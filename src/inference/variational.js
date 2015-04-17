@@ -38,7 +38,7 @@ module.exports = function(env) {
     this.initialAddress = a;
 
     //kick off the estimation:
-    this.takeGradSample();
+    return this.takeGradSample();
   }
 
   Variational.prototype.takeGradSample = function() {
@@ -48,7 +48,7 @@ module.exports = function(env) {
     this.variScore = 0;
     //get another sample
     this.numS++;
-    this.wpplFn(this.initialStore, env.exit, this.initialAddress);
+    return this.wpplFn(this.initialStore, env.exit, this.initialAddress);
   };
 
   Variational.prototype.sample = function(s, k, a, erp, params) {
@@ -68,7 +68,7 @@ module.exports = function(env) {
     this.jointScore += erp.score(params, val);
     this.variScore += erp.score(vParams, val);
 
-    k(s, val); //TODO: need a?
+    return k(s, val); //TODO: need a?
   };
 
   Variational.prototype.factor = function(s, k, a, score) {
@@ -76,7 +76,7 @@ module.exports = function(env) {
     //update joint score and keep going
     this.jointScore += score;
 
-    k(s); //TODO: need a?
+    return k(s); //TODO: need a?
   };
 
   Variational.prototype.exit = function(s, retval) {
@@ -131,7 +131,7 @@ module.exports = function(env) {
     env.coroutine = this.oldCoroutine;
 
     // Return from particle filter by calling original continuation:
-    this.k(this.initialStore, dist);
+    return this.k(this.initialStore, dist);
   };
 
   function vecPlus(a, b) {
