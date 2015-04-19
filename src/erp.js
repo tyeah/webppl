@@ -60,7 +60,7 @@ var bernoulliERP = new ERP(
     function flipGrad(params, val) {
       //FIXME: check domain
       var weight = params[0];
-      return val ? [1 / weight] : [-1 / weight];
+      return val ? [1 / weight] : [-1 / (1 - weight)];
     }
     );
 
