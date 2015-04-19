@@ -110,6 +110,7 @@ module.exports = function(env) {
         var grad = this.grad[a][i] / this.numS;
         this.runningG2[a][i] += Math.pow(grad, 2);
         var weight = 1.0 / Math.sqrt(this.runningG2[a][i]);
+        assert(isFinite(weight), 'Variational update weight is infinite.')
         // console.log(a+" "+i+": weight "+ weight +" grad "+ grad +" vparam "+this.variationalParams[a][i])
         delta = weight * grad;
         this.variationalParams[a][i] += delta;
