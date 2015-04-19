@@ -27,6 +27,7 @@ module.exports = function(env) {
     //running score accumulation per sample:
     this.jointScore = 0;
     this.variScore = 0;
+    this.deltaAbsMaxAvg = 0;
 
     // Move old coroutine out of the way and install this as the current
     // handler.
@@ -102,21 +103,34 @@ module.exports = function(env) {
     //we have all our samples to do a gradient step.
     //use AdaGrad update rule.
     //update variational parameters:
+
+    var delta, deltaAbsMax = 0;
     for (a in this.variationalParams) {
       for (var i in this.variationalParams[a]) {
         var grad = this.grad[a][i] / this.numS;
         this.runningG2[a][i] += Math.pow(grad, 2);
         var weight = 1.0 / Math.sqrt(this.runningG2[a][i]);
         // console.log(a+" "+i+": weight "+ weight +" grad "+ grad +" vparam "+this.variationalParams[a][i])
-        this.variationalParams[a][i] += weight * grad;
+        delta = weight * grad;
+        this.variationalParams[a][i] += delta;
+        deltaAbsMax = Math.max(Math.abs(delta), deltaAbsMax);
       }
     }
+
+    // Maintain an exponentially decaying average of the max
+    // variational parameter delta in order to test for convergence.
+    this.deltaAbsMaxAvg = this.deltaAbsMaxAvg * 0.9 + deltaAbsMax;
+    console.log(this.deltaAbsMaxAvg);
+    var converged = this.deltaAbsMaxAvg < 0.1;
+    if (converged) {
+      console.log('Varitional inference converged after step', this.t);
+    }
+
     this.t++;
     console.log(this.variationalParams);
 
     //if we haven't converged then do another gradient estimate and step:
-    //FIXME: converence test instead of fixed number of grad steps?
-    if (this.t < 500) {
+    if (this.t < 500 && !converged) {
       this.grad = {};
       this.numS = 0;
       return this.takeGradSample();
