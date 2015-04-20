@@ -8,15 +8,16 @@
 
 var erp = require('../erp.js');
 
-
 module.exports = function(env) {
 
-  function Variational(s, k, a, wpplFn, estS) {
+  function Variational(s, k, a, wpplFn, numSteps, numSamples) {
 
     this.wpplFn = wpplFn;
-    this.estimateSamples = estS;
-    this.numS = 0;
-    this.t = 1;
+    this.numSteps = numSteps || 100;
+    this.numSamples = numSamples || 100; // Per-step.
+    this.currentStep = 0;
+    this.currentSample = 0;
+
     // TODO: This probably needs a better name if it continues to hold ERP.
     this.variationalParams = {};
     //historic gradient squared for each variational param, used for adagrad update:
@@ -24,7 +25,7 @@ module.exports = function(env) {
     //gradient estimate per iteration:
     this.grad = {};
     //gradient of each sample used to estimate gradient:
-    this.samplegrad = {};
+    this.sampleGrad = {};
     //running score accumulation per sample:
     this.jointScore = 0;
     this.variScore = 0;
@@ -45,11 +46,11 @@ module.exports = function(env) {
 
   Variational.prototype.takeGradSample = function() {
     //reset sample info
-    this.samplegrad = {};
+    this.sampleGrad = {};
     this.jointScore = 0;
     this.variScore = 0;
     //get another sample
-    this.numS++;
+    this.currentSample++;
     return this.wpplFn(this.initialStore, env.exit, this.initialAddress);
   };
 
@@ -64,7 +65,7 @@ module.exports = function(env) {
     var val = erp.sample(vParams);
 
     //compute variational dist grad
-    this.samplegrad[a] = erp.grad(vParams, val);
+    this.sampleGrad[a] = erp.grad(vParams, val);
 
     //compute target score + variational score
     this.jointScore += erp.score(params, val);
@@ -85,18 +86,18 @@ module.exports = function(env) {
     //FIXME: params are arrays, so need vector arithmetic or something..
 
     //update gradient estimate
-    for (var a in this.samplegrad) {
+    for (var a in this.sampleGrad) {
       if (!this.grad.hasOwnProperty(a)) {
-        this.grad[a] = zeros(this.samplegrad[a].length);
+        this.grad[a] = zeros(this.sampleGrad[a].length);
       }
       this.grad[a] = vecPlus(
           this.grad[a],
-          vecScalarMult(this.samplegrad[a],
+          vecScalarMult(this.sampleGrad[a],
           (this.jointScore - this.variScore)));
     }
 
     //do we have as many samples as we need for this gradient estimate?
-    if (this.numS < this.estimateSamples) {
+    if (this.currentSample < this.numSamples) {
       return this.takeGradSample();
     }
 
@@ -104,14 +105,13 @@ module.exports = function(env) {
     //use AdaGrad update rule.
     //update variational parameters:
 
-    var variParam;
-    var delta, deltaAbsMax = 0;
+    var variParam, delta, deltaAbsMax = 0;
     for (a in this.variationalParams) {
       variParam = this.variationalParams[a];
       for (var i in variParam.params) {
-        var grad = this.grad[a][i] / this.numS;
+        var grad = this.grad[a][i] / this.numSamples;
         this.runningG2[a][i] += Math.pow(grad, 2);
-        var weight = 1.0 / Math.sqrt(this.runningG2[a][i]);
+        var weight = 0.5 / Math.sqrt(this.runningG2[a][i]);
         assert(isFinite(weight), 'Variational update weight is infinite.')
         // console.log(a+" "+i+": weight "+ weight +" grad "+ grad +" vparam "+variParam[a].params[i])
         delta = weight * grad;
@@ -124,22 +124,20 @@ module.exports = function(env) {
       }
     }
 
+    this.currentStep++;
+
     // Maintain an exponentially decaying average of the max
     // variational parameter delta in order to test for convergence.
     this.deltaAbsMaxAvg = this.deltaAbsMaxAvg * 0.9 + deltaAbsMax;
-    console.log(this.deltaAbsMaxAvg);
     var converged = this.deltaAbsMaxAvg < 0.1;
     if (converged) {
-      console.log('Varitional inference converged after step', this.t);
+      console.log('Varitional inference converged after step', this.currentStep);
     }
 
-    this.t++;
-    console.log(this.variationalParams);
-
     //if we haven't converged then do another gradient estimate and step:
-    if (this.t < 500 && !converged) {
+    if (this.currentStep < this.numSteps && !converged) {
       this.grad = {};
-      this.numS = 0;
+      this.currentSample = 0;
       return this.takeGradSample();
     }
 
@@ -151,7 +149,7 @@ module.exports = function(env) {
     // Reinstate previous coroutine
     env.coroutine = this.oldCoroutine;
 
-    // Return from particle filter by calling original continuation:
+    // Return by calling original continuation:
     return this.k(this.initialStore, dist);
   };
 
@@ -179,12 +177,10 @@ module.exports = function(env) {
     return a;
   }
 
-  function vari(s, cc, a, wpplFn, estS) {
-    return new Variational(s, cc, a, wpplFn, estS);
+  function variational(s, cc, a, wpplFn, numSteps, numSamples) {
+    return new Variational(s, cc, a, wpplFn, numSteps, numSamples);
   }
 
-  return {
-    Variational: vari
-  };
+  return {Variational: variational};
 
 };
