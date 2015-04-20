@@ -58,7 +58,7 @@ module.exports = function(env) {
     if (!this.variationalParams.hasOwnProperty(a)) {
       //initialize at prior (for this sample)...
       this.variationalParams[a] = {params: params, erp: erp};
-      this.runningG2[a] = [0];//fixme: vec size
+      this.runningG2[a] = zeros(params.length);
     }
     var vParams = this.variationalParams[a].params;
     var val = erp.sample(vParams);
@@ -87,8 +87,7 @@ module.exports = function(env) {
     //update gradient estimate
     for (var a in this.samplegrad) {
       if (!this.grad.hasOwnProperty(a)) {
-        //FIXME: size param vec:
-        this.grad[a] = [0];
+        this.grad[a] = zeros(this.samplegrad[a].length);
       }
       this.grad[a] = vecPlus(
           this.grad[a],
@@ -170,6 +169,14 @@ module.exports = function(env) {
       c[i] = a[i] * s;
     }
     return c;
+  }
+
+  function zeros(n) {
+    var a = [];
+    for (var i = 0; i < n; i++) {
+      a.push(0);
+    }
+    return a;
   }
 
   function vari(s, cc, a, wpplFn, estS) {
