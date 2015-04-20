@@ -98,7 +98,17 @@ function gaussianScore(params, x) {
   return -0.5 * (1.8378770664093453 + 2 * Math.log(sigma) + (x - mu) * (x - mu) / (sigma * sigma));
 }
 
-var gaussianERP = new ERP(gaussianSample, gaussianScore);
+function gaussianGrad(params, x) {
+  var mu = params[0];
+  var sigma = params[1];
+  var sigma2 = sigma * sigma;
+  var xdiff = x - mu;
+  var muGrad = xdiff / sigma2;
+  var sigmaGrad = (xdiff * xdiff / sigma2 - 1) / sigma;
+  return [muGrad, sigmaGrad];
+}
+
+var gaussianERP = new ERP(gaussianSample, gaussianScore, undefined, gaussianGrad);
 
 var discreteERP = new ERP(
     function discreteSample(params) {
@@ -135,6 +145,11 @@ function logGamma(xx) {
   return -tmp + Math.log(2.5066282746310005 * ser);
 }
 
+// TODO: Use a better approximation.
+function digamma(x) {
+  return Math.log(x) - 1 / (2 * x) - 1 / (12 * x * x);
+}
+
 function gammaSample(params) {
   var a = params[0];
   var b = params[1];
@@ -157,6 +172,14 @@ function gammaSample(params) {
   }
 }
 
+var gammaGrad = function(params, x)  {
+  var a = params[0];
+  var b = params[1];
+  var aGrad = Math.log(x / b) - digamma(a);
+  var bGrad = x / (b * b) - a / b;
+  return [aGrad, bGrad];
+};
+
 // params are shape and scale
 var gammaERP = new ERP(
     gammaSample,
@@ -165,7 +188,9 @@ var gammaERP = new ERP(
       var b = params[1];
       var x = val;
       return (a - 1) * Math.log(x) - x / b - logGamma(a) - a * Math.log(b);
-    }
+    },
+    undefined,
+    gammaGrad
     );
 
 var exponentialERP = new ERP(
