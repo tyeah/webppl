@@ -106,7 +106,7 @@ module.exports = function(env) {
     //update variational parameters:
 
     var variParam, delta, deltaAbsMax = 0;
-    for (a in this.variationalParams) {
+    for (a in this.grad) {
       variParam = this.variationalParams[a];
       for (var i in variParam.params) {
         var grad = this.grad[a][i] / this.numSamples;
