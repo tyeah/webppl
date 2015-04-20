@@ -21,11 +21,12 @@ var _ = require('underscore');
 var util = require('./util.js');
 
 
-function ERP(sampler, scorer, supporter, grad) {
+function ERP(sampler, scorer, supporter, grad, feasibleParams) {
   this.sample = sampler;
   this.score = scorer;
   this.support = supporter;
   this.grad = grad;
+  this.feasibleParams = feasibleParams;
 }
 
 var uniformERP = new ERP(
@@ -61,6 +62,10 @@ var bernoulliERP = new ERP(
       //FIXME: check domain
       var weight = params[0];
       return val ? [1 / weight] : [-1 / (1 - weight)];
+    },
+    function flipFeasibleParams(params) {
+      var weight = params[0];
+      return weight >= 0 && weight <= 1;
     }
     );
 
@@ -108,7 +113,13 @@ function gaussianGrad(params, x) {
   return [muGrad, sigmaGrad];
 }
 
-var gaussianERP = new ERP(gaussianSample, gaussianScore, undefined, gaussianGrad);
+function gaussianFeasibleParams(params) {
+  var sigma = params[1];
+  return sigma > 0;
+}
+
+var gaussianERP = new ERP(gaussianSample, gaussianScore, undefined,
+                          gaussianGrad, gaussianFeasibleParams);
 
 var discreteERP = new ERP(
     function discreteSample(params) {
@@ -180,6 +191,12 @@ var gammaGrad = function(params, x)  {
   return [aGrad, bGrad];
 };
 
+var gammaFeasibleParams = function(params) {
+  var a = params[0];
+  var b = params[1];
+  return a > 0 && b > 0;
+};
+
 // params are shape and scale
 var gammaERP = new ERP(
     gammaSample,
@@ -190,7 +207,8 @@ var gammaERP = new ERP(
       return (a - 1) * Math.log(x) - x / b - logGamma(a) - a * Math.log(b);
     },
     undefined,
-    gammaGrad
+    gammaGrad,
+    gammaFeasibleParams
     );
 
 var exponentialERP = new ERP(

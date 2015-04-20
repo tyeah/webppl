@@ -17,6 +17,7 @@ module.exports = function(env) {
     this.estimateSamples = estS;
     this.numS = 0;
     this.t = 1;
+    // TODO: This probably needs a better name if it continues to hold ERP.
     this.variationalParams = {};
     //historic gradient squared for each variational param, used for adagrad update:
     this.runningG2 = {};
@@ -56,10 +57,10 @@ module.exports = function(env) {
     //sample from variational dist
     if (!this.variationalParams.hasOwnProperty(a)) {
       //initialize at prior (for this sample)...
-      this.variationalParams[a] = params;
+      this.variationalParams[a] = {params: params, erp: erp};
       this.runningG2[a] = [0];//fixme: vec size
     }
-    var vParams = this.variationalParams[a];
+    var vParams = this.variationalParams[a].params;
     var val = erp.sample(vParams);
 
     //compute variational dist grad
@@ -104,17 +105,23 @@ module.exports = function(env) {
     //use AdaGrad update rule.
     //update variational parameters:
 
+    var variParam;
     var delta, deltaAbsMax = 0;
     for (a in this.variationalParams) {
-      for (var i in this.variationalParams[a]) {
+      variParam = this.variationalParams[a];
+      for (var i in variParam.params) {
         var grad = this.grad[a][i] / this.numS;
         this.runningG2[a][i] += Math.pow(grad, 2);
         var weight = 1.0 / Math.sqrt(this.runningG2[a][i]);
         assert(isFinite(weight), 'Variational update weight is infinite.')
-        // console.log(a+" "+i+": weight "+ weight +" grad "+ grad +" vparam "+this.variationalParams[a][i])
+        // console.log(a+" "+i+": weight "+ weight +" grad "+ grad +" vparam "+variParam[a].params[i])
         delta = weight * grad;
-        this.variationalParams[a][i] += delta;
+        variParam.params[i] += delta;
         deltaAbsMax = Math.max(Math.abs(delta), deltaAbsMax);
+      }
+      if (variParam.erp.feasibleParams) {
+        assert(variParam.erp.feasibleParams(variParam.params),
+               'Variational params have left feasible region.');
       }
     }
 
