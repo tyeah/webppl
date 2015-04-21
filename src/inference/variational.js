@@ -10,13 +10,16 @@ var erp = require('../erp.js');
 
 module.exports = function(env) {
 
-  function Variational(s, k, a, wpplFn, numSteps, numSamples) {
+  function Variational(s, k, a, wpplFn, numSteps, numSamples, numDistSamples) {
 
     this.wpplFn = wpplFn;
     this.numSteps = numSteps || 100;
     this.numSamples = numSamples || 100; // Per-step.
     this.currentStep = 0;
     this.currentSample = 0;
+
+    // Number of samples used to create the ERP returned from inference.
+    this.numDistSamples = numDistSamples || 100;
 
     // TODO: This probably needs a better name if it continues to hold ERP.
     this.variationalParams = {};
@@ -141,16 +144,39 @@ module.exports = function(env) {
       return this.takeGradSample();
     }
 
-    //return variational dist as ERP:
-    //FIXME
     console.log(this.variationalParams);
-    var dist = null;
 
-    // Reinstate previous coroutine
-    env.coroutine = this.oldCoroutine;
+    // Return the variational distribution as an ERP.
+    var hist = {};
+    return util.cpsForEach(
+      function(undef, i, lengthObj, nextK) {
 
-    // Return by calling original continuation:
-    return this.k(this.initialStore, dist);
+        // Sample from the variational program.
+        return this.wpplFn(this.initialStore, function(store, val) {
+          var k = JSON.stringify(val);
+          if (hist[k] === undefined) {
+            hist[k] = {prob: 0, val: val};
+          }
+          hist[k].prob += 1;
+          return nextK();
+        }, this.initialAddress);
+
+      }.bind(this),
+
+      function() {
+
+        var dist = erp.makeMarginalERP(hist);
+
+        // Reinstate previous coroutine
+        env.coroutine = this.oldCoroutine;
+
+        // Return by calling original continuation:
+        return this.k(this.initialStore, dist);
+
+      }.bind(this),
+      {length: this.numDistSamples} // HACK: Make use of cpsForEach as something like cpsRepeat.
+    );
+
   };
 
   function vecPlus(a, b) {
@@ -177,8 +203,8 @@ module.exports = function(env) {
     return a;
   }
 
-  function variational(s, cc, a, wpplFn, numSteps, numSamples) {
-    return new Variational(s, cc, a, wpplFn, numSteps, numSamples);
+  function variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples) {
+    return new Variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples);
   }
 
   return {Variational: variational};
