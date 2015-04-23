@@ -140,8 +140,8 @@ module.exports = function(env) {
     var aStarEst = {};
     for (address in aStarEstParts) {
       aStarEst[address] = vecElemDiv(
-        aStarEstParts[address][0],
-        aStarEstParts[address][1]);
+          aStarEstParts[address][0],
+          aStarEstParts[address][1]);
     }
 
     // Estimate gradients of the lower-bound (ELBO) we're maximizing.
@@ -156,8 +156,8 @@ module.exports = function(env) {
           elboGrad[address] = zeros(grad[address].length);
         }
         elboGrad[address] = vecPlus(elboGrad[address], vecSub(
-          vecScalarMult(grad[address], scoreDiff),
-          vecElemMult(grad[address], aStarEst[address])));
+            vecScalarMult(grad[address], scoreDiff),
+            vecElemMult(grad[address], aStarEst[address])));
         // Using this skips including the control variate.
         //elboGrad[address] = vecPlus(elboGrad[address], vecScalarMult(grad[address], scoreDiff));
       }
@@ -213,33 +213,33 @@ module.exports = function(env) {
     // Return the variational distribution as an ERP.
     var hist = {};
     return util.cpsForEach(
-      function(undef, i, lengthObj, nextK) {
+        function(undef, i, lengthObj, nextK) {
 
-        // Sample from the variational program.
-        return this.wpplFn(this.initialStore, function(store, val) {
-          var k = JSON.stringify(val);
-          if (hist[k] === undefined) {
-            hist[k] = {prob: 0, val: val};
-          }
-          hist[k].prob += 1;
-          return nextK();
-        }, this.initialAddress);
+          // Sample from the variational program.
+          return this.wpplFn(this.initialStore, function(store, val) {
+            var k = JSON.stringify(val);
+            if (hist[k] === undefined) {
+              hist[k] = {prob: 0, val: val};
+            }
+            hist[k].prob += 1;
+            return nextK();
+          }, this.initialAddress);
 
-      }.bind(this),
+        }.bind(this),
 
-      function() {
+        function() {
 
-        var dist = erp.makeMarginalERP(hist);
-        dist.elboEstimate = elboEstimate;
+          var dist = erp.makeMarginalERP(hist);
+          dist.elboEstimate = elboEstimate;
 
-        // Reinstate previous coroutine
-        env.coroutine = this.oldCoroutine;
+          // Reinstate previous coroutine
+          env.coroutine = this.oldCoroutine;
 
-        // Return by calling original continuation:
-        return this.k(this.initialStore, dist);
+          // Return by calling original continuation:
+          return this.k(this.initialStore, dist);
 
-      }.bind(this),
-      {length: this.numDistSamples} // HACK: Make use of cpsForEach as something like cpsRepeat.
+        }.bind(this),
+        {length: this.numDistSamples} // HACK: Make use of cpsForEach as something like cpsRepeat.
     );
 
   };
