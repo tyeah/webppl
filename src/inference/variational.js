@@ -163,6 +163,14 @@ module.exports = function(env) {
       }
     }
 
+    // Compute the lower-bound estimate.
+
+    // This will only be correct when observations come from
+    // normalized distributions. (Rather than arbitrary factor
+    // statements.)
+
+    var elboEstimate = util.sum(this.scoreDiffs) / this.numSamples;
+
     // Perform a gradient step using Adagrad.
     var variParam, delta, deltaAbsMax = 0;
     for (var a in elboGrad) {
@@ -222,6 +230,7 @@ module.exports = function(env) {
       function() {
 
         var dist = erp.makeMarginalERP(hist);
+        dist.elboEstimate = elboEstimate;
 
         // Reinstate previous coroutine
         env.coroutine = this.oldCoroutine;
