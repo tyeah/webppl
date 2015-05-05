@@ -156,9 +156,30 @@ function logGamma(xx) {
   return -tmp + Math.log(2.5066282746310005 * ser);
 }
 
-// TODO: Use a better approximation.
+var digammaCof = [
+  -1 / 12, 1 / 120, -1 / 252, 1 / 240,
+  -5 / 660, 691 / 32760, -1 / 12];
+
 function digamma(x) {
-  return Math.log(x) - 1 / (2 * x) - 1 / (12 * x * x);
+  if (x < 0) {
+    return digamma(1 - x) - Math.PI / Math.tan(Math.PI * x);
+  } else if (x < 6) {
+    var n = Math.ceil(6 - x);
+    var psi = digamma(x + n);
+    for (var i = 0; i < n; i++) {
+      psi -= 1 / (x + i);
+    }
+    return psi;
+  } else {
+    var psi = Math.log(x) - 1 / (2 * x);
+    var invsq = 1 / (x * x);
+    var z = 1;
+    for (var i = 0; i < digammaCof.length; i++) {
+      z *= invsq;
+      psi += digammaCof[i] * z;
+    }
+    return psi;
+  }
 }
 
 function gammaSample(params) {
