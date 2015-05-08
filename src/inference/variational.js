@@ -26,11 +26,14 @@ module.exports = function(env) {
     //historic gradient squared for each variational param, used for adagrad update:
     this.runningG2 = {};
 
-    // Store the gradients and difference in score (between the target
-    // and variational programs) for each sample. This is used to
-    // compute the control variate.
-    this.grads = [];
-    this.scoreDiffs = [];
+    // Maintain running totals of the sums used to computed estimates
+    // of the lower-bound and its gradient. These are sums over the
+    // samples used in estimates for the current step.
+    this.sumScoreDiff = 0;
+    this.sumGrad = {};
+    this.sumWeightedGrad = {};
+    this.sumGradSq = {};
+    this.sumWeightedGradSq = {};
 
     //gradient of each sample used to estimate gradient:
     this.sampleGrad = {};
@@ -93,74 +96,36 @@ module.exports = function(env) {
   Variational.prototype.exit = function(s, retval) {
     //FIXME: params are arrays, so need vector arithmetic or something..
 
-    this.scoreDiffs.push(this.jointScore - this.variScore);
-    this.grads.push(this.sampleGrad);
+    var scoreDiff = this.jointScore - this.variScore;
+
+    // Update running totals.
+
+    this.sumScoreDiff += scoreDiff;
+
+    for (var a in this.sampleGrad) {
+      if (!this.sumGrad[a]) {
+        var numParams = this.sampleGrad[a].length;
+        this.sumGrad[a] = zeros(numParams);
+        this.sumGradSq[a] = zeros(numParams);
+        this.sumWeightedGrad[a] = zeros(numParams);
+        this.sumWeightedGradSq[a] = zeros(numParams);
+      }
+
+      this.sumGrad[a] = vecPlus(this.sumGrad[a], this.sampleGrad[a]);
+      this.sumWeightedGrad[a] = vecPlus(
+          this.sumWeightedGrad[a],
+          vecScalarMult(this.sampleGrad[a], scoreDiff));
+
+      var sampleGradSq = vecElemSq(this.sampleGrad[a]);
+      this.sumGradSq[a] = vecPlus(this.sumGradSq[a], sampleGradSq);
+      this.sumWeightedGradSq[a] = vecPlus(
+          this.sumWeightedGradSq[a],
+          vecScalarMult(sampleGradSq, scoreDiff));
+    }
 
     //do we have as many samples as we need for this gradient estimate?
     if (this.currentSample < this.numSamples) {
       return this.takeGradSample();
-    }
-
-    // Estimate a*_i, the optimal scalar in the control variate.
-    // (Here the i indexes variational parameters.)
-    //
-    // a*_i = ( \sum grad_i^2 * scoreDiff ) / ( \sum grad_i^2 )
-    //
-    // See "Black Box Variational Inference" (Ranganath, Gerrish,
-    // Blei.)
-    //
-    // This performs the sum in both the numerator and
-    // denominator.
-
-    // TODO: Can a running/online version of aStarEst be computed. (So
-    // that we don't have to keep this.grads and this.scoreDiffs
-    // around.)
-
-    var aStarEstParts = {};
-    var grad, scoreDiff;
-    var address, gradLength, gradSq;
-    for (var i = 0; i < this.numSamples; i++) {
-      grad = this.grads[i]; // maps addresses to vectors of gradients
-      scoreDiff = this.scoreDiffs[i]; // scalar
-      for (address in grad) {
-        if (!aStarEstParts[address]) {
-          gradLength = grad[address].length;
-          aStarEstParts[address] = [zeros(gradLength), zeros(gradLength)];
-        }
-        gradSq = vecElemSq(grad[address]);
-        // Numerator.
-        aStarEstParts[address][0] = vecPlus(aStarEstParts[address][0], vecScalarMult(gradSq, scoreDiff));
-        // Denominator.
-        aStarEstParts[address][1] = vecPlus(aStarEstParts[address][1], gradSq);
-      }
-    }
-
-    // Finally, compute the quotient.
-    // TODO: Perform the division in-place? i.e. Re-use aStarEstParts.
-    var aStarEst = {};
-    for (address in aStarEstParts) {
-      aStarEst[address] = vecElemDiv(
-          aStarEstParts[address][0],
-          aStarEstParts[address][1]);
-    }
-
-    // Estimate gradients of the lower-bound (ELBO) we're maximizing.
-    // (Note the 1/numSamples factor is included when the gradient
-    // step is taken.)
-    var elboGrad = {};
-    for (i = 0; i < this.numSamples; i++) {
-      grad = this.grads[i]; // maps addresses to vectors of gradients
-      scoreDiff = this.scoreDiffs[i]; // scalar
-      for (address in grad) {
-        if (!elboGrad[address]) {
-          elboGrad[address] = zeros(grad[address].length);
-        }
-        elboGrad[address] = vecPlus(elboGrad[address], vecSub(
-            vecScalarMult(grad[address], scoreDiff),
-            vecElemMult(grad[address], aStarEst[address])));
-        // Using this skips including the control variate.
-        //elboGrad[address] = vecPlus(elboGrad[address], vecScalarMult(grad[address], scoreDiff));
-      }
     }
 
     // Compute the lower-bound estimate.
@@ -169,18 +134,28 @@ module.exports = function(env) {
     // normalized distributions. (Rather than arbitrary factor
     // statements.)
 
-    var elboEstimate = util.sum(this.scoreDiffs) / this.numSamples;
+    var elboEst = this.sumScoreDiff / this.numSamples;
 
     // Perform a gradient step using Adagrad.
-    var variParam, delta, deltaAbsMax = 0;
-    for (var a in elboGrad) {
-      variParam = this.variationalParams[a];
+    var deltaAbsMax = 0;
+
+    for (a in this.sumGrad) {
+      // Estimate a*, the (per-parameter) optimal control variate scalar.
+      var optimalScalarEst = vecElemDiv(
+          this.sumWeightedGradSq[a],
+          this.sumGradSq[a]);
+
+      var elboGradEst = vecSub(
+          this.sumWeightedGrad[a],
+          vecElemMult(this.sumGrad[a], optimalScalarEst));
+
+      var variParam = this.variationalParams[a];
       for (var i in variParam.params) {
-        var grad = elboGrad[a][i] / this.numSamples;
+        var grad = elboGradEst[i] / this.numSamples;
         this.runningG2[a][i] += Math.pow(grad, 2);
         var weight = 0.5 / Math.sqrt(this.runningG2[a][i]);
-        assert(isFinite(weight), 'Variational update weight is infinite.')
-        delta = weight * grad;
+        assert(isFinite(weight), 'Variational update weight is infinite.');
+        var delta = weight * grad;
         variParam.params[i] += delta;
         deltaAbsMax = Math.max(Math.abs(delta), deltaAbsMax);
       }
@@ -203,8 +178,11 @@ module.exports = function(env) {
     //if we haven't converged then do another gradient estimate and step:
     if (this.currentStep < this.numSteps && !converged) {
       this.currentSample = 0;
-      this.grads = [];
-      this.scoreDiffs = [];
+      this.sumScoreDiff = 0;
+      this.sumGrad = {};
+      this.sumWeightedGrad = {};
+      this.sumGradSq = {};
+      this.sumWeightedGradSq = {};
       return this.takeGradSample();
     }
 
@@ -230,7 +208,7 @@ module.exports = function(env) {
         function() {
 
           var dist = erp.makeMarginalERP(hist);
-          dist.elboEstimate = elboEstimate;
+          dist.elboEstimate = elboEst;
 
           // Reinstate previous coroutine
           env.coroutine = this.oldCoroutine;
