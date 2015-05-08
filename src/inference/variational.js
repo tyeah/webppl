@@ -23,27 +23,31 @@ module.exports = function(env) {
 
     // TODO: This probably needs a better name if it continues to hold ERP.
     this.variationalParams = {};
-    //historic gradient squared for each variational param, used for adagrad update:
+
+    // Historic gradient squared for each variational param, used for
+    // adagrad update:
     this.runningG2 = {};
 
-    // Maintain running totals of the sums used to computed estimates
-    // of the lower-bound and its gradient. These are sums over the
-    // samples used in estimates for the current step.
+    // Maintain running totals of the sums (over samples) used to
+    // computed (per-step) estimates of the lower-bound and its
+    // gradient.
     this.sumScoreDiff = 0;
     this.sumGrad = {};
     this.sumWeightedGrad = {};
     this.sumGradSq = {};
     this.sumWeightedGradSq = {};
 
-    //gradient of each sample used to estimate gradient:
+    // Gradient of each sample used to estimate gradient:
     this.sampleGrad = {};
-    //running score accumulation per sample:
+
+    // Running score accumulation per sample:
     this.jointScore = 0;
     this.variScore = 0;
+
     this.deltaAbsMaxAvg = 0;
 
-    // Move old coroutine out of the way and install this as the current
-    // handler.
+    // Move old coroutine out of the way and install this as the
+    // current handler.
     this.k = k;
     this.oldCoroutine = env.coroutine;
     env.coroutine = this;
@@ -51,50 +55,49 @@ module.exports = function(env) {
     this.initialStore = s; // will be reinstated at the end
     this.initialAddress = a;
 
-    //kick off the estimation:
+    // Kick off the estimation:
     return this.takeGradSample();
   }
 
   Variational.prototype.takeGradSample = function() {
-    //reset sample info
+    // Reset sample info
     this.sampleGrad = {};
     this.jointScore = 0;
     this.variScore = 0;
-    //get another sample
+    // Get another sample
     this.currentSample++;
     return this.wpplFn(this.initialStore, env.exit, this.initialAddress);
   };
 
   Variational.prototype.sample = function(s, k, a, erp, params) {
-    //sample from variational dist
+    // Sample from variational dist
     if (!this.variationalParams.hasOwnProperty(a)) {
-      //initialize at prior (for this sample)...
+      // Initialize at prior (for this sample).
       this.variationalParams[a] = {params: params, erp: erp};
       this.runningG2[a] = zeros(params.length);
     }
     var vParams = this.variationalParams[a].params;
     var val = erp.sample(vParams);
 
-    //compute variational dist grad
+    // Compute variational dist grad
     this.sampleGrad[a] = erp.grad(vParams, val);
 
-    //compute target score + variational score
+    // Compute target score + variational score
     this.jointScore += erp.score(params, val);
     this.variScore += erp.score(vParams, val);
 
-    return k(s, val); //TODO: need a?
+    return k(s, val); // TODO: need a?
   };
 
   Variational.prototype.factor = function(s, k, a, score) {
 
-    //update joint score and keep going
+    // Update joint score and keep going
     this.jointScore += score;
 
-    return k(s); //TODO: need a?
+    return k(s); // TODO: need a?
   };
 
   Variational.prototype.exit = function(s, retval) {
-    //FIXME: params are arrays, so need vector arithmetic or something..
 
     var scoreDiff = this.jointScore - this.variScore;
 
@@ -123,7 +126,8 @@ module.exports = function(env) {
           vecScalarMult(sampleGradSq, scoreDiff));
     }
 
-    //do we have as many samples as we need for this gradient estimate?
+    // Do we have as many samples as we need for this gradient
+    // estimate?
     if (this.currentSample < this.numSamples) {
       return this.takeGradSample();
     }
@@ -175,7 +179,8 @@ module.exports = function(env) {
       console.log('Varitional inference converged after step', this.currentStep);
     }
 
-    //if we haven't converged then do another gradient estimate and step:
+    // If we haven't converged then do another gradient estimate and
+    // step:
     if (this.currentStep < this.numSteps && !converged) {
       this.currentSample = 0;
       this.sumScoreDiff = 0;
@@ -217,10 +222,14 @@ module.exports = function(env) {
           return this.k(this.initialStore, dist);
 
         }.bind(this),
-        {length: this.numDistSamples} // HACK: Make use of cpsForEach as something like cpsRepeat.
+
+        // Duck-type an array-like object to iterate over.
+        {length: this.numDistSamples}
     );
 
   };
+
+  // FIXME: Params are arrays, so need vector arithmetic or something.
 
   function vecPlus(a, b) {
     var c = [];
