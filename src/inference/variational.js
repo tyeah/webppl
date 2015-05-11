@@ -6,7 +6,9 @@
 
 'use strict';
 
+var assert = require('assert');
 var erp = require('../erp.js');
+var util = require('../util.js');
 
 module.exports = function(env) {
 
