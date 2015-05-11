@@ -189,8 +189,6 @@ module.exports = function(env) {
       return this.takeGradSample();
     }
 
-    console.log(this.variationalParams);
-
     // Return the variational distribution as an ERP.
     var hist = {};
     return util.cpsForEach(
@@ -212,6 +210,7 @@ module.exports = function(env) {
 
           var dist = erp.makeMarginalERP(hist);
           dist.elboEstimate = elboEst;
+          dist.variationalParams = this.variationalParams;
 
           // Reinstate previous coroutine
           env.coroutine = this.oldCoroutine;
