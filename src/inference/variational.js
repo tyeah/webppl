@@ -23,8 +23,8 @@ module.exports = function(env) {
     // Number of samples used to create the ERP returned from inference.
     this.numDistSamples = numDistSamples || 100;
 
-    // The variational ERPs and their parameters.
-    this.variationalDists = {};
+    // The variational parameters.
+    this.variationalParams = {};
 
     // Historic gradient squared for each variational param, used for
     // adagrad update:
@@ -73,12 +73,12 @@ module.exports = function(env) {
 
   Variational.prototype.sample = function(s, k, a, erp, params) {
     // Sample from variational dist
-    if (!this.variationalDists.hasOwnProperty(a)) {
+    if (!this.variationalParams.hasOwnProperty(a)) {
       // Initialize at prior (for this sample).
-      this.variationalDists[a] = {params: params, erp: erp};
+      this.variationalParams[a] = params;
       this.runningG2[a] = zeros(params.length);
     }
-    var vParams = this.variationalDists[a].params;
+    var vParams = this.variationalParams[a];
     var val = erp.sample(vParams);
 
     // Compute variational dist grad
@@ -155,19 +155,15 @@ module.exports = function(env) {
           this.sumWeightedGrad[a],
           vecElemMult(this.sumGrad[a], optimalScalarEst));
 
-      var variDist = this.variationalDists[a];
-      for (var i in variDist.params) {
+      var variParams = this.variationalParams[a];
+      for (var i in variParams) {
         var grad = elboGradEst[i] / this.numSamples;
         this.runningG2[a][i] += Math.pow(grad, 2);
         var weight = 0.5 / Math.sqrt(this.runningG2[a][i]);
         assert(isFinite(weight), 'Variational update weight is infinite.');
         var delta = weight * grad;
-        variDist.params[i] += delta;
+        variParams[i] += delta;
         deltaAbsMax = Math.max(Math.abs(delta), deltaAbsMax);
-      }
-      if (variDist.erp.feasibleParams) {
-        assert(variDist.erp.feasibleParams(variDist.params),
-               'Variational params have left feasible region.');
       }
     }
 
@@ -193,7 +189,7 @@ module.exports = function(env) {
       return this.takeGradSample();
     }
 
-    console.log(this.variationalDists);
+    console.log(this.variationalParams);
 
     // Return the variational distribution as an ERP.
     var hist = {};

@@ -18,15 +18,15 @@
 'use strict';
 
 var _ = require('underscore');
+var assert = require('assert');
 var util = require('./util.js');
 
 
-function ERP(sampler, scorer, supporter, grad, feasibleParams) {
+function ERP(sampler, scorer, supporter, grad) {
   this.sample = sampler;
   this.score = scorer;
   this.support = supporter;
   this.grad = grad;
-  this.feasibleParams = feasibleParams;
 }
 
 var uniformERP = new ERP(
@@ -59,13 +59,10 @@ var bernoulliERP = new ERP(
       return [true, false];
     },
     function flipGrad(params, val) {
-      //FIXME: check domain
       var weight = params[0];
+      assert(weight >= 0 && weight <= 1,
+             'bernoulliERP param outside of domain.');
       return val ? [1 / weight] : [-1 / (1 - weight)];
-    },
-    function flipFeasibleParams(params) {
-      var weight = params[0];
-      return weight >= 0 && weight <= 1;
     }
     );
 
@@ -106,6 +103,7 @@ function gaussianScore(params, x) {
 function gaussianGrad(params, x) {
   var mu = params[0];
   var sigma = params[1];
+  assert(sigma > 0, 'gaussianERP param outside of domain');
   var sigma2 = sigma * sigma;
   var xdiff = x - mu;
   var muGrad = xdiff / sigma2;
@@ -113,13 +111,7 @@ function gaussianGrad(params, x) {
   return [muGrad, sigmaGrad];
 }
 
-function gaussianFeasibleParams(params) {
-  var sigma = params[1];
-  return sigma > 0;
-}
-
-var gaussianERP = new ERP(gaussianSample, gaussianScore, undefined,
-                          gaussianGrad, gaussianFeasibleParams);
+var gaussianERP = new ERP(gaussianSample, gaussianScore, undefined, gaussianGrad);
 
 var discreteERP = new ERP(
     function discreteSample(params) {
@@ -207,15 +199,10 @@ function gammaSample(params) {
 var gammaGrad = function(params, x)  {
   var a = params[0];
   var b = params[1];
+  assert(a > 0 && b > 0, 'gammaERP param outside of domain.');
   var aGrad = Math.log(x / b) - digamma(a);
   var bGrad = x / (b * b) - a / b;
   return [aGrad, bGrad];
-};
-
-var gammaFeasibleParams = function(params) {
-  var a = params[0];
-  var b = params[1];
-  return a > 0 && b > 0;
 };
 
 // params are shape and scale
@@ -228,8 +215,7 @@ var gammaERP = new ERP(
       return (a - 1) * Math.log(x) - x / b - logGamma(a) - a * Math.log(b);
     },
     undefined,
-    gammaGrad,
-    gammaFeasibleParams
+    gammaGrad
     );
 
 var exponentialERP = new ERP(
