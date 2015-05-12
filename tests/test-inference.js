@@ -179,7 +179,9 @@ var testNames = [
   'testPFVarFactors2',
   'testPFRj',
   'testPFRjStore',
-  'testPFRjAsMH'
+  'testPFRjAsMH',
+  'testVariational',
+  'testVariationalStore'
 ];
 
 var exampleNames = [
