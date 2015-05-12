@@ -6,6 +6,7 @@
 
 'use strict';
 
+var _ = require('underscore');
 var assert = require('assert');
 var erp = require('../erp.js');
 var util = require('../util.js');
@@ -75,7 +76,7 @@ module.exports = function(env) {
     this.variScore = 0;
     // Get another sample
     this.currentSample++;
-    return this.wpplFn(this.initialStore, env.exit, this.initialAddress);
+    return this.wpplFn(_.clone(this.initialStore), env.exit, this.initialAddress);
   };
 
   Variational.prototype.sample = function(s, k, a, erp, params) {
@@ -202,7 +203,7 @@ module.exports = function(env) {
         function(undef, i, lengthObj, nextK) {
 
           // Sample from the variational program.
-          return this.wpplFn(this.initialStore, function(store, val) {
+          return this.wpplFn(_.clone(this.initialStore), function(store, val) {
             var k = JSON.stringify(val);
             if (hist[k] === undefined) {
               hist[k] = {prob: 0, val: val};
