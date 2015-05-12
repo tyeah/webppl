@@ -116,24 +116,26 @@ module.exports = function(env) {
     this.sumScoreDiff += scoreDiff;
 
     for (var a in this.sampleGrad) {
-      if (!this.sumGrad[a]) {
-        var numParams = this.sampleGrad[a].length;
-        this.sumGrad[a] = zeros(numParams);
-        this.sumGradSq[a] = zeros(numParams);
-        this.sumWeightedGrad[a] = zeros(numParams);
-        this.sumWeightedGradSq[a] = zeros(numParams);
+      if (this.sampleGrad.hasOwnProperty(a)) {
+        if (!this.sumGrad[a]) {
+          var numParams = this.sampleGrad[a].length;
+          this.sumGrad[a] = zeros(numParams);
+          this.sumGradSq[a] = zeros(numParams);
+          this.sumWeightedGrad[a] = zeros(numParams);
+          this.sumWeightedGradSq[a] = zeros(numParams);
+        }
+
+        this.sumGrad[a] = vecPlus(this.sumGrad[a], this.sampleGrad[a]);
+        this.sumWeightedGrad[a] = vecPlus(
+            this.sumWeightedGrad[a],
+            vecScalarMult(this.sampleGrad[a], scoreDiff));
+
+        var sampleGradSq = vecElemSq(this.sampleGrad[a]);
+        this.sumGradSq[a] = vecPlus(this.sumGradSq[a], sampleGradSq);
+        this.sumWeightedGradSq[a] = vecPlus(
+            this.sumWeightedGradSq[a],
+            vecScalarMult(sampleGradSq, scoreDiff));
       }
-
-      this.sumGrad[a] = vecPlus(this.sumGrad[a], this.sampleGrad[a]);
-      this.sumWeightedGrad[a] = vecPlus(
-          this.sumWeightedGrad[a],
-          vecScalarMult(this.sampleGrad[a], scoreDiff));
-
-      var sampleGradSq = vecElemSq(this.sampleGrad[a]);
-      this.sumGradSq[a] = vecPlus(this.sumGradSq[a], sampleGradSq);
-      this.sumWeightedGradSq[a] = vecPlus(
-          this.sumWeightedGradSq[a],
-          vecScalarMult(sampleGradSq, scoreDiff));
     }
 
     // Do we have as many samples as we need for this gradient
@@ -154,24 +156,26 @@ module.exports = function(env) {
     var deltaAbsMax = 0;
 
     for (a in this.sumGrad) {
-      // Estimate a*, the (per-parameter) optimal control variate scalar.
-      var optimalScalarEst = vecElemDiv(
-          this.sumWeightedGradSq[a],
-          this.sumGradSq[a]);
+      if (this.sumGrad.hasOwnProperty(a)) {
+        // Estimate a*, the (per-parameter) optimal control variate scalar.
+        var optimalScalarEst = vecElemDiv(
+            this.sumWeightedGradSq[a],
+            this.sumGradSq[a]);
 
-      var elboGradEst = vecSub(
-          this.sumWeightedGrad[a],
-          vecElemMult(this.sumGrad[a], optimalScalarEst));
+        var elboGradEst = vecSub(
+            this.sumWeightedGrad[a],
+            vecElemMult(this.sumGrad[a], optimalScalarEst));
 
-      var variParams = this.variationalParams[a];
-      for (var i in variParams) {
-        var grad = elboGradEst[i] / this.numSamples;
-        this.runningG2[a][i] += Math.pow(grad, 2);
-        var weight = this.initialLearningRate / Math.sqrt(this.runningG2[a][i]);
-        assert(isFinite(weight), 'Variational update weight is infinite.');
-        var delta = weight * grad;
-        variParams[i] += delta;
-        deltaAbsMax = Math.max(Math.abs(delta), deltaAbsMax);
+        var variParams = this.variationalParams[a];
+        for (var i = 0; i < variParams.length; i++) {
+          var grad = elboGradEst[i] / this.numSamples;
+          this.runningG2[a][i] += Math.pow(grad, 2);
+          var weight = this.initialLearningRate / Math.sqrt(this.runningG2[a][i]);
+          assert(isFinite(weight), 'Variational update weight is infinite.');
+          var delta = weight * grad;
+          variParams[i] += delta;
+          deltaAbsMax = Math.max(Math.abs(delta), deltaAbsMax);
+        }
       }
     }
 
