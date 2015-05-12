@@ -250,6 +250,14 @@ var betaERP = new ERP(
       return ((x > 0 && x < 1) ?
           (a - 1) * Math.log(x) + (b - 1) * Math.log(1 - x) - logBeta(a, b) :
           -Infinity);
+    },
+    undefined,
+    function betaGrad(params, x) {
+      var a = params[0];
+      var b = params[1];
+      assert(a > 0 && b > 0, 'betaERP param outside of domain.');
+      var d = digamma(a + b);
+      return [Math.log(x) - digamma(a) + d, Math.log(1 - x) - digamma(b) + d];
     }
     );
 
@@ -416,6 +424,17 @@ var dirichletERP = new ERP(
         logp -= logGamma(alpha[j]);
       }
       return logp;
+    },
+    undefined,
+    function dirichletGrad(params, val) {
+      var alpha = params;
+      var d = digamma(util.sum(alpha));
+      var grad = [];
+      for (var i = 0; i < alpha.length; i++) {
+        assert(alpha[i] > 0, 'dirichletERP param outside of domain');
+        grad.push(Math.log(val[i]) - digamma(alpha[i]) + d);
+      }
+      return grad;
     }
     );
 
