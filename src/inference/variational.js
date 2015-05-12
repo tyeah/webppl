@@ -12,9 +12,13 @@ var util = require('../util.js');
 
 module.exports = function(env) {
 
-  function Variational(s, k, a, wpplFn, numSteps, numSamples, numDistSamples) {
+  function Variational(s, k, a, wpplFn,
+                       numSteps, numSamples, numDistSamples,
+                       verbose,
+                       initialLearningRate, convergenceEpsilon) {
 
     this.wpplFn = wpplFn;
+    this.verbose = verbose;
     this.numSteps = numSteps || 100;
     this.numSamples = numSamples || 100; // Per-step.
     this.currentStep = 0;
@@ -25,6 +29,11 @@ module.exports = function(env) {
 
     // The variational parameters.
     this.variationalParams = {};
+
+    // AdaGrad eta parameter.
+    this.initialLearningRate = initialLearningRate || 1;
+    this.convergenceEpsilon = convergenceEpsilon || 0.1;
+    this.deltaAbsMaxAvg = 0;
 
     // Historic gradient squared for each variational param, used for
     // adagrad update:
@@ -45,8 +54,6 @@ module.exports = function(env) {
     // Running score accumulation per sample:
     this.jointScore = 0;
     this.variScore = 0;
-
-    this.deltaAbsMaxAvg = 0;
 
     // Move old coroutine out of the way and install this as the
     // current handler.
@@ -159,7 +166,7 @@ module.exports = function(env) {
       for (var i in variParams) {
         var grad = elboGradEst[i] / this.numSamples;
         this.runningG2[a][i] += Math.pow(grad, 2);
-        var weight = 0.5 / Math.sqrt(this.runningG2[a][i]);
+        var weight = this.initialLearningRate / Math.sqrt(this.runningG2[a][i]);
         assert(isFinite(weight), 'Variational update weight is infinite.');
         var delta = weight * grad;
         variParams[i] += delta;
@@ -172,8 +179,8 @@ module.exports = function(env) {
     // Maintain an exponentially decaying average of the max
     // variational parameter delta in order to test for convergence.
     this.deltaAbsMaxAvg = this.deltaAbsMaxAvg * 0.9 + deltaAbsMax;
-    var converged = this.deltaAbsMaxAvg < 0.1;
-    if (converged) {
+    var converged = this.deltaAbsMaxAvg < this.convergenceEpsilon;
+    if (converged && this.verbose) {
       console.log('Varitional inference converged after step', this.currentStep);
     }
 
@@ -284,8 +291,8 @@ module.exports = function(env) {
     return a;
   }
 
-  function variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples) {
-    return new Variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples);
+  function variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples, verbose, lr, eps) {
+    return new Variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples, verbose, lr, eps);
   }
 
   return {Variational: variational};
