@@ -7,6 +7,7 @@
 'use strict';
 
 var _ = require('underscore');
+var numeric = require('numeric')
 var assert = require('assert');
 var erp = require('../erp.js');
 var util = require('../util.js');
@@ -84,7 +85,7 @@ module.exports = function(env) {
     if (!this.variationalParams.hasOwnProperty(a)) {
       // Initialize at prior (for this sample).
       this.variationalParams[a] = params;
-      this.runningG2[a] = zeros(params.length);
+      this.runningG2[a] = numeric.rep([params.length], 0);
     }
     var vParams = this.variationalParams[a];
     var val = erp.sample(vParams);
@@ -119,22 +120,22 @@ module.exports = function(env) {
       if (this.sampleGrad.hasOwnProperty(a)) {
         if (!this.sumGrad[a]) {
           var numParams = this.sampleGrad[a].length;
-          this.sumGrad[a] = zeros(numParams);
-          this.sumGradSq[a] = zeros(numParams);
-          this.sumWeightedGrad[a] = zeros(numParams);
-          this.sumWeightedGradSq[a] = zeros(numParams);
+          this.sumGrad[a] = numeric.rep([numParams], 0);
+          this.sumGradSq[a] = numeric.rep([numParams], 0);
+          this.sumWeightedGrad[a] = numeric.rep([numParams], 0);
+          this.sumWeightedGradSq[a] = numeric.rep([numParams], 0);
         }
 
-        this.sumGrad[a] = vecPlus(this.sumGrad[a], this.sampleGrad[a]);
-        this.sumWeightedGrad[a] = vecPlus(
+        this.sumGrad[a] = numeric.add(this.sumGrad[a], this.sampleGrad[a]);
+        this.sumWeightedGrad[a] = numeric.add(
             this.sumWeightedGrad[a],
-            vecScalarMult(this.sampleGrad[a], scoreDiff));
+            numeric.mul(this.sampleGrad[a], scoreDiff));
 
-        var sampleGradSq = vecElemSq(this.sampleGrad[a]);
-        this.sumGradSq[a] = vecPlus(this.sumGradSq[a], sampleGradSq);
-        this.sumWeightedGradSq[a] = vecPlus(
+        var sampleGradSq = numeric.pow(this.sampleGrad[a], 2);
+        this.sumGradSq[a] = numeric.add(this.sumGradSq[a], sampleGradSq);
+        this.sumWeightedGradSq[a] = numeric.add(
             this.sumWeightedGradSq[a],
-            vecScalarMult(sampleGradSq, scoreDiff));
+            numeric.mul(sampleGradSq, scoreDiff));
       }
     }
 
@@ -158,13 +159,13 @@ module.exports = function(env) {
     for (a in this.sumGrad) {
       if (this.sumGrad.hasOwnProperty(a)) {
         // Estimate a*, the (per-parameter) optimal control variate scalar.
-        var optimalScalarEst = vecElemDiv(
+        var optimalScalarEst = numeric.div(
             this.sumWeightedGradSq[a],
             this.sumGradSq[a]);
 
-        var elboGradEst = vecSub(
+        var elboGradEst = numeric.sub(
             this.sumWeightedGrad[a],
-            vecElemMult(this.sumGrad[a], optimalScalarEst));
+            numeric.mul(this.sumGrad[a], optimalScalarEst));
 
         var variParams = this.variationalParams[a];
         for (var i = 0; i < variParams.length; i++) {
@@ -237,64 +238,6 @@ module.exports = function(env) {
     );
 
   };
-
-  // FIXME: Params are arrays, so need vector arithmetic or something.
-
-  function vecPlus(a, b) {
-    var c = [];
-    for (var i = 0; i < a.length; i++) {
-      c[i] = a[i] + b[i];
-    }
-    return c;
-  }
-
-  function vecSub(a, b) {
-    var c = [];
-    for (var i = 0; i < a.length; i++) {
-      c[i] = a[i] - b[i];
-    }
-    return c;
-  }
-
-  function vecScalarMult(a, s) {
-    var c = [];
-    for (var i = 0; i < a.length; i++) {
-      c[i] = a[i] * s;
-    }
-    return c;
-  }
-
-  function vecElemSq(a) {
-    var s = [];
-    for (var i = 0; i < a.length; i++) {
-      s[i] = a[i] * a[i];
-    }
-    return s;
-  }
-
-  function vecElemDiv(a, b) {
-    var c = [];
-    for (var i = 0; i < a.length; i++) {
-      c[i] = a[i] / b[i];
-    }
-    return c;
-  }
-
-  function vecElemMult(a, b) {
-    var c = [];
-    for (var i = 0; i < a.length; i++) {
-      c[i] = a[i] * b[i];
-    }
-    return c;
-  }
-
-  function zeros(n) {
-    var a = [];
-    for (var i = 0; i < n; i++) {
-      a.push(0);
-    }
-    return a;
-  }
 
   function variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples, verbose, lr, eps) {
     return new Variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples, verbose, lr, eps);
