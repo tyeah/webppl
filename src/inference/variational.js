@@ -218,9 +218,7 @@ module.exports = function(env) {
           }, this.initialAddress);
 
         }.bind(this),
-
         function() {
-
           var dist = erp.makeMarginalERP(hist);
           dist.elboEstimate = elboEst;
           dist.variationalParams = this.variationalParams;
@@ -238,6 +236,8 @@ module.exports = function(env) {
     );
 
   };
+
+  Variational.prototype.incrementalize = env.defaultCoroutine.incrementalize;
 
   function variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples, verbose, lr, eps) {
     return new Variational(s, cc, a, wpplFn, numSteps, numSamples, numDistSamples, verbose, lr, eps);

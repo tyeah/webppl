@@ -26,7 +26,7 @@ function sum(xs) {
   if (xs.length === 0) {
     return 0.0;
   } else {
-    var total = _(xs).reduce(
+    var total = _.reduce(xs,
         function(a, b) {
           return a + b;
         });
@@ -57,6 +57,14 @@ function logsumexp(a) {
     sum += (a[i] === -Infinity ? 0 : Math.exp(a[i] - m));
   }
   return m + Math.log(sum);
+}
+
+function copyObj(obj) {
+  var newobj = {};
+  for (var k in obj) {
+    if (obj.hasOwnProperty(k)) {newobj[k] = obj[k];}
+  }
+  return newobj;
 }
 
 // More efficient version of (indexOf o map p)
@@ -114,21 +122,32 @@ function histsApproximatelyEqual(hist, expectedHist, tolerance) {
 
 function expectation(hist, func) {
   var f = func == undefined ? function(x) {return x;} : func;
-  var expectedValue = sum(_.mapObject(hist, function(num, key) {
-    return f(key) * num;
-  }));
-  return expectedValue;
+  if (_.isArray(hist)) {
+    return sum(xs) / xs.length;
+  } else {
+    var expectedValue = sum(_.mapObject(hist, function(v, x) {
+      return f(x) * v;
+    }));
+    return expectedValue;
+  }
 }
 
 function std(hist) {
-  var mean = expectation(hist);
-  var variance = sum(_.mapObject(hist, function(num, key) {
-    return num * Math.pow(mean - key, 2);
-  }));
-  return Math.pow(variance, 0.5);
+  var mu = expectation(hist);
+  if (_.isArray(hist)) {
+    var variance = expectation(hist.map(function(x) {
+      return Math.pow(x - mu, 2);
+    }));
+  } else {
+    var variance = sum(_.mapObject(hist, function(v, x) {
+      return v * Math.pow(mu - x, 2);
+    }));
+  }
+  return Math.sqrt(variance);
 }
 
 module.exports = {
+  copyObj: copyObj,
   cpsForEach: cpsForEach,
   expectation: expectation,
   gensym: gensym,

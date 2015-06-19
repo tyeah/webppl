@@ -76,7 +76,7 @@ module.exports = function(env) {
         {
           k: cc, name: a, erp: erp, params: params,
           score: currScore,
-          choiceScore: choiceScore,
+          forwardChoiceScore: choiceScore,
           val: val, reused: false,
           store: _.clone(s)
         });
@@ -197,9 +197,17 @@ module.exports = function(env) {
       return this.activeParticle().continuation(this.activeParticle().store);
     }
 
-    // Final rejuvenation:
-    var oldStore = this.oldStore;
+    // Initialize histogram with particle values
     var hist = {};
+    this.particles.forEach(function(particle) {
+      if (hist[particle.value] === undefined) {
+        hist[particle.value] = {prob: 0, val: particle.value};
+      }
+      hist[particle.value].prob += 1;
+    });
+
+    // Final rejuvenation (will add values for each MH step to histogram)
+    var oldStore = this.oldStore;
     return util.cpsForEach(
         function(particle, i, particles, nextK) {
           // make sure mhp coroutine doesn't escape:
@@ -229,6 +237,8 @@ module.exports = function(env) {
     );
 
   };
+
+  ParticleFilterRejuv.prototype.incrementalize = env.defaultCoroutine.incrementalize;
 
 
   ////// Lightweight MH on a particle
@@ -271,20 +281,9 @@ module.exports = function(env) {
     }
   };
 
-  MHP.prototype.sample = function(s, k, name, erp, params, forceSample) {
-    var prev = mh.findChoice(this.oldTrace, name);
-    var reuse = !(prev === undefined || forceSample);
-    var val = reuse ? prev.val : erp.sample(params);
-    var choiceScore = erp.score(params, val);
-    this.trace.push({
-      k: k, name: name, erp: erp, params: params,
-      score: this.currScore, choiceScore: choiceScore,
-      val: val, reused: reuse, store: _.clone(s)
-    });
-    this.currScore += choiceScore;
-    return k(s, val);
+  MHP.prototype.sample = function(s, cont, name, erp, params, forceSample) {
+    return mh.mhSample(this, arguments);
   };
-
 
   MHP.prototype.propose = function() {
     //make a new proposal:
@@ -305,9 +304,12 @@ module.exports = function(env) {
     this.val = val;
 
     // Did we like this proposal?
-    var acceptance = mh.acceptProb(this.trace, this.oldTrace,
-                                   this.regenFrom,
-                                   this.currScore, this.oldScore);
+    var acceptance = mh.acceptProb(
+        this.trace,
+        this.oldTrace,
+        this.regenFrom,
+        this.currScore,
+        this.oldScore);
 
     var accepted = Math.random() < acceptance;
 
@@ -350,6 +352,9 @@ module.exports = function(env) {
       return this.backToPF(newParticle);
     }
   };
+
+  // TODO: Incrementalized version?
+  MHP.prototype.incrementalize = env.defaultCoroutine.incrementalize;
 
 
   function pfr(s, cc, a, wpplFn, numParticles, rejuvSteps) {
