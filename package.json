@@ -26,7 +26,8 @@
     "minimist": "^1.1.1",
     "priorityqueuejs": "~1.0.0",
     "numeric": "~1.2.6",
-    "underscore": "^1.8.3"
+    "underscore": "^1.8.3",
+    "sweet.js": "^0.7.1"
   },
   "devDependencies": {
     "brfs": "^1.4.0",

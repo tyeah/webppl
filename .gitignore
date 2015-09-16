@@ -5,3 +5,5 @@ node_modules
 npm-debug.log
 compiled/webppl.js
 compiled/webppl.min.js
+src/erp_scorers.js
+src/bounds.js
