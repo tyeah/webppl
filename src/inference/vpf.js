@@ -10,7 +10,7 @@ var _ = require('underscore');
 var util = require('../util.js');
 var erp = require('../erp.js');
 var numeric = require('numeric');
-var tensor = require('tensor');
+var tensor = require('../tensor.js');
 
 
 module.exports = function(env) {
@@ -347,14 +347,12 @@ module.exports = function(env) {
         sample: function(params) { return erpObj.sample(this.params); },
         score: function(params, val) { return erpObj.score(this.params, val); }
       });
-      var vpfErpObj = _.extend(_.clone(erpObj) {
+      var vpfErpObj = _.extend(_.clone(erpObj), {
         importanceERP: impErpObj
       });
       VPF[propname] = vpfErpObj;
     }
   }
-
-
 
   return {
     VPF: VPF
