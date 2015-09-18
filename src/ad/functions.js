@@ -37,16 +37,9 @@ S_tape.prototype = {
   resetState: function() {
     this.sensitivity = 0.0;
     this.fanout = 0;
-  },
-  checkNaN: function() {
-    for (var i = 0; i < arguments.length; i++) {
-      if (isNaN(arguments[i])) {
-        this.print();
-        throw 'Found NaN in AD tape!';
-      }
-    }
   }
 };
+S_tape.prototype.reversePhaseResetting = S_tape.prototype.reversePhase;
 var isTape = function(t) { return t instanceof S_tape; };
 
 var S_tape1 = function(opname, epsilon, primal, factor, tape) {
@@ -65,10 +58,16 @@ S_tape1.prototype.reversePhase = function(sensitivity) {
   this.sensitivity += sensitivity;
   this.fanout -= 1;
   if (this.fanout === 0) {
-    // ////
-    // this.checkNaN(this.sensitivity*this.factor);
-    // ////
     this.tape.reversePhase(this.sensitivity*this.factor);
+  }
+}
+S_tape1.prototype.reversePhaseResetting = function(sensitivity) {
+  this.sensitivity += sensitivity;
+  this.fanout -= 1;
+  if (this.fanout === 0) {
+    var sens = this.sensitivity;
+    this.sensitivity = 0;
+    this.tape.reversePhaseResetting(sens*this.factor);
   }
 }
 S_tape1.prototype.reversePhaseDebug = function(sensitivity, tablevel) {
@@ -82,7 +81,6 @@ S_tape1.prototype.reversePhaseDebug = function(sensitivity, tablevel) {
 S_tape1.prototype.print = function(tablevel) {
   tablevel = tablevel === undefined ? 0 : tablevel;
   S_tape.prototype.print.call(this, tablevel);
-  // console.log(spaces(tablevel) + 'factor: ' + this.factor);
   this.tape.print(tablevel + 1);
 }
 S_tape1.prototype.resetState = function() {
@@ -110,19 +108,24 @@ S_tape2.prototype.reversePhase = function(sensitivity) {
   this.sensitivity += sensitivity;
   this.fanout -= 1;
   if (this.fanout === 0) {
-    // ////
-    // this.checkNaN(this.sensitivity*this.factor1, this.sensitivity*this.factor2);
-    // ////
     this.tape1.reversePhase(this.sensitivity*this.factor1);
     this.tape2.reversePhase(this.sensitivity*this.factor2);
+  }
+}
+S_tape2.prototype.reversePhase = function(sensitivity) {
+  this.sensitivity += sensitivity;
+  this.fanout -= 1;
+  if (this.fanout === 0) {
+    var sens = this.sensitivity;
+    this.sensitivity = 0;
+    this.tape1.reversePhase(sens*this.factor1);
+    this.tape2.reversePhase(sens*this.factor2);
   }
 }
 S_tape2.prototype.reversePhaseDebug = function(sensitivity, tablevel) {
   tablevel = tablevel === undefined ? 0 : tablevel;
   S_tape.prototype.reversePhaseDebug.call(this, sensitivity, tablevel);
   if (this.fanout === 0) {
-    // console.log(spaces(tablevel) + 'propagating. factor1 =  ' + this.factor1 + ', total: ' + this.sensitivity*this.factor1);
-    // console.log(spaces(tablevel) + 'propagating. factor2 =  ' + this.factor2 + ', total: ' + this.sensitivity*this.factor2);
     this.tape1.reversePhaseDebug(this.sensitivity*this.factor1, tablevel + 1);
     this.tape2.reversePhaseDebug(this.sensitivity*this.factor2, tablevel + 1);
   }

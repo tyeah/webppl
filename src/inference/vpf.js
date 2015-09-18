@@ -43,21 +43,26 @@ module.exports = function(env) {
     };
   }
 
-  function VariationalParticleFilter(s, k, a, wpplFn, numParticles, strict) {
+  function VariationalParticleFilter(s, k, a, wpplFn, opts) {
 
-    this.particles = [];
-    this.particleHistory = [];
-    this.particleIndex = 0;  // marks the active particle
-
-    // Create initial particles
-    var exitK = function(s) {
-      return wpplFn(s, env.exit, a);
-    };
-    for (var i = 0; i < numParticles; i++) {
-      this.particles.push(newParticle(s, exitK));
+    function opt(name, defaultval) {
+      var o = opts[name];
+      assert(o !== undefined || defaultval !== undefined,
+        'VPF - option "' + name +'" must be defined!');
+      return o === undefined ? defaultval : o;
     }
 
-    this.strict = strict;
+    this.numParticles = opt('numParticles');
+    this.strict = opt('strict', false);
+    this.vparams = opt('vparams');
+    this.flightsLeft = opt('maxNumFlights');
+    this.convergeEps = opt('convergeEps', 0.1);
+    this.verbosity = opt('verbosity', 0);
+    this.initLearnRate = opt('initLearnRate', 1);
+    // TODO: regularization? annealing? other stuff?
+
+    // AdaGrad running sum for gradient normalization
+    this.runningG2 = {};
 
     // Move old coroutine out of the way and install this as the current
     // handler.
@@ -68,7 +73,19 @@ module.exports = function(env) {
     this.oldStore = _.clone(s); // will be reinstated at the end
   }
 
-  VariationalParticleFilter.prototype.run = function() {
+  VariationalParticleFilter.prototype.runFlight = function() {
+    this.particles = [];
+    this.particleHistory = [];
+    this.particleIndex = 0;  // marks the active particle
+
+    // Create initial particles
+    var exitK = function(s) {
+      return wpplFn(s, env.exit, a);
+    };
+    for (var i = 0; i < this.numParticles; i++) {
+      this.particles.push(newParticle(s, exitK));
+    }
+
     // Run first particle
     return this.currentParticle().continuation(this.currentParticle().store);
   };
@@ -208,20 +225,76 @@ module.exports = function(env) {
   };
 
   VariationalParticleFilter.prototype.finish = function() {
+    this.flightsLeft--;
+    this.doGradientUpdate();
+    if (this.flightsLeft === 0) {
+      // Turn all params from tapes into doubles
+      for (var name in vparams) {
+        tensor.mapeq(vparams[name], function(x) { return ad_primal(x); });
+      }
+      // Reinstate previous coroutine:
+      env.coroutine = this.oldCoroutine;
+      // Return from particle filter by calling original continuation:
+      return this.k(this.oldStore);
+    } else {
+      // Wrap all params in a fresh set of tapes
+      for (var name in vparams) {
+        tensor.mapeq(vparams[name], function(x) { return ad_maketape(ad_primal(x)); });
+      }
+      // Run another flight
+      return this.runFlight();
+    }
+  };
 
-    // TODO: Everything goes here...
+  VariationalParticleFilter.prototype.estimateGradient = function() {
+    // Super naive for now: just compute gradients on all particle scores
+    //    (resetting tapes along the way)
+    var gradient = {};
+    for (var i = 0; i < this.particleHistory.length; i++) {
+      var particles = this.particleHistory[i];
+      for (var j = 0; j < particles.length; j++) {
+        var particle = particles[j];
+        particle.guideScore.determineFanout();
+        particle.guideScore.reversePhaseResetting(1);
+        for (var name in this.vparams) {
+          var param = this.vparams[name];
+          var dim = numeric.dim(param);
+          if (!gradient.hasOwnProperty[name]) {
+            gradient[name] = numeric.rep(dim, 0);
+          }
+          numeric.addeq(gradient[name], numeric.mul(particle.weight,
+            tensor.map(param, function(x) {
+              var sens = x.sensitivity;
+              x.sensitivity = 0;
+              return sens;
+            })));
+        }
+      }
+    }
 
-    // Reinstate previous coroutine:
-    env.coroutine = this.oldCoroutine;
+    return gradient;
+  };
 
-    // Return from particle filter by calling original continuation:
-    return this.k(this.oldStore);
+  VariationalParticleFilter.prototype.doGradientUpdate = function() {
+    var gradient = this.estimateGradient();
+    // Update parameters using AdaGrad
+    for (var name in gradient) {
+      var grad = gradient[name];
+      var dim = numeric.dim(grad);
+      if (!this.runningG2.hasOwnProperty(name)) {
+        this.runningG2[name] = numeric.rep(dim, 0);
+      }
+      numeric.addeq(this.runningG2[name], numeric.mul(grad, grad));
+      var weight = numeric.div(this.initLearnRate, numeric.sqrt(this.runningG2[name]));
+      numeric.muleq(grad, weight);
+      numeric.addeq(this.vparams[name], grad);
+    }
   };
 
   VariationalParticleFilter.prototype.incrementalize = env.defaultCoroutine.incrementalize;
 
   function VPF(s, cc, a, wpplFn, numParticles, strict) {
-    return new VariationalParticleFilter(s, cc, a, wpplFn, numParticles, strict === undefined ? true : strict).run();
+    return new VariationalParticleFilter(s, cc, a, wpplFn, numParticles, strict === undefined ? true : strict).runFlight();
   }
 
 
