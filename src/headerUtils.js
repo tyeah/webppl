@@ -89,12 +89,20 @@ module.exports = function(env) {
     }
   };
 
+  // Get the current address
+  function currentAddress(s, k, a) {
+    // Lop off the last address extension (i.e. the one for this
+    //    function call).
+    return k(s, a.slice(0, a.lastIndexOf('_')));
+  }
+
   return {
     display: display,
     cache: cache,
     stochasticCache: stochasticCache,
     apply: apply,
-    _Fn: _Fn
+    _Fn: _Fn,
+    currentAddress: currentAddress
   };
 
 };
