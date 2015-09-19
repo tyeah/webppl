@@ -1,0 +1,45 @@
+var util = require.call(null, 'vpf_experiments/sandbox/targetsum');
+
+var targetsum = 10.0;
+
+var params = VPF.newParams();
+
+var _gaussian = function(mu, sigma, prevs) {
+	VPF.gaussianERP.importanceERP.setParams(util.gaussianParams(params, prevs.length, prevs));
+	return sample(VPF.gaussianERP, [mu, sigma]);
+	// return gaussian(mu, sigma);
+}
+
+var program = function() {
+	var x1 = _gaussian(0, 5, []);
+	var x2 = _gaussian(0, 5, [x1]);
+	var x3 = _gaussian(0, 5, [x1, x2]);
+	var sum = x1 + x2 + x3;
+	factor(gaussianERP.score([targetsum, 0.1], sum));
+	return [x1, x2, x3];
+}
+
+VPF(program, {
+	numParticles: 100,
+	maxNumFlights: 100,
+	vparams: params,
+	convergeEps: 0.1,
+	initLearnRate: 1,
+	verbosity: {
+		// flightNum: true,
+		// particleNum: true,
+		// params: true,
+		// eubo: true,
+		// endStatus: true
+	}
+});
+
+console.log(params);
+
+repeat(10, function() {
+	var result = ParticleFilter(program, 1);
+	var nums = result.MAP().val;
+	console.log((nums[0]+nums[1]+nums[2]) + ': ' + JSON.stringify(nums));
+});
+
+true;
