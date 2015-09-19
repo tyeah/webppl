@@ -22,6 +22,7 @@ module.exports = function(env) {
 
   function newParticle(s, k) {
     return {
+      id: util.gensym(0),
       continuation: k,
       weight: 0,
       targetScore: 0,
@@ -34,6 +35,7 @@ module.exports = function(env) {
 
   function copyParticle(particle) {
     return {
+      id: particle.id,
       continuation: particle.continuation,
       weight: particle.weight,
       targetScore: particle.targetScore,
@@ -118,19 +120,10 @@ module.exports = function(env) {
     var importanceScore = importanceERP.adscore(params, val);
     var choiceScore = erp.score(params, val);
     var particle = this.currentParticle();
-    assert(isFinite(particle.weight) && isFinite(particle.targetScore) && isFinite(ad_primal(particle.guideScore)));
+    particle.id = util.gensym(0);
     particle.weight += choiceScore - ad_primal(importanceScore);
     particle.targetScore += choiceScore;
     particle.guideScore = ad_add(particle.guideScore, importanceScore);
-    ////
-    if (!isFinite(particle.weight) || !isFinite(particle.targetScore) || !isFinite(ad_primal(particle.guideScore))) {
-      console.log('importance score: ' + ad_primal(importanceScore));
-      console.log('sampled val: ' + val);
-      console.log('params: ' + params);
-      console.log('importance params: ' + importanceERP.rawparams);
-      assert(false);
-    }
-    ////
     return cc(s, val);
   };
 
@@ -282,6 +275,23 @@ module.exports = function(env) {
     }
   };
 
+  VariationalParticleFilter.prototype.getParticleGradient = function(particle) {
+    var gradient = {};
+    particle.guideScore.determineFanout();
+    particle.guideScore.reversePhaseResetting(1);
+    for (var name in this.vparams) {
+      var param = this.vparams[name];
+      // TODO(?): Only add if some element of param is non-zero.
+      gradient[name] = tensor.map(param, function(x) {
+        var sens = x.sensitivity;
+        // assert(sens !== 0);
+        x.sensitivity = 0;
+        return sens;
+      });
+    }
+    return gradient;
+  }
+
   VariationalParticleFilter.prototype.estimateGradient = function() {
     // Super naive for now: just compute gradients on all particle scores
     //    (resetting tapes along the way)
@@ -294,25 +304,18 @@ module.exports = function(env) {
       var avgW = avgWeight(particles);
       for (var j = 0; j < particles.length; j++) {
         var particle = particles[j];
-        particle.guideScore.determineFanout();
-        particle.guideScore.reversePhaseResetting(1);
         if (this.verbosity.eubo && (i === this.particleHistory.length - 1)) {
           eubo += (particle.targetScore - ad_primal(particle.guideScore));
         }
-        for (var name in this.vparams) {
-          var param = this.vparams[name];
-          var dim = tensor.getdim(param);
+        var grad = this.getParticleGradient(particle);
+        for (var name in grad) {
+          var g = grad[name];
           if (!gradient.hasOwnProperty[name]) {
+            var dim = numeric.dim(g);
             gradient[name] = numeric.rep(dim, 0);
           }
           var w = Math.exp(particle.weight - avgW);
-          numeric.addeq(gradient[name], numeric.mul(w,
-            tensor.map(param, function(x) {
-              var sens = x.sensitivity;
-              // assert(sens !== 0);
-              x.sensitivity = 0;
-              return sens;
-            })));
+          numeric.addeq(gradient[name], numeric.mul(w, g));
         }
       }
     }
