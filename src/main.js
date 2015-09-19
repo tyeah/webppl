@@ -133,7 +133,8 @@ function run(code, k, verbose) {
   if (verbose && console.time) {
     console.time('run');
   }
-  eval.call(global, compiledCode)({}, k, '');
+  // eval.call(global, compiledCode)({}, k, '');
+  eval(compiledCode)({}, k, '');
   if (verbose && console.timeEnd) {
     console.timeEnd('run');
   }
