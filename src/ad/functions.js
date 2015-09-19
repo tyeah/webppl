@@ -112,14 +112,14 @@ S_tape2.prototype.reversePhase = function(sensitivity) {
     this.tape2.reversePhase(this.sensitivity*this.factor2);
   }
 }
-S_tape2.prototype.reversePhase = function(sensitivity) {
+S_tape2.prototype.reversePhaseResetting = function(sensitivity) {
   this.sensitivity += sensitivity;
   this.fanout -= 1;
   if (this.fanout === 0) {
     var sens = this.sensitivity;
     this.sensitivity = 0;
-    this.tape1.reversePhase(sens*this.factor1);
-    this.tape2.reversePhase(sens*this.factor2);
+    this.tape1.reversePhaseResetting(sens*this.factor1);
+    this.tape2.reversePhaseResetting(sens*this.factor2);
   }
 }
 S_tape2.prototype.reversePhaseDebug = function(sensitivity, tablevel) {
@@ -133,7 +133,6 @@ S_tape2.prototype.reversePhaseDebug = function(sensitivity, tablevel) {
 S_tape2.prototype.print = function(tablevel) {
   tablevel = tablevel === undefined ? 0 : tablevel;
   S_tape.prototype.print.call(this, tablevel);
-  console.log(spaces(tablevel) + 'factor1: ' + this.factor1 + ', factor2: ' + this.factor2);
   this.tape1.print(tablevel + 1);
   this.tape2.print(tablevel + 1);
 }
