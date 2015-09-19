@@ -103,6 +103,7 @@ function all(tensor, pred) {
 var maxreduce = numeric.mapreduce('accum = Math.max(xi, accum)', '-Infinity');
 
 module.exports = {
+	getdim: getdim,
 	create: create,
 	map: map,
 	map2: map2,
