@@ -74,12 +74,12 @@ var normalize = function(x, lo, hi) {
 }
 // Just manually normalizing the data for now
 var setCurrFeatures = function() {
-	// var bb = globalStore.bbox;
-	// var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
-	// var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
-	// var ymin = normalize(bb.min.y, viewport.ymin, viewport.ymax);
-	// var ymax = normalize(bb.max.y, viewport.ymin, viewport.ymax);
-	// globalStore.currFeatures = [xmin, xmax, ymin, ymax];
+	var bb = globalStore.bbox;
+	var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
+	var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
+	var ymin = normalize(bb.min.y, viewport.ymin, viewport.ymax);
+	var ymax = normalize(bb.max.y, viewport.ymin, viewport.ymax);
+	globalStore.currFeatures = [xmin, xmax, ymin, ymax];
 }
 
 var branch = function(currState, treeNode) {
