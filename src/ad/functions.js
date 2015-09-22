@@ -313,30 +313,30 @@ var derivativeR = function(f) {
 }
 
 module.exports = {
-  ad_add: d_add,
-  ad_sub: d_sub,
-  ad_mul: d_mul,
-  ad_div: d_div,
-  ad_eq: d_eq,
-  ad_neq: d_neq,
-  ad_peq: d_peq,
-  ad_pneq: d_pneq,
-  ad_gt: d_gt,
-  ad_lt: d_lt,
-  ad_geq: d_geq,
-  ad_leq: d_leq,
-  ad_floor: d_floor,
-  ad_sqrt: d_sqrt,
-  ad_exp: d_exp,
-  ad_log: d_log,
-  ad_pow: d_pow,
-  ad_sin: d_sin,
-  ad_cos: d_cos,
-  ad_atan: d_atan,
-  ad_derivativeR: derivativeR,
-  ad_gradientR: gradientR,
-  ad_maketape: function(x) { return new S_tape(_e_, x); },
-  ad_primal: function(x) { return x.primal === undefined ? x : x.primal; }
+  add: d_add,
+  sub: d_sub,
+  mul: d_mul,
+  div: d_div,
+  eq: d_eq,
+  neq: d_neq,
+  peq: d_peq,
+  pneq: d_pneq,
+  gt: d_gt,
+  lt: d_lt,
+  geq: d_geq,
+  leq: d_leq,
+  floor: d_floor,
+  sqrt: d_sqrt,
+  exp: d_exp,
+  log: d_log,
+  pow: d_pow,
+  sin: d_sin,
+  cos: d_cos,
+  atan: d_atan,
+  derivativeR: derivativeR,
+  gradientR: gradientR,
+  maketape: function(x) { return new S_tape(_e_, x); },
+  primal: function(x) { return x.primal === undefined ? x : x.primal; }
 };
 
 // Also expose functions via the Math module
@@ -363,6 +363,6 @@ d_Math.tan = d_tan;
 d_Math.sinh = d_sinh;
 d_Math.cosh = d_cosh;
 d_Math.tanh = d_tanh;
-module.exports.ad_Math = d_Math;
+module.exports.math = d_Math;
 
 

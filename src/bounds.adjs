@@ -1,7 +1,7 @@
 var none = {
 	fwd: function(x) { return x; },
 	rvs: function(x) { return x; },
-}
+};
 
 var nonNegative = {
 	fwd: Math.exp,

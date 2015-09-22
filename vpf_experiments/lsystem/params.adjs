@@ -1,0 +1,28 @@
+
+var numeric = require('numeric');
+var tensor = require('../../src/tensor')
+
+var sampleprms = [0, 0.05];
+function paramsByLinReg(params, name, origprms, bounds, features) {
+	// If features has different dimensionality, we need separate params,
+	//    even if the name is the same.
+	name += '(' + features.length + ')';
+	var intercepts = VPF.paramTensor(params, name + '[icepts]', [bounds.length], gaussianERP.sample, sampleprms);
+	var output = intercepts.slice();
+	if (features.length > 0) {
+	 	var coeffs = VPF.paramTensor(params, name + '[coeffs]', [bounds.length, features.length], gaussianERP.sample, sampleprms);
+		for (var i = 0; i < bounds.length; i++) {
+			for (var j = 0; j < features.length; j++) {
+				output[i] += (coeffs[i][j] * features[j]);
+			}
+		}
+	}
+	for (var i = 0; i < bounds.length; i++) {
+		output[i] = bounds[i].fwd(output[i] + bounds[i].rvs(origprms[i]));
+	}
+	return output;
+}
+
+module.exports = {
+	paramsByLinReg: paramsByLinReg
+}

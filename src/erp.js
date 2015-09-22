@@ -265,11 +265,20 @@ var exponentialERP = new ERP({
   adscore: adscorers.exponential
 });
 
-function betaSample(params) {
+function __betaSample(params) {
   var a = params[0];
   var b = params[1];
   var x = gammaSample([a, 1]);
-  return x / (x + gammaSample([b, 1]));
+  var y = gammaSample([b, 1]);
+  return x / (x + y);
+}
+// Kludge: rejection sample until we get a value in the support
+function betaSample(params) {
+  var x;
+  do {
+    x = __betaSample(params);
+  } while (x <= 0 || x >= 1)
+  return x;
 }
 
 var betaERP = new ERP({

@@ -12,6 +12,7 @@ var erp = require('../erp.js');
 var numeric = require('numeric');
 var tensor = require('../tensor.js');
 var assert = require('assert');
+var ad = require('../ad/functions.js')
 
 
 module.exports = function(env) {
@@ -22,27 +23,27 @@ module.exports = function(env) {
 
   function newParticle(s, k) {
     return {
-      id: util.gensym(0),
       continuation: k,
       weight: 0,
       targetScore: 0,
       guideScore: 0,
       value: undefined,
       store: _.clone(s),
-      active: true
+      active: true,
+      ancestor: -1
     };
   }
 
-  function copyParticle(particle) {
+  function copyParticle(particle, ancestorIdx) {
     return {
-      id: particle.id,
       continuation: particle.continuation,
       weight: particle.weight,
       targetScore: particle.targetScore,
       guideScore: particle.guideScore,
       value: particle.value,
       store: _.clone(particle.store),
-      active: particle.active
+      active: particle.active,
+      ancestor: ancestorIdx
     };
   }
 
@@ -65,6 +66,7 @@ module.exports = function(env) {
     }
 
     this.numParticles = opt('numParticles');
+    this.numStrata = opt('numStrata', 1);
     this.strict = opt('strict', false);
     this.vparams = opt('vparams');
     this.maxNumFlights = opt('maxNumFlights');
@@ -72,6 +74,7 @@ module.exports = function(env) {
     this.convergeEps = opt('convergeEps', 0.1);
     this.verbosity = opt('verbosity', { endStatus: true });
     this.initLearnRate = opt('initLearnRate', 1);
+    this.tempSchedule = opt('tempSchedule', function() { return 1; });
     // TODO: regularization? annealing? other stuff?
 
     // AdaGrad running sum for gradient normalization
@@ -120,14 +123,24 @@ module.exports = function(env) {
     var importanceScore = importanceERP.adscore(params, val);
     var choiceScore = erp.score(params, val);
     var particle = this.currentParticle();
-    particle.id = util.gensym(0);
-    particle.weight += choiceScore - ad_primal(importanceScore);
+    particle.weight += choiceScore - ad.primal(importanceScore);
     particle.targetScore += choiceScore;
-    particle.guideScore = ad_add(particle.guideScore, importanceScore);
+    particle.guideScore = ad.add(particle.guideScore, importanceScore);
+    if (!isFinite(particle.weight)) {
+      console.log('name: ' + a);
+      console.log('erp: ' + erp.sample.name);
+      console.log('val: ' + val);
+      console.log('params: ' + params);
+      console.log('importance params: ' + importanceERP.rawparams);
+      console.log('scores:', particle.targetScore, ad.primal(particle.guideScore), particle.weight);
+      assert(false, 'Found non-finite particle weight!');
+    }
     return cc(s, val);
   };
 
   VariationalParticleFilter.prototype.factor = function(s, cc, a, score) {
+    var temp = this.tempSchedule(this.maxNumFlights - this.flightsLeft, this.maxNumFlights);
+    score *= temp;
     // Update particle weight
     var particle = this.currentParticle();
     particle.weight += score;
@@ -195,23 +208,22 @@ module.exports = function(env) {
       // Compute list of retained particles
       var retainedParticles = [];
       var newExpWeights = [];
-      _.each(
-          this.particles,
-          function(particle) {
-            var w = Math.exp(particle.weight - avgW);
-            var nRetained = Math.floor(w);
-            newExpWeights.push(w - nRetained);
-            for (var i = 0; i < nRetained; i++) {
-              retainedParticles.push(copyParticle(particle));
-            }
-          });
+      for (var p = 0; p < this.numParticles; p++) {
+        var particle = this.particles[p];
+        var w = Math.exp(particle.weight - avgW);
+        var nRetained = Math.floor(w);
+        newExpWeights.push(w - nRetained);
+        for (var i = 0; i < nRetained; i++) {
+          retainedParticles.push(copyParticle(particle, p));
+        }
+      }
       // Compute new particles
       var numNewParticles = m - retainedParticles.length;
       var newParticles = [];
       var j;
       for (var i = 0; i < numNewParticles; i++) {
         j = erp.multinomialSample(newExpWeights);
-        newParticles.push(copyParticle(this.particles[j]));
+        newParticles.push(copyParticle(this.particles[j], j));
       }
 
       // Particles after update: Retained + new particles
@@ -224,13 +236,26 @@ module.exports = function(env) {
     _.each(this.particles, function(particle) {
       particle.weight = avgW;
     });
+
+    if (this.verbosity.numUniqueParticles) {
+      var ids = {};
+      var n = 0;
+      for (var i = 0; i < this.numParticles; i++) {
+        var id = this.particles[i].ancestor;
+        if (!ids.hasOwnProperty(id)) {
+          n++;
+          ids[id] = true;
+        }
+      }
+      console.log('  # unique particles after resample: ' + n);
+    }
   };
 
   VariationalParticleFilter.prototype.exit = function(s, retval) {
     var particle = this.currentParticle();
     particle.value = retval;
     if (this.verbosity.particleNum) {
-      console.log('    finished particle ' + this.particleIndex + '/' + this.numParticles);
+      console.log('      Finished particle ' + this.particleIndex + '/' + this.numParticles);
     }
     particle.active = false;
     // Wait for all particles to reach exit before computing
@@ -268,7 +293,7 @@ module.exports = function(env) {
     } else {
       // Wrap all params in a fresh set of tapes
       for (var name in this.vparams) {
-        tensor.mapeq(this.vparams[name], function(x) { return ad_maketape(x); });
+        tensor.mapeq(this.vparams[name], function(x) { return ad.maketape(x); });
       }
       // Run another flight
       return this.runFlight();
@@ -279,6 +304,8 @@ module.exports = function(env) {
     var gradient = {};
     particle.guideScore.determineFanout();
     particle.guideScore.reversePhaseResetting(1);
+    // particle.guideScore.reversePhase(1);
+    // particle.guideScore.print();
     for (var name in this.vparams) {
       var param = this.vparams[name];
       // TODO(?): Only add if some element of param is non-zero.
@@ -289,12 +316,31 @@ module.exports = function(env) {
         return sens;
       });
     }
+    if (this.verbosity.gradientSamples) {
+      console.log('    gradientSamp: ' + JSON.stringify(gradient));
+    }
     return gradient;
   }
 
+  function groupByAncestor(particles) {
+    var groups = {};
+    for (var p = 0; p < particles.length; p++) {
+      var particle = particles[p];
+      var id = particle.ancestor;
+      if (!groups.hasOwnProperty(id)) {
+        groups[id] = [];
+      }
+      groups[id].push(particle);
+    }
+    var list = [];
+    for (var name in groups) {
+      list.push(groups[name]);
+    }
+    return list;
+  }
+
   VariationalParticleFilter.prototype.estimateGradient = function() {
-    // Super naive for now: just compute gradients on all particle scores
-    //    (resetting tapes along the way)
+    // TODO: Use particle ancestor tree to avoid even more unnecessary recomputation (?)
     var gradient = {};
     if (this.verbosity.eubo) {
       var eubo = 0;
@@ -302,19 +348,22 @@ module.exports = function(env) {
     for (var i = 0; i < this.particleHistory.length; i++) {
       var particles = this.particleHistory[i];
       var avgW = avgWeight(particles);
-      for (var j = 0; j < particles.length; j++) {
-        var particle = particles[j];
+      var groupedParticles = groupByAncestor(particles);
+      for (var j = 0; j < groupedParticles.length; j++) {
+        var group = groupedParticles[j];
+        var n = group.length;
+        var rep = group[0];
         if (this.verbosity.eubo && (i === this.particleHistory.length - 1)) {
-          eubo += (particle.targetScore - ad_primal(particle.guideScore));
+          eubo += n * (rep.targetScore - ad.primal(rep.guideScore));
         }
-        var grad = this.getParticleGradient(particle);
+        var grad = this.getParticleGradient(rep);
+        var w = n * Math.exp(rep.weight - avgW);
         for (var name in grad) {
           var g = grad[name];
           if (!gradient.hasOwnProperty[name]) {
             var dim = numeric.dim(g);
             gradient[name] = numeric.rep(dim, 0);
           }
-          var w = Math.exp(particle.weight - avgW);
           numeric.addeq(gradient[name], numeric.mul(w, g));
         }
       }
@@ -322,12 +371,15 @@ module.exports = function(env) {
 
     // Turn all params from tapes into doubles
     for (var name in this.vparams) {
-      tensor.mapeq(this.vparams[name], function(x) { return ad_primal(x); });
+      tensor.mapeq(this.vparams[name], function(x) { return ad.primal(x); });
     }
 
     if (this.verbosity.eubo) {
       eubo /= this.numParticles;
       console.log('  eubo: ' + eubo);
+    }
+    if (this.verbosity.gradientEstimate) {
+      console.log('  gradientEst: ' + JSON.stringify(gradient));
     }
 
     return gradient;
@@ -335,6 +387,9 @@ module.exports = function(env) {
 
   VariationalParticleFilter.prototype.doGradientUpdate = function() {
     var gradient = this.estimateGradient();
+    if (this.verbosity.params) {
+      console.log('  params before update: ' + JSON.stringify(this.vparams));
+    }
     var maxDelta = 0;
     // Update parameters using AdaGrad
     for (var name in gradient) {
@@ -345,8 +400,10 @@ module.exports = function(env) {
       }
       numeric.addeq(this.runningG2[name], numeric.mul(grad, grad));
       var weight = numeric.div(this.initLearnRate, numeric.sqrt(this.runningG2[name]));
-      if (!isFinite(weight)) {
+      if (!numeric.all(numeric.isFinite(weight))) {
         console.log('name: ' + name);
+        console.log('grad: ' + grad);
+        console.log('weight: ' + weight);
         assert(false, 'Found non-finite AdaGrad weight!');
       }
       numeric.muleq(grad, weight);
@@ -355,7 +412,7 @@ module.exports = function(env) {
     }
     this.maxDeltaAvg = this.maxDeltaAvg * 0.9 + maxDelta;
     if (this.verbosity.params) {
-      console.log('  params: ' + JSON.stringify(this.vparams));
+      console.log('  params after update: ' + JSON.stringify(this.vparams));
     }
   };
 
@@ -372,13 +429,15 @@ module.exports = function(env) {
     newParams: function() { return {}; },
     param: function(params, name, initialVal, bound, sampler, samplerprms) {
       if (!params.hasOwnProperty(name)) {
+        assert(env.coroutine instanceof VariationalParticleFilter,
+          'Attempting to create new variational parameter outside of VPF.');
         if (initialVal === undefined) {
           initialVal = sampler(samplerprms);
         }
         if (bound !== undefined) {
           initialVal = bound.rvs(initialVal);
         }
-        params[name] = [ad_maketape(initialVal)];
+        params[name] = [ad.maketape(initialVal)];
       }
       var p = params[name][0];
       if (bound !== undefined) {
@@ -389,13 +448,10 @@ module.exports = function(env) {
     },
     paramTensor: function(params, name, dim, sampler, samplerprms) {
       if (!params.hasOwnProperty(name)) {
-        var val;
-        if (initialVal !== undefined) {
-          val = numeric.rep(dim, initialVal);
-        } else {
-          val = tensor.create(dim, function() { return sampler(samplerprms); });
-        }
-        tensor.mapeq(val, function(x) { return ad_maketape(x); });
+        assert(env.coroutine instanceof VariationalParticleFilter,
+          'Attempting to create new variational parameter outside of VPF.');
+        var val = tensor.create(dim, function() { return sampler(samplerprms); });
+        tensor.mapeq(val, function(x) { return ad.maketape(x); });
         params[name] = val;
       }
       return params[name];
@@ -414,7 +470,7 @@ module.exports = function(env) {
         baseERP: erpObj,
         setParams: function(params) {
           this.params = params;
-          this.rawparams = params.map(ad_primal);
+          this.rawparams = params.map(ad.primal);
         },
         sample: function(params) { return this.baseERP.sample(this.rawparams); },
         score: function(params, val) { return this.baseERP.score(this.rawparams, val); },

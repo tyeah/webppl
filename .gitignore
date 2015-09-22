@@ -6,7 +6,9 @@ npm-debug.log
 compiled/webppl.js
 compiled/webppl.min.js
 
-# .adjs stuff
+# .adjs/VPF stuff
 src/erp_scorers.js
 src/bounds.js
-vpf_experiments/sandbox/targetsum.js
+vpf_experiments/targetsum/params.js
+vpf_experiments/lsystem/params.js
+vpf_experiments/*/results/*

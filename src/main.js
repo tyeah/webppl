@@ -35,12 +35,10 @@ function makePropertiesGlobal(obj) {
   }
 }
 
-// Ensure that necessary files have been AD-transformed and that the AD functions
-//    are globally available
+// Ensure that necessary files have been AD-transformed.
 if (typeof(window) === 'undefined') {
   require('child_process').execSync('make -f ' + __dirname + '/../Makefile.autodiff');
 }
-makePropertiesGlobal(require('./ad/functions'));
 
 // Explicitly call require here to ensure that browserify notices that the
 // header should be bundled.
