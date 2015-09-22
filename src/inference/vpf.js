@@ -75,6 +75,8 @@ module.exports = function(env) {
     this.verbosity = opt('verbosity', { endStatus: true });
     this.initLearnRate = opt('initLearnRate', 1);
     this.tempSchedule = opt('tempSchedule', function() { return 1; });
+    this.doResampling = opt('doResampling', true);
+    this.objective = opt('objective', 'EUBO');
     // TODO: regularization? annealing? other stuff?
 
     // AdaGrad running sum for gradient normalization
@@ -196,6 +198,9 @@ module.exports = function(env) {
   };
 
   VariationalParticleFilter.prototype.resampleParticles = function() {
+    if (!this.doResampling) {
+      return;
+    }
     // Residual resampling following Liu 2008; p. 72, section 3.4.4
     var m = this.particles.length;
     var avgW = avgWeight(this.particles);
@@ -281,7 +286,7 @@ module.exports = function(env) {
     if (converged || this.flightsLeft === 0) {
       if (this.verbosity.endStatus) {
         if (converged) {
-          console.log('CONVERGED');
+          console.log('CONVERGED (' + this.maxDeltaAvg + ' < ' + this.convergeEps + ')');
         } else {
           console.log('DID NOT CONVERGE (' + this.maxDeltaAvg + ' > ' + this.convergeEps +  ')');
         }
@@ -298,91 +303,6 @@ module.exports = function(env) {
       // Run another flight
       return this.runFlight();
     }
-  };
-
-  VariationalParticleFilter.prototype.getParticleGradient = function(particle) {
-    var gradient = {};
-    particle.guideScore.determineFanout();
-    particle.guideScore.reversePhaseResetting(1);
-    // particle.guideScore.reversePhase(1);
-    // particle.guideScore.print();
-    for (var name in this.vparams) {
-      var param = this.vparams[name];
-      // TODO(?): Only add if some element of param is non-zero.
-      gradient[name] = tensor.map(param, function(x) {
-        var sens = x.sensitivity;
-        // assert(sens !== 0);
-        x.sensitivity = 0;
-        return sens;
-      });
-    }
-    if (this.verbosity.gradientSamples) {
-      console.log('    gradientSamp: ' + JSON.stringify(gradient));
-    }
-    return gradient;
-  }
-
-  function groupByAncestor(particles) {
-    var groups = {};
-    for (var p = 0; p < particles.length; p++) {
-      var particle = particles[p];
-      var id = particle.ancestor;
-      if (!groups.hasOwnProperty(id)) {
-        groups[id] = [];
-      }
-      groups[id].push(particle);
-    }
-    var list = [];
-    for (var name in groups) {
-      list.push(groups[name]);
-    }
-    return list;
-  }
-
-  VariationalParticleFilter.prototype.estimateGradient = function() {
-    // TODO: Use particle ancestor tree to avoid even more unnecessary recomputation (?)
-    var gradient = {};
-    if (this.verbosity.eubo) {
-      var eubo = 0;
-    }
-    for (var i = 0; i < this.particleHistory.length; i++) {
-      var particles = this.particleHistory[i];
-      var avgW = avgWeight(particles);
-      var groupedParticles = groupByAncestor(particles);
-      for (var j = 0; j < groupedParticles.length; j++) {
-        var group = groupedParticles[j];
-        var n = group.length;
-        var rep = group[0];
-        if (this.verbosity.eubo && (i === this.particleHistory.length - 1)) {
-          eubo += n * (rep.targetScore - ad.primal(rep.guideScore));
-        }
-        var grad = this.getParticleGradient(rep);
-        var w = n * Math.exp(rep.weight - avgW);
-        for (var name in grad) {
-          var g = grad[name];
-          if (!gradient.hasOwnProperty[name]) {
-            var dim = numeric.dim(g);
-            gradient[name] = numeric.rep(dim, 0);
-          }
-          numeric.addeq(gradient[name], numeric.mul(w, g));
-        }
-      }
-    }
-
-    // Turn all params from tapes into doubles
-    for (var name in this.vparams) {
-      tensor.mapeq(this.vparams[name], function(x) { return ad.primal(x); });
-    }
-
-    if (this.verbosity.eubo) {
-      eubo /= this.numParticles;
-      console.log('  eubo: ' + eubo);
-    }
-    if (this.verbosity.gradientEstimate) {
-      console.log('  gradientEst: ' + JSON.stringify(gradient));
-    }
-
-    return gradient;
   };
 
   VariationalParticleFilter.prototype.doGradientUpdate = function() {
@@ -414,6 +334,148 @@ module.exports = function(env) {
     if (this.verbosity.params) {
       console.log('  params after update: ' + JSON.stringify(this.vparams));
     }
+  };
+
+  VariationalParticleFilter.prototype.estimateGradient = function() {
+    var gradient;
+    if (this.objective === 'EUBO') {
+      gradient = this.estimateEUBOGradient();
+    } else if (this.objective === 'ELBO') {
+      gradient = this.estimateELBOGradient();
+    } else {
+      throw 'Unrecognized variational objective ' + this.objective;
+    }
+
+    // Turn all params from tapes into doubles
+    for (var name in this.vparams) {
+      tensor.mapeq(this.vparams[name], function(x) { return ad.primal(x); });
+    }
+
+    if (this.verbosity.scoreDiff) {
+      var scoreDiff = 0;
+      for (var i = 0; i < this.particles.length; i++) {
+        var p = this.particles[i];
+        scoreDiff += (p.targetScore - ad.primal(p.guideScore));
+      }
+      scoreDiff /= this.numParticles;
+      console.log('  scoreDiff: ' + scoreDiff);
+    }
+    if (this.verbosity.gradientEstimate) {
+      console.log('  gradientEst: ' + JSON.stringify(gradient));
+    }
+
+    return gradient;
+  };
+
+  VariationalParticleFilter.prototype.estimateEUBOGradient = function() {
+    // TODO: Use particle ancestor tree to avoid even more unnecessary recomputation (?)
+    var gradient = {};
+    for (var i = 0; i < this.particleHistory.length; i++) {
+      var particles = this.particleHistory[i];
+      var avgW = avgWeight(particles);
+      var groupedParticles = groupByAncestor(particles);
+      for (var j = 0; j < groupedParticles.length; j++) {
+        var group = groupedParticles[j];
+        var n = group.length;
+        var rep = group[0];
+        var grad = this.getParticleGradient(rep);
+        var w = n * Math.exp(rep.weight - avgW);
+        for (var name in grad) {
+          var g = grad[name];
+          if (!gradient.hasOwnProperty[name]) {
+            var dim = numeric.dim(g);
+            gradient[name] = numeric.rep(dim, 0);
+          }
+          numeric.addeq(gradient[name], numeric.mul(w, g));
+        }
+      }
+    };
+    return gradient;
+  };
+
+  function groupByAncestor(particles) {
+    var groups = {};
+    for (var p = 0; p < particles.length; p++) {
+      var particle = particles[p];
+      var id = particle.ancestor;
+      if (!groups.hasOwnProperty(id)) {
+        groups[id] = [];
+      }
+      groups[id].push(particle);
+    }
+    var list = [];
+    for (var name in groups) {
+      list.push(groups[name]);
+    }
+    return list;
+  }
+
+  VariationalParticleFilter.prototype.estimateELBOGradient = function() {
+    var sumGrad = {};
+    var sumWeightedGrad = {};
+    var sumGradSq = {};
+    var sumWeightedGradSq = {};
+    for (var i = 0; i < this.particles.length; i++) {
+      var particle = this.particles[i];
+      var grad = this.getParticleGradient(particle);
+      var scoreDiff = particle.targetScore - ad.primal(particle.guideScore);
+      for (var name in grad) {
+        var g = grad[name];
+        if (!sumGrad.hasOwnProperty[name]) {
+          var dim = numeric.dim(g);
+          sumGrad[name] = numeric.rep(dim, 0);
+          sumWeightedGrad[name] = numeric.rep(dim, 0);
+          sumGradSq[name] = numeric.rep(dim, 0);
+          sumWeightedGradSq[name] = numeric.rep(dim, 0);
+        }
+        numeric.addeq(sumGrad[name], g);
+        var weightedGrad = numeric.mul(g, scoreDiff);
+        numeric.addeq(sumWeightedGrad[name], weightedGrad);
+        var gSq = numeric.mul(g, g);
+        numeric.addeq(sumGradSq[name], gSq);
+        var weightedGradSq = numeric.mul(gSq, scoreDiff);
+        numeric.addeq(sumWeightedGradSq[name], weightedGradSq);
+      }
+    }
+    // Control variate
+    var numerSum = 0;
+    var denomSum = 0;
+    for (var name in sumGrad) {
+      numerSum += numeric.sum(sumWeightedGradSq[name]);
+      denomSum += numeric.sum(sumGradSq[name]);
+    }
+    var aStar = numerSum / denomSum;
+    var elboGradEst = {};
+    for (var name in sumGrad) {
+      elboGradEst[name] = numeric.div(numeric.sub(sumWeightedGrad[name], numeric.mul(sumGrad[name], aStar)), this.numParticles);
+      // elboGradEst[name] = numeric.div(sumWeightedGrad[name], this.numParticles);
+    }
+    // console.log('sumGrad: ' + JSON.stringify(sumGrad));
+    // console.log('sumGradSq: ' + JSON.stringify(sumGradSq));
+    // console.log('sumWeightedGrad: ' + JSON.stringify(sumWeightedGrad));
+    // console.log('sumWeightedGradSq: ' + JSON.stringify(sumWeightedGradSq));
+    // console.log('aStar: ' + aStar);
+    // console.log('elboGradEst: ' + JSON.stringify(elboGradEst));
+    return elboGradEst;
+  };
+
+  VariationalParticleFilter.prototype.getParticleGradient = function(particle) {
+    var gradient = {};
+    particle.guideScore.determineFanout();
+    particle.guideScore.reversePhaseResetting(1);
+    for (var name in this.vparams) {
+      var param = this.vparams[name];
+      // TODO(?): Only add if some element of param is non-zero.
+      gradient[name] = tensor.map(param, function(x) {
+        var sens = x.sensitivity;
+        x.sensitivity = 0;
+        return sens;
+      });
+    }
+    if (this.verbosity.gradientSamples) {
+      console.log('    gradientSamp: ' + JSON.stringify(gradient));
+    }
+    return gradient;
   };
 
   VariationalParticleFilter.prototype.incrementalize = env.defaultCoroutine.incrementalize;
