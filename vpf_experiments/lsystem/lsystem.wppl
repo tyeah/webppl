@@ -43,7 +43,8 @@ var _uniform = function(lo, hi) {
 	var bnds = [bounds.nonNegative, bounds.nonNegative];
 	var features = globalStore.currFeatures;
 	var betaprms = [1, 1];
-	var params = lsysParams.paramsByLinReg(vparams, callsite, betaprms, bnds, features);
+	// var params = lsysParams.paramsByLinReg(vparams, callsite, betaprms, bnds, features);
+	var params = lsysParams.paramsByNN(vparams, callsite, betaprms, bnds, features, 10);
 	VPF.betaERP.importanceERP.setParams(params);
 	var t = sample(VPF.betaERP, betaprms);
 	return (1-t)*lo + t*hi;
@@ -62,10 +63,11 @@ var targetFactor = function(mult) {
 	// factor(mult * gaussianERP.score([targetHeight, 0.1], size.y));
 	// factor(mult * gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y));
 	// factor(mult * gaussianERP.score([targetXcenter, 0.1], globalStore.bbox.center().x));
-	var f = gaussianERP.score([targetWidth, 0.1], size.x) +
-	        // gaussianERP.score([targetHeight, 0.1], size.y) +
-	        gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y) +
-	        gaussianERP.score([targetXcenter, 0.1], globalStore.bbox.center().x);
+	var f = 
+			gaussianERP.score([targetWidth, 0.1], size.x)
+	        // + gaussianERP.score([targetHeight, 0.1], size.y)
+	        // + gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y)
+	        + gaussianERP.score([targetXcenter, 0.1], globalStore.bbox.center().x);
 	factor(mult * f);
 }
 
@@ -73,20 +75,30 @@ var normalize = function(x, lo, hi) {
 	return (2 * (x - lo) / (hi - lo)) - 1;
 }
 // Just manually normalizing the data for now
-var setCurrFeatures = function() {
+var setCurrFeatures = function(currPos) {
 	var bb = globalStore.bbox;
+	var x = normalize(currPos.x, viewport.xmin, viewport.xmax);
+	var y = normalize(currPos.y, viewport.ymin, viewport.ymax);
 	var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
 	var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
-	var ymin = normalize(bb.min.y, viewport.ymin, viewport.ymax);
-	var ymax = normalize(bb.max.y, viewport.ymin, viewport.ymax);
-	globalStore.currFeatures = [xmin, xmax, ymin, ymax];
+	// var ymin = normalize(bb.min.y, viewport.ymin, viewport.ymax);
+	// var ymax = normalize(bb.max.y, viewport.ymin, viewport.ymax);
+	// globalStore.currFeatures = [x, y, xmin, xmax, ymin, ymax];
+	// globalStore.currFeatures = [x, y, xmin, xmax];
+	globalStore.currFeatures = [x, y];
+	// globalStore.currFeatures = [
+	// 	x, xmin, xmax,
+	// 	x*x, x*xmin, x*xmax,
+	// 	xmin*xmin, xmin*xmax,
+	// 	xmax*xmax
+	// ];
 }
 
 var branch = function(currState, treeNode) {
 	var width = 0.9 * currState.width;
 	var length = 2;
-	var newang = currState.angle + _gaussian(0, Math.PI/8);
-	// var newang = currState.angle + _uniform(-Math.PI/6, Math.PI/6);
+	// var newang = currState.angle + _gaussian(0, Math.PI/8);
+	var newang = currState.angle + _uniform(-Math.PI/6, Math.PI/6);
 	var newbranch = {
 		start: currState.pos,
 		angle: newang,
@@ -109,8 +121,7 @@ var branch = function(currState, treeNode) {
 	globalStore.bbox = globalStore.bbox.clone();
 	globalStore.bbox.expandByPoint(newbranch.start);
 	globalStore.bbox.expandByPoint(newbranch.end);
-
-	setCurrFeatures();
+	setCurrFeatures(newbranch.end);
 
 	// // Add new heuristic factor
 	// targetFactor(1);
@@ -132,16 +143,16 @@ var branch = function(currState, treeNode) {
 					var branchState1 = {
 						depth: currState.depth + 1,
 						pos: newbranch.end,
-						angle: newbranch.angle - Math.abs(_gaussian(0, Math.PI/6)),
-						// angle: newbranch.angle - _uniform(0, Math.PI/4),
+						// angle: newbranch.angle - Math.abs(_gaussian(0, Math.PI/6)),
+						angle: newbranch.angle - _uniform(0, Math.PI/4),
 						width: newbranch.width
 					};
 					branch(branchState1, newNode);
 					var branchState2 = {
 						depth: currState.depth + 1,
 						pos: newbranch.end,
-						angle: newbranch.angle + Math.abs(_gaussian(0, Math.PI/6)),
-						// angle: newbranch.angle + _uniform(0, Math.PI/4),
+						// angle: newbranch.angle + Math.abs(_gaussian(0, Math.PI/6)),
+						angle: newbranch.angle + _uniform(0, Math.PI/4),
 						width: newbranch.width
 					};
 					branch(branchState2, newNode);
@@ -180,13 +191,18 @@ VPF(generate, {
 	vparams: vparams,
 	convergeEps: 0.1,
 	initLearnRate: 1,
-	tempSchedule: lsysUtils.TempSchedules.linear,
+	tempSchedule: lsysUtils.TempSchedules.linearStop(0.5),
+	regularizationWeight: 100,
+
+	// doResampling: false,
+	// objective: 'ELBO',
+
 	verbosity: {
 		flightNum: true,
 		// numUniqueParticles: true,
 		// particleNum: true,
 		// params: true,
-		eubo: true,
+		scoreDiff: true,
 		// gradientEstimate: true,
 		// gradientSamples: true,
 		endStatus: true
@@ -196,6 +212,7 @@ console.log(vparams);
 
 
 var res = {width: 600, height: 600};
+var name = 'test';
 repeat(10, function(i) {
 	// var ret = generate();
 	// var ret = MH(generate, 1000).MAP().val;
@@ -205,7 +222,7 @@ repeat(10, function(i) {
 	var ret = sample(ParticleFilter(generate, 1));
 	console.log('bbox size: ' + JSON.stringify(ret.bbox.size()));
 	// console.log('bbox: ' + JSON.stringify(ret.bbox));
-	lsysUtils.renderOut('vpf_experiments/lsystem/results/' + i + '.png', res, viewport, ret.branches);
+	lsysUtils.renderOut('vpf_experiments/lsystem/' + name + '/' + i + '.png', res, viewport, ret.branches);
 });
 undefined;
 

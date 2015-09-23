@@ -1,21 +1,53 @@
 
-var numeric = require('numeric');
-var tensor = require('../../src/tensor')
+var sampleprms = [0, 0.01];
 
-var sampleprms = [0, 0.05];
+function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+// Matrix/vector multiply-add
+function madd(A, x, b) {
+	var output = b.slice();
+	for (var i = 0; i < b.length; i++) {
+		for (var j = 0; j < x.length; j++) {
+			output[i] = output[i] + (A[i][j] * x[j]);
+		}
+	}
+	return output;
+}
+
+// Calculate parameters by a linear regression on input features
+// (plus non-linear bounding transforms)
 function paramsByLinReg(params, name, origprms, bounds, features) {
 	// If features has different dimensionality, we need separate params,
 	//    even if the name is the same.
 	name += '(' + features.length + ')';
 	var intercepts = VPF.paramTensor(params, name + '[icepts]', [bounds.length], gaussianERP.sample, sampleprms);
-	var output = intercepts.slice();
-	if (features.length > 0) {
-	 	var coeffs = VPF.paramTensor(params, name + '[coeffs]', [bounds.length, features.length], gaussianERP.sample, sampleprms);
-		for (var i = 0; i < bounds.length; i++) {
-			for (var j = 0; j < features.length; j++) {
-				output[i] += (coeffs[i][j] * features[j]);
-			}
-		}
+	var output;
+	if (features.length === 0) {
+		output = intercepts.slice();
+	} else {
+		var coeffs = VPF.paramTensor(params, name + '[coeffs]', [bounds.length, features.length], gaussianERP.sample, sampleprms);
+		output = madd(coeffs, features, intercepts);
+	}
+	for (var i = 0; i < bounds.length; i++) {
+		output[i] = bounds[i].fwd(output[i] + bounds[i].rvs(origprms[i]));
+	}
+	return output;
+}
+
+function paramsByNN(params, name, origprms, bounds, features, nHidden) {
+	// If features has different dimensionality, we need separate params,
+	//    even if the name is the same.
+	name += '(' + features.length + ')';
+	var intercepts = VPF.paramTensor(params, name + '[icepts]', [bounds.length], gaussianERP.sample, sampleprms);
+	var output;
+	if (features.length === 0) {
+		output = intercepts.slice();
+	} else {
+		var nnbias = VPF.paramTensor(params, name + '[nnbias]', [nHidden], gaussianERP.sample, sampleprms);
+		var nnweights = VPF.paramTensor(params, name + '[nnweights]', [nHidden, features.length], gaussianERP.sample, sampleprms);
+		var hidden = madd(nnweights, features, nnbias).map(sigmoid);
+		var coeffs = VPF.paramTensor(params, name + '[coeffs]', [bounds.length, nHidden], gaussianERP.sample, sampleprms);
+		output = madd(coeffs, hidden, intercepts);
 	}
 	for (var i = 0; i < bounds.length; i++) {
 		output[i] = bounds[i].fwd(output[i] + bounds[i].rvs(origprms[i]));
@@ -24,5 +56,6 @@ function paramsByLinReg(params, name, origprms, bounds, features) {
 }
 
 module.exports = {
-	paramsByLinReg: paramsByLinReg
+	paramsByLinReg: paramsByLinReg,
+	paramsByNN: paramsByNN
 }

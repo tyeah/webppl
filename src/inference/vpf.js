@@ -75,6 +75,7 @@ module.exports = function(env) {
     this.verbosity = opt('verbosity', { endStatus: true });
     this.initLearnRate = opt('initLearnRate', 1);
     this.tempSchedule = opt('tempSchedule', function() { return 1; });
+    this.regularizationWeight = opt('regularizationWeight', 1);
     this.doResampling = opt('doResampling', true);
     this.objective = opt('objective', 'EUBO');
     // TODO: regularization? annealing? other stuff?
@@ -314,6 +315,9 @@ module.exports = function(env) {
     // Update parameters using AdaGrad
     for (var name in gradient) {
       var grad = gradient[name];
+      if (this.regularizationWeight > 0) {
+        numeric.subeq(grad, numeric.mul(this.regularizationWeight, this.vparams[name]));
+      }
       var dim = numeric.dim(grad);
       if (!this.runningG2.hasOwnProperty(name)) {
         this.runningG2[name] = numeric.rep(dim, 0);
