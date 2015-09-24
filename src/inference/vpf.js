@@ -73,7 +73,7 @@ module.exports = function(env) {
     this.flightsLeft = this.maxNumFlights;
     this.convergeEps = opt('convergeEps', 0.1);
     this.verbosity = opt('verbosity', { endStatus: true });
-    this.initLearnRate = opt('initLearnRate', 1);
+    this.adagradInitLearnRate = opt('adagradInitLearnRate', 1);
     this.tempSchedule = opt('tempSchedule', function() { return 1; });
     this.regularizationWeight = opt('regularizationWeight', 0);
     this.doResampling = opt('doResampling', true);
@@ -323,7 +323,7 @@ module.exports = function(env) {
         this.runningG2[name] = numeric.rep(dim, 0);
       }
       numeric.addeq(this.runningG2[name], numeric.mul(grad, grad));
-      var weight = numeric.div(this.initLearnRate, numeric.sqrt(this.runningG2[name]));
+      var weight = numeric.div(this.adagradInitLearnRate, numeric.sqrt(this.runningG2[name]));
       if (!numeric.all(numeric.isFinite(weight))) {
         console.log('name: ' + name);
         console.log('grad: ' + grad);
