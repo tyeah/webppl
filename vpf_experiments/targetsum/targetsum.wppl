@@ -1,15 +1,18 @@
-var util = require.call(null, 'vpf_experiments/targetsum/params');
+var params = require.call(null, 'vpf_experiments/targetsum/params');
 var tempSchedules = require.call(null, 'src/tempSchedules');
+var bounds = require.call(null, 'src/bounds');
 
 var targetsum = 10;
 // var tightness = 0.1;
 var tightness = 1;
 
-var params = VPF.newParams();
+var vparams = VPF.newParams();
 
 // var _gaussian = gaussian;
 var _gaussian = function(mu, sigma, prevs) {
-	VPF.gaussianERP.importanceERP.setParams(util.gaussianParams(params, prevs.length, prevs));
+	// var prms = params.gaussianParams(vparams, prevs.length, prevs);
+	var prms = params.generalParams(vparams, prevs.length, [bounds.none, bounds.nonNegative], prevs);
+	VPF.gaussianERP.importanceERP.setParams(prms);
 	return sample(VPF.gaussianERP, [mu, sigma]);
 }
 
@@ -22,12 +25,12 @@ var program = function() {
 	return [x1, x2, x3];
 }
 
-VPF(program, {
-	numParticles: 1000,
+var result = VPF(program, {
+	numParticles: 100,
 	maxNumFlights: 1000,
-	vparams: params,
+	vparams: vparams,
 	convergeEps: 0.1,
-	initLearnRate: 1,
+	adagradInitLearnRate: 1,
 	// tempSchedule: tempSchedules.linear,
 
 	doResampling: false,
@@ -44,7 +47,7 @@ VPF(program, {
 	}
 });
 
-console.log(params);
+console.log(result.finalParams);
 
 repeat(10, function() {
 	var result = ParticleFilter(program, 1);
@@ -52,4 +55,4 @@ repeat(10, function() {
 	console.log((nums[0]+nums[1]+nums[2]) + ': ' + JSON.stringify(nums));
 });
 
-true;
+undefined;

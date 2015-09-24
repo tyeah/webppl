@@ -1,20 +1,73 @@
 var bounds = require('../../src/bounds');
 
-function gaussianParams(params, basename, prevvals) {
-	var mu = VPF.param(params, basename + '[mu_intercerpt]', 
-		undefined, undefined, gaussianERP.sample, [0, 1]);
+var gaussian_hyperprior = [0, 1e-3];
 
+function gaussianParams(params, basename, prevvals) {
+
+	prevvals = prevvals.map(function(x) { return x / 5; });
+
+	var mu_icept = VPF.param(params, basename + '[mu_intercerpt]', 
+		undefined, undefined, gaussianERP.sample, gaussian_hyperprior);
+	var mu = mu_icept;
+
+	var mu_weights = [];
 	for (var i = 0; i < prevvals.length; i++) {
 		var w = VPF.param(params, basename + '[mu_' + i + ']',
-			undefined, undefined, gaussianERP.sample, [0, 1]);
+			undefined, undefined, gaussianERP.sample, gaussian_hyperprior);
+		mu_weights.push(w);
 		mu = mu + (prevvals[i] * w);
 	}
 	
-	var sigma = VPF.param(params, basename + '[sigma]',
-		undefined, bounds.nonNegative, gammaERP.sample, [1, 1]);
+	// var sigma = VPF.param(params, basename + '[sigma]',
+	// 	undefined, bounds.nonNegative, gammaERP.sample, [1, 1]);
+
+	var sigma_icept = VPF.param(params, basename + '[sigma_intercerpt]', 
+		undefined, undefined, gaussianERP.sample, gaussian_hyperprior);
+	var sigma = sigma_icept;
+
+	var sigma_weights = [];
+	for (var i = 0; i < prevvals.length; i++) {
+		var w = VPF.param(params, basename + '[sigma_' + i + ']',
+			undefined, undefined, gaussianERP.sample, gaussian_hyperprior);
+		sigma_weights.push(w);
+		sigma = sigma + (prevvals[i] * w);
+	}
+	var preBoundsSigma = sigma;
+	sigma = bounds.nonNegative.fwd(sigma);
+
+	// if (!isFinite(__AD__.primal(sigma)) || Math.abs(sigma) > 1000) {
+	// 	console.log('  sigma: ' + __AD__.primal(sigma));
+	// 	console.log('  pre-bounds sigma: ' + __AD__.primal(preBoundsSigma));
+	// 	console.log('  sigma icept: ' + __AD__.primal(sigma_icept));
+	// 	console.log('  sigma weights: ' + sigma_weights.map(__AD__.primal));
+	// 	console.log('  prevvals: ' + prevvals);
+	// 	assert(false);
+	// }
+
 	return [mu, sigma];
 }
 
+function generalParams(params, basename, bounds, features) {
+
+	features = features.map(function(x) { return x / 5; });
+
+	var intercepts = VPF.paramTensor(params, basename + '[icepts]', [bounds.length], gaussianERP.sample, gaussian_hyperprior);
+	var outputs = intercepts.slice();
+	if (features.length > 0) {
+		var coeffs = VPF.paramTensor(params, basename + '[coeffs]', [bounds.length, features.length], gaussianERP.sample, gaussian_hyperprior);
+		for (var i = 0; i < outputs.length; i++) {
+			for (var j = 0; j < features.length; j++) {
+				outputs[i] += coeffs[i][j] * features[j];
+			}
+		}
+	}
+	for (var i = 0; i < outputs.length; i++) {
+		outputs[i] = bounds[i].fwd(outputs[i]);
+	}
+	return outputs;
+}
+
 module.exports = {
-	gaussianParams: gaussianParams
+	gaussianParams: gaussianParams,
+	generalParams: generalParams
 };

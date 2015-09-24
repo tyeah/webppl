@@ -66,11 +66,10 @@ module.exports = function(env) {
     }
 
     this.numParticles = opt('numParticles');
-    this.numStrata = opt('numStrata', 1);
-    this.strict = opt('strict', false);
-    this.vparams = opt('vparams');
     this.maxNumFlights = opt('maxNumFlights');
     this.flightsLeft = this.maxNumFlights;
+    this.strict = opt('strict', false);
+    this.vparams = opt('vparams');
     this.convergeEps = opt('convergeEps', 0.1);
     this.verbosity = opt('verbosity', { endStatus: true });
     this.adagradInitLearnRate = opt('adagradInitLearnRate', 1);
@@ -78,12 +77,14 @@ module.exports = function(env) {
     this.regularizationWeight = opt('regularizationWeight', 0);
     this.doResampling = opt('doResampling', true);
     this.objective = opt('objective', 'EUBO');
-    // TODO: regularization? annealing? other stuff?
 
     // AdaGrad running sum for gradient normalization
     this.runningG2 = {};
-    // Convergence test
+    // Convergence testing
     this.maxDeltaAvg = 0;
+
+    // Diagnostics
+    this.diagnostics = {};
 
     // Move old coroutine out of the way and install this as the current
     // handler.
@@ -292,10 +293,14 @@ module.exports = function(env) {
           console.log('DID NOT CONVERGE (' + this.maxDeltaAvg + ' > ' + this.convergeEps +  ')');
         }
       }
+      // Finalize return object
+      this.diagnostics.converged = converged;
+      this.diagnostics.flightsRun = this.maxNumFlights - this.flightsLeft;
+      this.diagnostics.finalParams = this.vparams;
       // Reinstate previous coroutine:
       env.coroutine = this.oldCoroutine;
       // Return from particle filter by calling original continuation:
-      return this.k(this.oldStore);
+      return this.k(this.oldStore, this.diagnostics);
     } else {
       // Wrap all params in a fresh set of tapes
       for (var name in this.vparams) {
@@ -355,13 +360,17 @@ module.exports = function(env) {
       tensor.mapeq(this.vparams[name], function(x) { return ad.primal(x); });
     }
 
+    var scoreDiff = 0;
+    for (var i = 0; i < this.particles.length; i++) {
+      var p = this.particles[i];
+      scoreDiff += (p.targetScore - ad.primal(p.guideScore));
+    }
+    scoreDiff /= this.numParticles;
+    if (!this.diagnostics.hasOwnProperty('scoreDiffs')) {
+      this.diagnostics.scoreDiffs = [];
+    }
+    this.diagnostics.scoreDiffs.push(scoreDiff);
     if (this.verbosity.scoreDiff) {
-      var scoreDiff = 0;
-      for (var i = 0; i < this.particles.length; i++) {
-        var p = this.particles[i];
-        scoreDiff += (p.targetScore - ad.primal(p.guideScore));
-      }
-      scoreDiff /= this.numParticles;
       console.log('  scoreDiff: ' + scoreDiff);
     }
     if (this.verbosity.gradientEstimate) {
