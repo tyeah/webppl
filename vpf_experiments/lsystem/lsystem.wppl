@@ -36,19 +36,19 @@ var _gaussian = function(mu, sigma) {
 	return sample(VPF.gaussianERP, prms);
 }
 
-// var _uniform = uniform;
-var _uniform = function(lo, hi) {
-	var addr = currentAddress();
-	var callsite = addr.slice(addr.lastIndexOf('_'));
-	var bnds = [bounds.nonNegative, bounds.nonNegative];
-	var features = globalStore.currFeatures;
-	var betaprms = [1, 1];
-	// var params = lsysParams.paramsByLinReg(vparams, callsite, betaprms, bnds, features);
-	var params = lsysParams.paramsByNN(vparams, callsite, betaprms, bnds, features, 10);
-	VPF.betaERP.importanceERP.setParams(params);
-	var t = sample(VPF.betaERP, betaprms);
-	return (1-t)*lo + t*hi;
-}
+var _uniform = uniform;
+// var _uniform = function(lo, hi) {
+// 	var addr = currentAddress();
+// 	var callsite = addr.slice(addr.lastIndexOf('_'));
+// 	var bnds = [bounds.nonNegative, bounds.nonNegative];
+// 	var features = globalStore.currFeatures;
+// 	var betaprms = [1, 1];
+// 	var params = lsysParams.paramsByLinReg(vparams, callsite, betaprms, bnds, features);
+// 	// var params = lsysParams.paramsByNN(vparams, callsite, betaprms, bnds, features, 10);
+// 	VPF.betaERP.importanceERP.setParams(params);
+// 	var t = sample(VPF.betaERP, betaprms);
+// 	return (1-t)*lo + t*hi;
+// }
 
 var _flip = flip;
 
@@ -66,7 +66,7 @@ var targetFactor = function(mult) {
 	var f = 
 			gaussianERP.score([targetWidth, 0.1], size.x)
 	        // + gaussianERP.score([targetHeight, 0.1], size.y)
-	        // + gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y)
+	        + gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y)
 	        + gaussianERP.score([targetXcenter, 0.1], globalStore.bbox.center().x);
 	factor(mult * f);
 }
@@ -112,10 +112,10 @@ var branch = function(currState, treeNode) {
 		treeNode.children.push(newNode);
 	}
 
-	// // Subtract previous heuristic factor
-	// if (globalStore.branches.length > 0) {
-	// 	targetFactor(-1);
-	// }
+	// Subtract previous heuristic factor
+	if (globalStore.branches.length > 0) {
+		targetFactor(-1);
+	}
 
 	globalStore.branches = globalStore.branches.concat([newbranch]);
 	globalStore.bbox = globalStore.bbox.clone();
@@ -123,8 +123,8 @@ var branch = function(currState, treeNode) {
 	globalStore.bbox.expandByPoint(newbranch.end);
 	setCurrFeatures(newbranch.end);
 
-	// // Add new heuristic factor
-	// targetFactor(1);
+	// Add new heuristic factor
+	targetFactor(1);
 
 	// Terminate?
 	future(function() {
@@ -176,53 +176,54 @@ var generate = function() {
 	future(function() { branch(startState, undefined); });
 	finishAllFutures();
 
-	// Target factor only once, at very end
-	targetFactor(1);
+	// // Target factor only once, at very end
+	// targetFactor(1);
 
 	return { branches: globalStore.branches, bbox: globalStore.bbox };
 };
 
-setFuturePolicy('deterministic');
+// setFuturePolicy('deterministic');
 
-VPF(generate, {
-	numParticles: 100,
-	// numParticles: 1,
-	maxNumFlights: 300,
-	vparams: vparams,
-	convergeEps: 0.1,
-	initLearnRate: 1,
-	tempSchedule: lsysUtils.TempSchedules.linearStop(0.5),
-	regularizationWeight: 100,
+// VPF(generate, {
+// 	numParticles: 100,
+// 	// numParticles: 1,
+// 	maxNumFlights: 300,
+// 	vparams: vparams,
+// 	convergeEps: 0.1,
+// 	initLearnRate: 1,
+// 	tempSchedule: lsysUtils.TempSchedules.linearStop(0.5),
+// 	regularizationWeight: 100,
 
-	// doResampling: false,
-	// objective: 'ELBO',
+// 	// doResampling: false,
+// 	// objective: 'ELBO',
 
-	verbosity: {
-		flightNum: true,
-		// numUniqueParticles: true,
-		// particleNum: true,
-		// params: true,
-		scoreDiff: true,
-		// gradientEstimate: true,
-		// gradientSamples: true,
-		endStatus: true
-	}
-});
-console.log(vparams);
+// 	verbosity: {
+// 		flightNum: true,
+// 		// numUniqueParticles: true,
+// 		// particleNum: true,
+// 		// params: true,
+// 		scoreDiff: true,
+// 		// gradientEstimate: true,
+// 		// gradientSamples: true,
+// 		endStatus: true
+// 	}
+// });
+// console.log(vparams);
 
 
 var res = {width: 600, height: 600};
 var name = 'test';
-repeat(10, function(i) {
+var n = 20;
+repeat(n, function(i) {
 	// var ret = generate();
 	// var ret = MH(generate, 1000).MAP().val;
 	// var ret = sample(MH(generate, 1000));
 	// var ret = ParticleFilter(generate, 300).MAP().val;
-	// var ret = sample(ParticleFilter(generate, 300));
-	var ret = sample(ParticleFilter(generate, 1));
+	var ret = sample(ParticleFilter(generate, 300));
+	// var ret = sample(ParticleFilter(generate, 1));
 	console.log('bbox size: ' + JSON.stringify(ret.bbox.size()));
 	// console.log('bbox: ' + JSON.stringify(ret.bbox));
-	lsysUtils.renderOut('vpf_experiments/lsystem/' + name + '/' + i + '.png', res, viewport, ret.branches);
+	lsysUtils.renderOut('vpf_experiments/lsystem/results/' + name + '/' + i + '.png', res, viewport, ret.branches);
 });
 undefined;
 

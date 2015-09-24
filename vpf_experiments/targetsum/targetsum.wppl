@@ -1,18 +1,18 @@
 var util = require.call(null, 'vpf_experiments/targetsum/params');
+var tempSchedules = require.call(null, 'src/tempSchedules');
 
 var targetsum = 10.0;
 
 var params = VPF.newParams();
 
+// var _gaussian = gaussian;
 var _gaussian = function(mu, sigma, prevs) {
 	VPF.gaussianERP.importanceERP.setParams(util.gaussianParams(params, prevs.length, prevs));
 	return sample(VPF.gaussianERP, [mu, sigma]);
-	// return gaussian(mu, sigma);
 }
 
 var program = function() {
 	var x1 = _gaussian(0, 5, []);
-	// var x1 = gaussian(0, 5);
 	var x2 = _gaussian(0, 5, [x1]);
 	var x3 = _gaussian(0, 5, [x1, x2]);
 	var sum = x1 + x2 + x3;
@@ -21,17 +21,24 @@ var program = function() {
 }
 
 VPF(program, {
-	numParticles: 100,
-	maxNumFlights: 1000,
+	numParticles: 1000,
+	maxNumFlights: 100,
 	vparams: params,
 	convergeEps: 0.1,
 	initLearnRate: 1,
+	// tempSchedule: tempSchedules.linearStop(0.5),
+
+	// doResampling: false,
+	// objective: 'ELBO',
+
 	verbosity: {
-		// flightNum: true,
+		flightNum: true,
+		scoreDiff: true,
 		// particleNum: true,
 		// params: true,
-		// eubo: true,
-		// endStatus: true
+		// gradientEstimate: true,
+		// gradientSamples: true,
+		endStatus: true
 	}
 });
 

@@ -75,7 +75,7 @@ module.exports = function(env) {
     this.verbosity = opt('verbosity', { endStatus: true });
     this.initLearnRate = opt('initLearnRate', 1);
     this.tempSchedule = opt('tempSchedule', function() { return 1; });
-    this.regularizationWeight = opt('regularizationWeight', 1);
+    this.regularizationWeight = opt('regularizationWeight', 0);
     this.doResampling = opt('doResampling', true);
     this.objective = opt('objective', 'EUBO');
     // TODO: regularization? annealing? other stuff?
@@ -372,7 +372,7 @@ module.exports = function(env) {
   };
 
   VariationalParticleFilter.prototype.estimateEUBOGradient = function() {
-    // TODO: Use particle ancestor tree to avoid even more unnecessary recomputation (?)
+    // TODO: Use particle ancestor tree to avoid even more unnecessary recomputation(?)
     var gradient = {};
     for (var i = 0; i < this.particleHistory.length; i++) {
       var particles = this.particleHistory[i];
@@ -386,7 +386,7 @@ module.exports = function(env) {
         var w = n * Math.exp(rep.weight - avgW);
         for (var name in grad) {
           var g = grad[name];
-          if (!gradient.hasOwnProperty[name]) {
+          if (!gradient.hasOwnProperty(name)) {
             var dim = numeric.dim(g);
             gradient[name] = numeric.rep(dim, 0);
           }
@@ -415,17 +415,19 @@ module.exports = function(env) {
   }
 
   VariationalParticleFilter.prototype.estimateELBOGradient = function() {
+    var sumScoreDiff = 0;
     var sumGrad = {};
     var sumWeightedGrad = {};
     var sumGradSq = {};
     var sumWeightedGradSq = {};
     for (var i = 0; i < this.particles.length; i++) {
       var particle = this.particles[i];
-      var grad = this.getParticleGradient(particle);
       var scoreDiff = particle.targetScore - ad.primal(particle.guideScore);
+      var grad = this.getParticleGradient(particle);
+      sumScoreDiff += scoreDiff;
       for (var name in grad) {
         var g = grad[name];
-        if (!sumGrad.hasOwnProperty[name]) {
+        if (!sumGrad.hasOwnProperty(name)) {
           var dim = numeric.dim(g);
           sumGrad[name] = numeric.rep(dim, 0);
           sumWeightedGrad[name] = numeric.rep(dim, 0);
@@ -452,14 +454,17 @@ module.exports = function(env) {
     var elboGradEst = {};
     for (var name in sumGrad) {
       elboGradEst[name] = numeric.div(numeric.sub(sumWeightedGrad[name], numeric.mul(sumGrad[name], aStar)), this.numParticles);
-      // elboGradEst[name] = numeric.div(sumWeightedGrad[name], this.numParticles);
     }
-    // console.log('sumGrad: ' + JSON.stringify(sumGrad));
-    // console.log('sumGradSq: ' + JSON.stringify(sumGradSq));
-    // console.log('sumWeightedGrad: ' + JSON.stringify(sumWeightedGrad));
-    // console.log('sumWeightedGradSq: ' + JSON.stringify(sumWeightedGradSq));
-    // console.log('aStar: ' + aStar);
-    // console.log('elboGradEst: ' + JSON.stringify(elboGradEst));
+    if (this.verbosity.gradientIntermediates) {
+      console.log('  sumGrad: ' + JSON.stringify(sumGrad));
+      console.log('  sumGradSq: ' + JSON.stringify(sumGradSq));
+      console.log('  sumWeightedGrad: ' + JSON.stringify(sumWeightedGrad));
+      console.log('  sumWeightedGradSq: ' + JSON.stringify(sumWeightedGradSq));
+      console.log('  aStar: ' + JSON.stringify(aStar));
+      console.log('  sumScoreDiff: ' + sumScoreDiff);
+      console.log('  avgScoreDiff: ' + sumScoreDiff / this.numParticles);
+      console.log('  elboGradEst: ' + JSON.stringify(elboGradEst));
+    }
     return elboGradEst;
   };
 

@@ -1,11 +1,8 @@
 var bounds = require('../../src/bounds');
 
 function gaussianParams(params, basename, prevvals) {
-	// if (prevvals.length === 0) {
-		var mu = VPF.param(params, basename + '[mu_intercerpt]', 
-			undefined, undefined, gaussianERP.sample, [0, 1]);
-	// }
-	// else var mu = 0;
+	var mu = VPF.param(params, basename + '[mu_intercerpt]', 
+		undefined, undefined, gaussianERP.sample, [0, 1]);
 
 	for (var i = 0; i < prevvals.length; i++) {
 		var w = VPF.param(params, basename + '[mu_' + i + ']',
@@ -17,7 +14,6 @@ function gaussianParams(params, basename, prevvals) {
 		undefined, bounds.nonNegative, gammaERP.sample, [1, 1]);
 	return [mu, sigma];
 }
-
 
 module.exports = {
 	gaussianParams: gaussianParams
