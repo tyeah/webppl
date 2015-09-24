@@ -1,7 +1,9 @@
 var util = require.call(null, 'vpf_experiments/targetsum/params');
 var tempSchedules = require.call(null, 'src/tempSchedules');
 
-var targetsum = 10.0;
+var targetsum = 10;
+// var tightness = 0.1;
+var tightness = 1;
 
 var params = VPF.newParams();
 
@@ -16,20 +18,20 @@ var program = function() {
 	var x2 = _gaussian(0, 5, [x1]);
 	var x3 = _gaussian(0, 5, [x1, x2]);
 	var sum = x1 + x2 + x3;
-	factor(gaussianERP.score([targetsum, 0.1], sum));
+	factor(gaussianERP.score([targetsum, tightness], sum));
 	return [x1, x2, x3];
 }
 
 VPF(program, {
 	numParticles: 1000,
-	maxNumFlights: 100,
+	maxNumFlights: 1000,
 	vparams: params,
 	convergeEps: 0.1,
 	initLearnRate: 1,
-	// tempSchedule: tempSchedules.linearStop(0.5),
+	// tempSchedule: tempSchedules.linear,
 
-	// doResampling: false,
-	// objective: 'ELBO',
+	doResampling: false,
+	objective: 'ELBO',
 
 	verbosity: {
 		flightNum: true,
