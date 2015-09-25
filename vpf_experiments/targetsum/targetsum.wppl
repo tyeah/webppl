@@ -1,28 +1,35 @@
 var params = require.call(null, 'vpf_experiments/targetsum/params');
 var tempSchedules = require.call(null, 'src/tempSchedules');
-var bounds = require.call(null, 'src/bounds');
-
-var targetsum = 10;
-// var tightness = 0.1;
-var tightness = 1;
 
 var vparams = VPF.newParams();
 
 // var _gaussian = gaussian;
 var _gaussian = function(mu, sigma, prevs) {
 	// var prms = params.gaussianParams(vparams, prevs.length, prevs);
-	var prms = params.generalParams(vparams, prevs.length, [bounds.none, bounds.nonNegative], prevs);
+	var prms = params.generalParams(vparams, prevs.length, prevs);
 	VPF.gaussianERP.importanceERP.setParams(prms);
 	return sample(VPF.gaussianERP, [mu, sigma]);
 }
 
+var nVars = 10;
+var targetsum = 10 * nVars / 3;
+var tightness = targetsum / 10;
+// var tightness = 1;
+
+var genvars = function(prevVars) {
+	if (prevVars.length === nVars) {
+		return prevVars;
+	} else {
+		var x = _gaussian(0, 5, prevVars);
+		return genvars(prevVars.concat([x]));
+	}
+}
+
 var program = function() {
-	var x1 = _gaussian(0, 5, []);
-	var x2 = _gaussian(0, 5, [x1]);
-	var x3 = _gaussian(0, 5, [x1, x2]);
-	var sum = x1 + x2 + x3;
-	factor(gaussianERP.score([targetsum, tightness], sum));
-	return [x1, x2, x3];
+	var vars = genvars([]);
+	var sumvars = sum(vars);
+	factor(gaussianERP.score([targetsum, tightness], sumvars));
+	return vars;
 }
 
 var result = VPF(program, {
@@ -49,10 +56,10 @@ var result = VPF(program, {
 
 console.log(result.finalParams);
 
+console.log('target sum: ' + targetsum);
 repeat(10, function() {
-	var result = ParticleFilter(program, 1);
-	var nums = result.MAP().val;
-	console.log((nums[0]+nums[1]+nums[2]) + ': ' + JSON.stringify(nums));
+	var nums = ParticleFilter(program, 1).MAP().val;
+	console.log(sum(nums) + ': ' + JSON.stringify(nums));
 });
 
 undefined;
