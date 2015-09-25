@@ -15,6 +15,12 @@ var assert = require('assert');
 var ad = require('../ad/functions.js')
 
 
+function hrtimeToSeconds(t) {
+  // Seconds + nanoseconds
+  return t[0] + t[1]/1e9;
+}
+
+
 module.exports = function(env) {
 
   function isActive(particle) {
@@ -56,7 +62,7 @@ module.exports = function(env) {
     return avgW;
   }
 
-  function VariationalParticleFilter(s, k, a, wpplFn, opts) {
+  function VariationalParticleFilter(s, k, a, wpplFn, vparams, opts) {
 
     function opt(name, defaultval) {
       var o = opts[name];
@@ -69,14 +75,15 @@ module.exports = function(env) {
     this.maxNumFlights = opt('maxNumFlights');
     this.flightsLeft = this.maxNumFlights;
     this.strict = opt('strict', false);
-    this.vparams = opt('vparams');
     this.convergeEps = opt('convergeEps', 0.1);
-    this.verbosity = opt('verbosity', { endStatus: true });
+    this.verbosity = opt('verbosity', {});
     this.adagradInitLearnRate = opt('adagradInitLearnRate', 1);
     this.tempSchedule = opt('tempSchedule', function() { return 1; });
     this.regularizationWeight = opt('regularizationWeight', 0);
-    this.doResampling = opt('doResampling', true);
     this.objective = opt('objective', 'EUBO');
+
+    // Variational parameters
+    this.vparams = vparams;
 
     // AdaGrad running sum for gradient normalization
     this.runningG2 = {};
@@ -95,6 +102,9 @@ module.exports = function(env) {
     this.oldStore = _.clone(s); // will be reinstated at the end
     this.wpplFn = wpplFn;
     this.addr = a;
+
+    // Start timer
+    this.startTime = process.hrtime();
   }
 
   VariationalParticleFilter.prototype.runFlight = function() {
@@ -200,7 +210,7 @@ module.exports = function(env) {
   };
 
   VariationalParticleFilter.prototype.resampleParticles = function() {
-    if (!this.doResampling) {
+    if (this.objective === 'ELBO') {
       return;
     }
     // Residual resampling following Liu 2008; p. 72, section 3.4.4
@@ -297,6 +307,7 @@ module.exports = function(env) {
       this.diagnostics.converged = converged;
       this.diagnostics.flightsRun = this.maxNumFlights - this.flightsLeft;
       this.diagnostics.finalParams = this.vparams;
+      this.diagnostics.timeTaken = hrtimeToSeconds(process.hrtime(this.startTime));
       // Reinstate previous coroutine:
       env.coroutine = this.oldCoroutine;
       // Return from particle filter by calling original continuation:
@@ -368,8 +379,10 @@ module.exports = function(env) {
     scoreDiff /= this.numParticles;
     if (!this.diagnostics.hasOwnProperty('scoreDiffs')) {
       this.diagnostics.scoreDiffs = [];
+      this.diagnostics.times = [];
     }
     this.diagnostics.scoreDiffs.push(scoreDiff);
+    this.diagnostics.times.push(hrtimeToSeconds(process.hrtime(this.startTime)));
     if (this.verbosity.scoreDiff) {
       console.log('  scoreDiff: ' + scoreDiff);
     }

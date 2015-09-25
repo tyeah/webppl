@@ -1,5 +1,35 @@
+
+var isautomated = function() { return typeof(__params__) !== 'undefined'; }
+
+var autoparam = function(name, defval) {
+	return isautomated() && __params__.hasOwnProperty(name) ? __params__[name] : defval;
+}
+
+// ------------------------------------------------------------------
+
+var nVars = autoparam('nVars', 3);
+var targetsum = 10 * nVars / 3;
+var tightness = autoparam('tightness', targetsum / 10);
+
+var vpfParams = {
+	numParticles: autoparam('numParticles', 100),
+	maxNumFlights: autoparam('maxNumFlights', 1000),
+	convergeEps: 0.1,
+	adagradInitLearnRate: 1,
+
+	objective: autoparam('objective', 'ELBO'),
+	// objective: autoparam('objective', 'EUBO'),
+
+	verbosity: autoparam('verbosity', {
+		flightNum: true,
+		scoreDiff: true,
+		endStatus: true
+	})
+};
+
+// ------------------------------------------------------------------
+
 var params = require.call(null, 'vpf_experiments/targetsum/params');
-var tempSchedules = require.call(null, 'src/tempSchedules');
 
 var vparams = VPF.newParams();
 
@@ -10,11 +40,6 @@ var _gaussian = function(mu, sigma, prevs) {
 	VPF.gaussianERP.importanceERP.setParams(prms);
 	return sample(VPF.gaussianERP, [mu, sigma]);
 }
-
-var nVars = 10;
-var targetsum = 10 * nVars / 3;
-var tightness = targetsum / 10;
-// var tightness = 1;
 
 var genvars = function(prevVars) {
 	if (prevVars.length === nVars) {
@@ -32,34 +57,20 @@ var program = function() {
 	return vars;
 }
 
-var result = VPF(program, {
-	numParticles: 100,
-	maxNumFlights: 1000,
-	vparams: vparams,
-	convergeEps: 0.1,
-	adagradInitLearnRate: 1,
-	// tempSchedule: tempSchedules.linear,
+var result = VPF(program, vparams, vpfParams);
 
-	doResampling: false,
-	objective: 'ELBO',
-
-	verbosity: {
-		flightNum: true,
-		scoreDiff: true,
-		// particleNum: true,
-		// params: true,
-		// gradientEstimate: true,
-		// gradientSamples: true,
-		endStatus: true
-	}
-});
-
-console.log(result.finalParams);
-
-console.log('target sum: ' + targetsum);
-repeat(10, function() {
-	var nums = ParticleFilter(program, 1).MAP().val;
-	console.log(sum(nums) + ': ' + JSON.stringify(nums));
-});
-
-undefined;
+if (!isautomated()) {
+	console.log('target sum: ' + targetsum);
+	repeat(10, function() {
+		var nums = ParticleFilter(program, 1).MAP().val;
+		console.log(sum(nums) + ': ' + JSON.stringify(nums));
+	});
+	undefined;
+} else {
+	var utils = require('vpf_experiments/targetsum/utils');
+	var samps = repeat(autoparam('numTestSamps', 100), function() {
+		return ParticleFilter(program, 1).MAP().val;
+	});
+	utils.computeAdditionalDependentMeasures(result, samps, targetsum);
+	result;
+}

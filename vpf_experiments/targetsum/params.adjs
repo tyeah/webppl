@@ -64,8 +64,8 @@ function generalParams(params, basename, features) {
 		}
 	}
 	// sigma
-	// var alpha = Math.min(1/features.length, 1);
 	var alpha = Math.min(0.01/features.length, 1);
+	// var alpha = 1;
 	outputs[1] = Math.exp(alpha * outputs[1]) + 0.01;
 	return outputs;
 }
