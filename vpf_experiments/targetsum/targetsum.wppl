@@ -67,7 +67,7 @@ if (!isautomated()) {
 	});
 	undefined;
 } else {
-	var utils = require('vpf_experiments/targetsum/utils');
+	var utils = require.call(null, 'vpf_experiments/targetsum/utils');
 	var samps = repeat(autoparam('numTestSamps', 100), function() {
 		return ParticleFilter(program, 1).MAP().val;
 	});

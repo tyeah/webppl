@@ -55,10 +55,17 @@ function run(config, callback) {
 		//    progfn throws an exception
 		function go() {
 			var success = true;
+			var nFailures = 0;
 			try {
 				progfn({}, topK, '');
 			} catch (e) {
+				console.log('run: caught exception: ' + e.toString());
 				success = false;
+				nFailures++;
+				if (nFailures === 10) {
+					console.log('run: failed 10 times; bailing');
+					process.exit(1);
+				}
 			} finally {
 				return success;
 			}
@@ -104,7 +111,7 @@ function makeVarying(varyingName, varyingValues, fn, convertValue) {
 
 // Run something and save the results to a CSV file
 function csv(file, headerLabels, config, callback, fn) {
-	console.log('Opening CSV file "' + file '"');
+	console.log('Opening CSV file "' + file + '"');
 	var f = fs.openSync(file, 'w');
 	fs.writeSync(f, headerLabels.toString() + '\n');
 	fn(config, function(rows) {
