@@ -119,7 +119,7 @@ function changeNumParticles(nReps) {
 
 // changeNumVars(1);
 // changeTightness(1);
-changeNumParticles(1);
+// changeNumParticles(1);
 
 
 

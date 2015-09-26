@@ -19,212 +19,228 @@ var polar2rect = function(r, theta) {
 	return vec2(r*Math.cos(theta), r*Math.sin(theta));
 }
 
-// var viewport = {xmin: -20, xmax: 20, ymin: -38, ymax: 2};
+
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
+
+var targetWidth = 8;
+var targetYmax = 0;
+var targetXcenter = 0;
 
 var vparams = VPF.newParams();
 
-// var _gaussian = gaussian;
-var _gaussian = function(mu, sigma) {
-	var addr = currentAddress();
-	var callsite = addr.slice(addr.lastIndexOf('_'));
-	var bnds = [bounds.none, bounds.nonNegative];
-	var features = globalStore.currFeatures;
-	var prms = [mu, sigma];
-	var params = lsysParams.paramsByLinReg(vparams, callsite, prms, bnds, features);
-	VPF.gaussianERP.importanceERP.setParams(params);
-	return sample(VPF.gaussianERP, prms);
-}
 
-var _uniform = uniform;
-// var _uniform = function(lo, hi) {
-// 	var addr = currentAddress();
-// 	var callsite = addr.slice(addr.lastIndexOf('_'));
-// 	var bnds = [bounds.nonNegative, bounds.nonNegative];
-// 	var features = globalStore.currFeatures;
-// 	var betaprms = [1, 1];
-// 	var params = lsysParams.paramsByLinReg(vparams, callsite, betaprms, bnds, features);
-// 	// var params = lsysParams.paramsByNN(vparams, callsite, betaprms, bnds, features, 10);
-// 	VPF.betaERP.importanceERP.setParams(params);
-// 	var t = sample(VPF.betaERP, betaprms);
-// 	return (1-t)*lo + t*hi;
-// }
+var makeProgram = function(variational, heuristicFactors) {
 
-var _flip = flip;
-
-// var targetWidth = 15;
-var targetWidth = 8;
-var targetHeight = 8;
-var targetYmax = 0;
-var targetXcenter = 0;
-var targetFactor = function(mult) {
-	var size = globalStore.bbox.size();
-	// factor(mult * gaussianERP.score([targetWidth, 0.1], size.x));
-	// factor(mult * gaussianERP.score([targetHeight, 0.1], size.y));
-	// factor(mult * gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y));
-	// factor(mult * gaussianERP.score([targetXcenter, 0.1], globalStore.bbox.center().x));
-	var f = 
-			gaussianERP.score([targetWidth, 0.1], size.x)
-	        // + gaussianERP.score([targetHeight, 0.1], size.y)
-	        + gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y)
-	        + gaussianERP.score([targetXcenter, 0.1], globalStore.bbox.center().x);
-	factor(mult * f);
-}
-
-var normalize = function(x, lo, hi) {
-	return (2 * (x - lo) / (hi - lo)) - 1;
-}
-// Just manually normalizing the data for now
-var setCurrFeatures = function(currPos) {
-	var bb = globalStore.bbox;
-	var x = normalize(currPos.x, viewport.xmin, viewport.xmax);
-	var y = normalize(currPos.y, viewport.ymin, viewport.ymax);
-	var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
-	var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
-	// var ymin = normalize(bb.min.y, viewport.ymin, viewport.ymax);
-	// var ymax = normalize(bb.max.y, viewport.ymin, viewport.ymax);
-	// globalStore.currFeatures = [x, y, xmin, xmax, ymin, ymax];
-	// globalStore.currFeatures = [x, y, xmin, xmax];
-	globalStore.currFeatures = [x, y];
-	// globalStore.currFeatures = [
-	// 	x, xmin, xmax,
-	// 	x*x, x*xmin, x*xmax,
-	// 	xmin*xmin, xmin*xmax,
-	// 	xmax*xmax
-	// ];
-}
-
-var branch = function(currState, treeNode) {
-	var width = 0.9 * currState.width;
-	var length = 2;
-	// var newang = currState.angle + _gaussian(0, Math.PI/8);
-	var newang = currState.angle + _uniform(-Math.PI/6, Math.PI/6);
-	var newbranch = {
-		start: currState.pos,
-		angle: newang,
-		width: width,
-		end: currState.pos.clone().add(polar2rect(length, newang))
+	var _gaussian = !variational ? gaussian :
+	function(mu, sigma) {
+		var addr = currentAddress();
+		var callsite = addr.slice(addr.lastIndexOf('_'));
+		var bnds = [bounds.none, bounds.nonNegative];
+		var features = globalStore.currFeatures;
+		var params = lsysParams.paramsByLinReg(vparams, callsite, bnds, features);
+		VPF.gaussianERP.importanceERP.setParams(params);
+		return sample(VPF.gaussianERP, [mu, sigma]);
 	};
-	var newNode = { branch: newbranch, parent: treeNode, children: [] };
-	if (treeNode === undefined) {
-		globalStore.treeRoot = newNode;
-	} else {
-		treeNode.children.push(newNode);
+
+	var _uniform = !variational ? uniform :
+	function(lo, hi) {
+		var addr = currentAddress();
+		var callsite = addr.slice(addr.lastIndexOf('_'));
+		var bnds = [bounds.nonNegative, bounds.nonNegative];
+		var features = globalStore.currFeatures;
+		var params = lsysParams.paramsByLinReg(vparams, callsite, bnds, features);
+		VPF.betaERP.importanceERP.setParams(params);
+		var t = sample(VPF.betaERP, [1, 1]);
+		return (1-t)*lo + t*hi;
+	};
+
+	var _flip = flip;
+
+
+	var targetFactor = function(mult) {
+		var size = globalStore.bbox.size();
+		var f = 
+				gaussianERP.score([targetWidth, 0.8], size.x)
+		        // + gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y)
+		        // + gaussianERP.score([targetXcenter, 0.1], globalStore.bbox.center().x);
+		factor(mult * f);
 	}
 
-	// Subtract previous heuristic factor
-	if (globalStore.branches.length > 0) {
-		targetFactor(-1);
+	var normalize = function(x, lo, hi) {
+		return (2 * (x - lo) / (hi - lo)) - 1;
+		// return (x - lo) / (hi - lo);
+	}
+	var setCurrFeatures = function(currState) {
+		var x = normalize(currState.pos.x, viewport.xmin, viewport.xmax);
+		var y = normalize(currState.pos.y, viewport.ymin, viewport.ymax);
+		// var angle1 = currState.angle - Math.floor(currState.angle / 2*Math.PI)*2*Math.PI;
+		// var angle2 = angle1 > 0 ? angle1 : 2*Math.PI + angle1;
+		// var angle = normalize(angle1, 0, 2*Math.PI);
+		var depth = normalize(currState.depth, 0, 5);
+		var sang = 0.5 * Math.sin(currState.angle);
+		var cang = 0.5 * Math.cos(currState.angle);
+		var bb = globalStore.bbox;
+		if (bb.empty()) {
+			// globalStore.currFeatures = [x, y, depth, sang, cang];
+			globalStore.currFeatures = [x, y];
+		} else {
+			var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
+			var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
+			// globalStore.currFeatures = [x, y, depth, sang, cang, xmin, xmax];
+			// globalStore.currFeatures = [x, y, xmin, xmax];
+			globalStore.currFeatures = [x, y];
+		}
 	}
 
-	globalStore.branches = globalStore.branches.concat([newbranch]);
-	globalStore.bbox = globalStore.bbox.clone();
-	globalStore.bbox.expandByPoint(newbranch.start);
-	globalStore.bbox.expandByPoint(newbranch.end);
-	setCurrFeatures(newbranch.end);
+	var branch = function(currState, treeNode) {
+		setCurrFeatures(currState);
 
-	// Add new heuristic factor
-	targetFactor(1);
+		var width = 0.9 * currState.width;
+		var length = 2;
+		var newang = currState.angle + _gaussian(0, Math.PI/8);
+		// var newang = currState.angle + _uniform(-Math.PI/6, Math.PI/6);
+		var newbranch = {
+			start: currState.pos,
+			angle: newang,
+			width: width,
+			end: currState.pos.clone().add(polar2rect(length, newang))
+		};
+		var newNode = { branch: newbranch, parent: treeNode, children: [] };
+		if (treeNode === undefined) {
+			globalStore.treeRoot = newNode;
+		} else {
+			treeNode.children.push(newNode);
+		}
 
-	// Terminate?
-	future(function() {
-		// if (_flip(Math.exp(-0.045*currState.depth))) {
-		if (currState.depth < 5) {
-			future(function() {
-				// Continue or fork?
-				if (_flip(0.5)) {
-					branch({
-						depth: currState.depth + 1,
-						pos: newbranch.end,
-						angle: newbranch.angle,
-						width: newbranch.width},
-					newNode);
-				} else {
-					var branchState1 = {
-						depth: currState.depth + 1,
-						pos: newbranch.end,
-						// angle: newbranch.angle - Math.abs(_gaussian(0, Math.PI/6)),
-						angle: newbranch.angle - _uniform(0, Math.PI/4),
-						width: newbranch.width
-					};
-					branch(branchState1, newNode);
-					var branchState2 = {
-						depth: currState.depth + 1,
-						pos: newbranch.end,
-						// angle: newbranch.angle + Math.abs(_gaussian(0, Math.PI/6)),
-						angle: newbranch.angle + _uniform(0, Math.PI/4),
-						width: newbranch.width
-					};
-					branch(branchState2, newNode);
-				}
-			});
+		if (heuristicFactors) {
+			// Subtract previous heuristic factor
+			if (globalStore.branches.length > 0) {
+				targetFactor(-1);
+			}
+		}
+
+		globalStore.branches = globalStore.branches.concat([newbranch]);
+		globalStore.bbox = globalStore.bbox.clone();
+		globalStore.bbox.expandByPoint(newbranch.start);
+		globalStore.bbox.expandByPoint(newbranch.end);
+
+		if (heuristicFactors) {
+			// Add new heuristic factor
+			targetFactor(1);
+		}
+
+		// Terminate?
+		future(function() {
+			// if (_flip(Math.exp(-0.045*currState.depth))) {
+			if (currState.depth < 5) {
+				future(function() {
+					// Continue or fork?
+					if (_flip(0.5)) {
+						branch({
+							depth: currState.depth + 1,
+							pos: newbranch.end,
+							angle: newbranch.angle,
+							width: newbranch.width},
+						newNode);
+					} else {
+						var branchState1 = {
+							depth: currState.depth + 1,
+							pos: newbranch.end,
+							angle: newbranch.angle - Math.abs(_gaussian(0, Math.PI/6)),
+							// angle: newbranch.angle - _uniform(0, Math.PI/4),
+							width: newbranch.width
+						};
+						branch(branchState1, newNode);
+						var branchState2 = {
+							depth: currState.depth + 1,
+							pos: newbranch.end,
+							angle: newbranch.angle + Math.abs(_gaussian(0, Math.PI/6)),
+							// angle: newbranch.angle + _uniform(0, Math.PI/4),
+							width: newbranch.width
+						};
+						branch(branchState2, newNode);
+					}
+				});
+			}
+		});
+	};
+
+	var generate = function() {
+		globalStore.treeNode = undefined;
+		globalStore.branches = [];
+		globalStore.bbox = box2();
+		globalStore.currFeatures = [];
+		var startState = {
+			depth: 0,
+			pos: vec2(0, 0),
+			angle: -Math.PI/2,
+			width: 0.75
+		};
+		future(function() { branch(startState, undefined); });
+		finishAllFutures();
+
+		if (!heuristicFactors) {
+			// Target factor only once, at very end
+			targetFactor(1);
+		}
+
+		return { branches: globalStore.branches, bbox: globalStore.bbox };
+	};
+
+	return generate;
+}
+
+var variational = true;
+var heuristicFactors = false;
+var futurePolicy = 'deterministic';
+var generate = makeProgram(variational, heuristicFactors);
+
+setFuturePolicy(futurePolicy);
+
+if (variational) {
+	VPF(generate, vparams, {
+		numParticles: 100,
+		maxNumFlights: 300,
+		convergeEps: 0.1,
+		adagradInitLearnRate: 1,
+
+		objective: 'ELBO',
+
+		verbosity: {
+			flightNum: true,
+			// numUniqueParticles: true,
+			// particleNum: true,
+			// params: true,
+			scoreDiff: true,
+			// gradientEstimate: true,
+			// gradientSamples: true,
+			endStatus: true
 		}
 	});
-};
-
-var generate = function() {
-	globalStore.treeNode = undefined;
-	globalStore.branches = [];
-	globalStore.bbox = box2();
-	globalStore.currFeatures = [];
-	var startState = {
-		depth: 0,
-		pos: vec2(0, 0),
-		angle: -Math.PI/2,
-		width: 0.75
-	};
-	future(function() { branch(startState, undefined); });
-	finishAllFutures();
-
-	// // Target factor only once, at very end
-	// targetFactor(1);
-
-	return { branches: globalStore.branches, bbox: globalStore.bbox };
-};
-
-// setFuturePolicy('deterministic');
-
-// VPF(generate, {
-// 	numParticles: 100,
-// 	// numParticles: 1,
-// 	maxNumFlights: 300,
-// 	vparams: vparams,
-// 	convergeEps: 0.1,
-// 	initLearnRate: 1,
-// 	tempSchedule: lsysUtils.TempSchedules.linearStop(0.5),
-// 	regularizationWeight: 100,
-
-// 	// doResampling: false,
-// 	// objective: 'ELBO',
-
-// 	verbosity: {
-// 		flightNum: true,
-// 		// numUniqueParticles: true,
-// 		// particleNum: true,
-// 		// params: true,
-// 		scoreDiff: true,
-// 		// gradientEstimate: true,
-// 		// gradientSamples: true,
-// 		endStatus: true
-// 	}
-// });
-// console.log(vparams);
+	console.log(vparams);
+}
 
 
 var res = {width: 600, height: 600};
-var name = 'test';
 var n = 20;
-repeat(n, function(i) {
-	// var ret = generate();
-	// var ret = MH(generate, 1000).MAP().val;
-	// var ret = sample(MH(generate, 1000));
-	// var ret = ParticleFilter(generate, 300).MAP().val;
-	var ret = sample(ParticleFilter(generate, 300));
+var name = 'test';
+var resultsDir = 'vpf_experiments/lsystem/results/' + name;
+var fs = require.call(null, 'fs');
+if (!fs.existsSync(resultsDir)) {
+	fs.mkdirSync(resultsDir);
+}
+var errs = repeat(n, function(i) {
 	// var ret = sample(ParticleFilter(generate, 1));
-	console.log('bbox size: ' + JSON.stringify(ret.bbox.size()));
-	// console.log('bbox: ' + JSON.stringify(ret.bbox));
+	// var ret = sample(MH(generate, 1000));
+	var ret = !variational ? sample(ParticleFilter(generate, 300)) :
+							 sample(ParticleFilter(generate, 1));
+	var width = ret.bbox.size().x;
+	var err =  Math.abs(targetWidth - width) / targetWidth;
+	console.log('width: ' + width + ', relative error: ' + err);
 	lsysUtils.renderOut('vpf_experiments/lsystem/results/' + name + '/' + i + '.png', res, viewport, ret.branches);
+	return err;
 });
+console.log('avg relative error: ' + sum(errs)/n);
 undefined;
 
 
