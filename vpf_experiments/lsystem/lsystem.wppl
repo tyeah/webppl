@@ -66,9 +66,11 @@ var makeProgram = function(variational, heuristicFactors) {
 		factor(mult * f);
 	}
 
+	var fuzz = [0, 1e-8];
 	var normalize = function(x, lo, hi) {
-		return (2 * (x - lo) / (hi - lo)) - 1;
-		// return (x - lo) / (hi - lo);
+		// Fuzz prevents values that are exactly in the middle of [lo, hi] from normalizing
+		//    to zero and causing zero derivatives. Also might make learning a bit more robust(?)
+		return (2 * (x - lo) / (hi - lo)) - 1 + gaussianERP.sample(fuzz);
 	}
 	var setCurrFeatures = function(currState) {
 		var x = normalize(currState.pos.x, viewport.xmin, viewport.xmax);
@@ -81,14 +83,13 @@ var makeProgram = function(variational, heuristicFactors) {
 		var cang = 0.5 * Math.cos(currState.angle);
 		var bb = globalStore.bbox;
 		if (bb.empty()) {
-			// globalStore.currFeatures = [x, y, depth, sang, cang];
-			globalStore.currFeatures = [x, y];
+			globalStore.currFeatures = [x, y, depth, sang, cang];
+			// globalStore.currFeatures = [x, y, depth];
 		} else {
 			var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
 			var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
-			// globalStore.currFeatures = [x, y, depth, sang, cang, xmin, xmax];
-			// globalStore.currFeatures = [x, y, xmin, xmax];
-			globalStore.currFeatures = [x, y];
+			globalStore.currFeatures = [x, y, depth, sang, cang, xmin, xmax];
+			// globalStore.currFeatures = [x, y, depth, xmin, xmax];
 		}
 	}
 
@@ -97,7 +98,7 @@ var makeProgram = function(variational, heuristicFactors) {
 
 		var width = 0.9 * currState.width;
 		var length = 2;
-		var newang = currState.angle + _gaussian(0, Math.PI/8);
+		var newang = currState.angle + _gaussian(0, Math.PI/8);	
 		// var newang = currState.angle + _uniform(-Math.PI/6, Math.PI/6);
 		var newbranch = {
 			start: currState.pos,
@@ -193,16 +194,17 @@ var makeProgram = function(variational, heuristicFactors) {
 var variational = true;
 var heuristicFactors = false;
 var futurePolicy = 'deterministic';
+// var futurePolicy = 'stochastic';
+setFuturePolicy(futurePolicy);
 var generate = makeProgram(variational, heuristicFactors);
 
-setFuturePolicy(futurePolicy);
 
 if (variational) {
 	VPF(generate, vparams, {
 		numParticles: 100,
-		maxNumFlights: 300,
+		maxNumFlights: 400,
 		convergeEps: 0.1,
-		adagradInitLearnRate: 1,
+		adagradInitLearnRate: 0.5,
 
 		objective: 'ELBO',
 

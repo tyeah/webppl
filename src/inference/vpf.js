@@ -342,7 +342,7 @@ module.exports = function(env) {
       var weight = numeric.div(this.adagradInitLearnRate, numeric.sqrt(this.runningG2[name]));
       if (!numeric.all(numeric.isFinite(weight))) {
         console.log('name: ' + name);
-        console.log('grad: ' + grad);
+        console.log('grad: ' + JSON.stringify(grad));
         console.log('weight: ' + weight);
         assert(false, 'Found non-finite AdaGrad weight!');
       }
