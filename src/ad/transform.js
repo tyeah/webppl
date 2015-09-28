@@ -5,11 +5,11 @@ var sweet = require('sweet.js');
 
 
 var macros = fs.readFileSync('./src/ad/macros.js');
-var adFuncFile = __dirname + '/functions.js';
+var adMainFile = __dirname + '/main.js';
 function transform(code) {
 	var allcode = macros + '\n' + code;
 	var compiled = sweet.compile(allcode, {readableNames: true});
-	return "var __AD__ = require('" + adFuncFile + "');\n\n" + compiled.code;
+	return "var __AD__ = require('" + adMainFile + "');\n\n" + compiled.code;
 }
 
 module.exports = {

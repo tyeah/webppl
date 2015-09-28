@@ -35,11 +35,11 @@ function gaussianParams(params, basename, prevvals) {
 	// var preBoundsSigma = sigma;
 	// sigma = bounds.nonNegative.fwd(sigma);
 
-	// if (!isFinite(__AD__.primal(sigma)) || Math.abs(sigma) > 1000) {
-	// 	console.log('  sigma: ' + __AD__.primal(sigma));
-	// 	console.log('  pre-bounds sigma: ' + __AD__.primal(preBoundsSigma));
-	// 	console.log('  sigma icept: ' + __AD__.primal(sigma_icept));
-	// 	console.log('  sigma weights: ' + sigma_weights.map(__AD__.primal));
+	// if (!isFinite(__AD__.uptapify(sigma)) || Math.abs(sigma) > 1000) {
+	// 	console.log('  sigma: ' + __AD__.uptapify(sigma));
+	// 	console.log('  pre-bounds sigma: ' + __AD__.uptapify(preBoundsSigma));
+	// 	console.log('  sigma icept: ' + __AD__.uptapify(sigma_icept));
+	// 	console.log('  sigma weights: ' + sigma_weights.map(__AD__.uptapify));
 	// 	console.log('  prevvals: ' + prevvals);
 	// 	assert(false);
 	// }

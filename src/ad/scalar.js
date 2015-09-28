@@ -8,8 +8,7 @@ function spaces(n) {
 }
 
 var id = 0;
-var S_tape = function(epsilon, primal) {
-  this.epsilon = epsilon;
+var S_tape = function(primal) {
   this.primal = primal;
   this.fanout = 0;
   this.sensitivity = 0.0;
@@ -42,8 +41,8 @@ S_tape.prototype = {
 S_tape.prototype.reversePhaseResetting = S_tape.prototype.reversePhase;
 var isTape = function(t) { return t instanceof S_tape; };
 
-var S_tape1 = function(opname, epsilon, primal, factor, tape) {
-  S_tape.call(this, epsilon, primal);
+var S_tape1 = function(opname, primal, factor, tape) {
+  S_tape.call(this, primal);
   this.opname = opname;
   this.factor = factor;
   this.tape = tape;
@@ -88,8 +87,8 @@ S_tape1.prototype.resetState = function() {
   this.tape.resetState();
 }
 
-var S_tape2 = function(opname, epsilon, primal, factor1, factor2, tape1, tape2) {
-  S_tape.call(this, epsilon, primal);
+var S_tape2 = function(opname, primal, factor1, factor2, tape1, tape2) {
+  S_tape.call(this, primal);
   this.opname = opname;
   this.factor1 = factor1;
   this.factor2 = factor2;
@@ -148,16 +147,16 @@ var lift_realreal_to_real = function(f, df_dx1, df_dx2) {
   liftedfn = function(x_1, x_2) {
     if (isTape(x_1)) {
       if (isTape(x_2))
-          return new S_tape2(f.name, x_1.epsilon,
+          return new S_tape2(f.name,
                       fn(x_1.primal, x_2.primal),
                       df_dx1(x_1.primal, x_2.primal), df_dx2(x_1.primal, x_2.primal),
                       x_1, x_2)
       else
-        return new S_tape1(f.name, x_1.epsilon, fn(x_1.primal, x_2), df_dx1(x_1.primal, x_2), x_1)
+        return new S_tape1(f.name, fn(x_1.primal, x_2), df_dx1(x_1.primal, x_2), x_1)
     }
     else {
       if (isTape(x_2))
-        return new S_tape1(f.name, x_2.epsilon, fn(x_1, x_2.primal), df_dx2(x_1, x_2.primal), x_2)
+        return new S_tape1(f.name, fn(x_1, x_2.primal), df_dx2(x_1, x_2.primal), x_2)
       else
         return f(x_1, x_2)
     }
@@ -170,7 +169,7 @@ var lift_real_to_real = function(f, df_dx) {
   var fn = f;
   liftedfn = function(x1) {
     if (isTape(x1))
-      return new S_tape1(f.name, x1.epsilon, fn(x1.primal), df_dx(x1.primal), x1);
+      return new S_tape1(f.name, fn(x1.primal), df_dx(x1.primal), x1);
     else
       return f(x1);
   }
@@ -287,32 +286,35 @@ var d_tanh = lift_real_to_real(Math.tanh, function(x){
 
 
 /** derivatives and gradients **/
-var _e_ = 0
 
-var lt_e = function(e1, e2) { return e1 < e2 }
+// var lt_e = function(e1, e2) { return e1 < e2 }
 
-var gradientR = function(f) {
-  return function(x) {
-    _e_ += 1;
-    var new_x = x.map( function(xi) { return new S_tape(_e_, xi) } )
-    var y = f(new_x);
-    if (isTape(y) && !lt_e(y.epsilon, _e_)) {
-      y.determineFanout();
-      y.reversePhase(1.0);
-    }
-    _e_ -= 1;
-    return new_x.map(function(v){return v.sensitivity})
-  }
-}
+// var gradientR = function(f) {
+//   return function(x) {
+//     var new_x = x.map( function(xi) { return new S_tape(xi) } )
+//     var y = f(new_x);
+//     if (isTape(y)) {
+//       y.determineFanout();
+//       y.reversePhase(1.0);
+//     }
+//     return new_x.map(function(v){return v.sensitivity})
+//   }
+// }
 
-var derivativeR = function(f) {
-  return function(x) {
-    var r = gradientR( function(x1) {return f(x1[0])} )([x])
-    return r[0]
-  }
-}
+// var derivativeR = function(f) {
+//   return function(x) {
+//     var r = gradientR( function(x1) {return f(x1[0])} )([x])
+//     return r[0]
+//   }
+// }
 
 module.exports = {
+  tape: S_tape,
+  tape1: S_tape1,
+  tape2: S_tape2
+}
+
+module.exports.functions = {
   add: d_add,
   sub: d_sub,
   mul: d_mul,
@@ -333,10 +335,6 @@ module.exports = {
   sin: d_sin,
   cos: d_cos,
   atan: d_atan,
-  derivativeR: derivativeR,
-  gradientR: gradientR,
-  maketape: function(x) { return new S_tape(_e_, x); },
-  primal: function(x) { return x.primal === undefined ? x : x.primal; }
 };
 
 // Also expose functions via the Math module

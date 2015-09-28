@@ -12,7 +12,7 @@ var erp = require('../erp.js');
 var numeric = require('numeric');
 var tensor = require('../tensor.js');
 var assert = require('assert');
-var ad = require('../ad/functions.js')
+var ad = require('../ad/main.js')
 
 
 function hrtimeToSeconds(t) {
@@ -137,7 +137,7 @@ module.exports = function(env) {
     var importanceScore = importanceERP.adscore(params, val);
     var choiceScore = erp.score(params, val);
     var particle = this.currentParticle();
-    particle.weight += choiceScore - ad.primal(importanceScore);
+    particle.weight += choiceScore - ad.untapify(importanceScore);
     particle.targetScore += choiceScore;
     particle.guideScore = ad.add(particle.guideScore, importanceScore);
     if (!isFinite(particle.weight)) {
@@ -146,7 +146,7 @@ module.exports = function(env) {
       console.log('val: ' + val);
       console.log('params: ' + params);
       console.log('importance params: ' + importanceERP.rawparams);
-      console.log('scores:', particle.targetScore, ad.primal(particle.guideScore), particle.weight);
+      console.log('scores:', particle.targetScore, ad.untapify(particle.guideScore), particle.weight);
       assert(false, 'Found non-finite particle weight!');
     }
     return cc(s, val);
@@ -315,7 +315,7 @@ module.exports = function(env) {
     } else {
       // Wrap all params in a fresh set of tapes
       for (var name in this.vparams) {
-        tensor.mapeq(this.vparams[name], function(x) { return ad.maketape(x); });
+        tensor.mapeq(this.vparams[name], function(x) { return ad.scalarTapify(x); });
       }
       // Run another flight
       return this.runFlight();
@@ -368,13 +368,13 @@ module.exports = function(env) {
 
     // Turn all params from tapes into doubles
     for (var name in this.vparams) {
-      tensor.mapeq(this.vparams[name], function(x) { return ad.primal(x); });
+      tensor.mapeq(this.vparams[name], function(x) { return ad.untapify(x); });
     }
 
     var scoreDiff = 0;
     for (var i = 0; i < this.particles.length; i++) {
       var p = this.particles[i];
-      scoreDiff += (p.targetScore - ad.primal(p.guideScore));
+      scoreDiff += (p.targetScore - ad.untapify(p.guideScore));
     }
     scoreDiff /= this.numParticles;
     if (!this.diagnostics.hasOwnProperty('scoreDiffs')) {
@@ -444,7 +444,7 @@ module.exports = function(env) {
     var sumWeightedGradSq = {};
     for (var i = 0; i < this.particles.length; i++) {
       var particle = this.particles[i];
-      var scoreDiff = particle.targetScore - ad.primal(particle.guideScore);
+      var scoreDiff = particle.targetScore - ad.untapify(particle.guideScore);
       var grad = this.getParticleGradient(particle);
       sumScoreDiff += scoreDiff;
       for (var name in grad) {
@@ -530,7 +530,7 @@ module.exports = function(env) {
         if (bound !== undefined) {
           initialVal = bound.rvs(initialVal);
         }
-        params[name] = [ad.maketape(initialVal)];
+        params[name] = [ad.scalarTapify(initialVal)];
       }
       var p = params[name][0];
       if (bound !== undefined) {
@@ -544,7 +544,7 @@ module.exports = function(env) {
         assert(env.coroutine instanceof VariationalParticleFilter,
           'Attempting to create new variational parameter outside of VPF.');
         var val = tensor.create(dim, function() { return sampler(samplerprms); });
-        tensor.mapeq(val, function(x) { return ad.maketape(x); });
+        tensor.mapeq(val, function(x) { return ad.scalarTapify(x); });
         params[name] = val;
       }
       return params[name];
@@ -563,7 +563,7 @@ module.exports = function(env) {
         baseERP: erpObj,
         setParams: function(params) {
           this.params = params;
-          this.rawparams = params.map(ad.primal);
+          this.rawparams = params.map(ad.untapify);
         },
         sample: function(params) { return this.baseERP.sample(this.rawparams); },
         score: function(params, val) { return this.baseERP.score(this.rawparams, val); },
