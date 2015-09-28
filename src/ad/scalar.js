@@ -21,17 +21,11 @@ S_tape.prototype = {
     this.sensitivity += sensitivity;
     this.fanout -= 1;
   },
-  reversePhaseDebug: function(sensitivity, tablevel) {
-    tablevel = tablevel === undefined ? 0 : tablevel;
-    var oldsensitivity = this.sensitivity;
-    this.sensitivity += sensitivity;
-    this.fanout -=1;
-    console.log(spaces(tablevel) + '[' + this.id + '] ' + this.opname + ' | primal: ' + this.primal + ', deriv: ' + oldsensitivity + ' + ' + sensitivity + ' = ' + this.sensitivity);
-  },
   print: function(tablevel) {
     tablevel = tablevel === undefined ? 0 : tablevel;
     var s = spaces(tablevel);
-    console.log(s + '[' + this.id + '] ' + this.opname + ' | primal: ' + this.primal + ', deriv: ' + this.sensitivity);
+    console.log(s + '[' + this.id + '] ' + this.opname + ' | primal: ' + 
+      this.primal + ', deriv: ' + this.sensitivity);
   },
   resetState: function() {
     this.sensitivity = 0.0;
@@ -67,14 +61,6 @@ S_tape1.prototype.reversePhaseResetting = function(sensitivity) {
     var sens = this.sensitivity;
     this.sensitivity = 0;
     this.tape.reversePhaseResetting(sens*this.factor);
-  }
-}
-S_tape1.prototype.reversePhaseDebug = function(sensitivity, tablevel) {
-  tablevel = tablevel === undefined ? 0 : tablevel;
-  S_tape.prototype.reversePhaseDebug.call(this, sensitivity, tablevel);
-  if (this.fanout === 0) {
-    console.log(spaces(tablevel) + 'propagating. factor =  ' + this.factor + ', total: ' + this.sensitivity*this.factor);
-    this.tape.reversePhaseDebug(this.sensitivity*this.factor, tablevel + 1);
   }
 }
 S_tape1.prototype.print = function(tablevel) {
@@ -119,14 +105,6 @@ S_tape2.prototype.reversePhaseResetting = function(sensitivity) {
     this.sensitivity = 0;
     this.tape1.reversePhaseResetting(sens*this.factor1);
     this.tape2.reversePhaseResetting(sens*this.factor2);
-  }
-}
-S_tape2.prototype.reversePhaseDebug = function(sensitivity, tablevel) {
-  tablevel = tablevel === undefined ? 0 : tablevel;
-  S_tape.prototype.reversePhaseDebug.call(this, sensitivity, tablevel);
-  if (this.fanout === 0) {
-    this.tape1.reversePhaseDebug(this.sensitivity*this.factor1, tablevel + 1);
-    this.tape2.reversePhaseDebug(this.sensitivity*this.factor2, tablevel + 1);
   }
 }
 S_tape2.prototype.print = function(tablevel) {
@@ -311,7 +289,10 @@ var d_tanh = lift_real_to_real(Math.tanh, function(x){
 module.exports = {
   tape: S_tape,
   tape1: S_tape1,
-  tape2: S_tape2
+  tape2: S_tape2,
+  isTape: isTape,
+  makeUnaryFunction: lift_real_to_real,
+  makeBinaryFunction: lift_realreal_to_real
 }
 
 module.exports.functions = {
