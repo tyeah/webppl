@@ -11,6 +11,7 @@ module.exports = {
   	makeUnaryTensorFunction: tensor.makeUnaryFunction,
   	makeBinaryTensorFucntion: tensor.makeBinaryFunction,
   	vecselect: tensor.vecselect,
+  	vec2scalars: tensor.vec2scalars,
   	math: scalar.math
 };
 

@@ -193,13 +193,20 @@ ST_tape.prototype.reversePhaseResetting = function(sensitivity) {
 		this.tape.reversePhaseResetting(vectorderiv);
 	}
 };
-var vecselect = function(x, i) {
+function vecselect(x, i) {
 	if (isTape(x)) {
 		return new ST_tape(x.primal[i], x, i);
 	} else {
 		return x[i];
 	}
 };
+function vec2scalars(x) {
+	var out = Array(x.length);
+	for (var i = 0; i < out.length; i++) {
+		out[i] = vecselect(x, i);
+	}
+	return out;
+}
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -277,7 +284,8 @@ module.exports = {
 	isTape: isTape,
 	makeUnaryFunction: lift_real_to_real,
 	makeBinaryFunction: lift_realreal_to_real,
-	vecselect: vecselect
+	vecselect: vecselect,
+	vec2scalars: vec2scalars
 };
 
 
