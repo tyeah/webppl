@@ -315,7 +315,7 @@ module.exports = function(env) {
     } else {
       // Wrap all params in a fresh set of tapes
       for (var name in this.vparams) {
-        tensor.mapeq(this.vparams[name], function(x) { return ad.scalarTapify(x); });
+        this.vparams[name] = ad.tensorTapify(this.vparams[name]);
       }
       // Run another flight
       return this.runFlight();
@@ -368,7 +368,7 @@ module.exports = function(env) {
 
     // Turn all params from tapes into doubles
     for (var name in this.vparams) {
-      tensor.mapeq(this.vparams[name], function(x) { return ad.untapify(x); });
+      this.vparams[name] = ad.untapify(this.vparams[name]);
     }
 
     var scoreDiff = 0;
@@ -496,12 +496,10 @@ module.exports = function(env) {
     particle.guideScore.reversePhaseResetting(1);
     for (var name in this.vparams) {
       var param = this.vparams[name];
-      // TODO(?): Only add if some element of param is non-zero.
-      gradient[name] = tensor.map(param, function(x) {
-        var sens = x.sensitivity;
-        x.sensitivity = 0;
-        return sens;
-      });
+      // TODO(?): Only add if some element of grad is non-zero.
+      var grad = param.sensitivity;
+      param.sensitivity = numeric.rep(numeric.dim(param.sensitivity), 0);
+      gradient[name] = grad;
     }
     if (this.verbosity.gradientSamples) {
       console.log('    gradientSamp: ' + JSON.stringify(gradient));
@@ -520,32 +518,12 @@ module.exports = function(env) {
   // Functions for creating / retrieving variational parameters
   _.extend(VPF, {
     newParams: function() { return {}; },
-    param: function(params, name, initialVal, bound, sampler, samplerprms) {
-      if (!params.hasOwnProperty(name)) {
-        assert(env.coroutine instanceof VariationalParticleFilter,
-          'Attempting to create new variational parameter outside of VPF.');
-        if (initialVal === undefined) {
-          initialVal = sampler(samplerprms);
-        }
-        if (bound !== undefined) {
-          initialVal = bound.rvs(initialVal);
-        }
-        params[name] = [ad.scalarTapify(initialVal)];
-      }
-      var p = params[name][0];
-      if (bound !== undefined) {
-        return bound.fwd(p);
-      } else {
-        return p;
-      }
-    },
-    paramTensor: function(params, name, dim, sampler, samplerprms) {
+    param: function(params, name, dim, sampler, samplerprms) {
       if (!params.hasOwnProperty(name)) {
         assert(env.coroutine instanceof VariationalParticleFilter,
           'Attempting to create new variational parameter outside of VPF.');
         var val = tensor.create(dim, function() { return sampler(samplerprms); });
-        tensor.mapeq(val, function(x) { return ad.scalarTapify(x); });
-        params[name] = val;
+        params[name] = ad.tensorTapify(val);
       }
       return params[name];
     }

@@ -201,7 +201,8 @@ function vecselect(x, i) {
 	}
 };
 function vec2scalars(x) {
-	var out = Array(x.length);
+	var xlen = x.primal === undefined ? x.length : x.primal.length;
+	var out = Array(xlen);
 	for (var i = 0; i < out.length; i++) {
 		out[i] = vecselect(x, i);
 	}

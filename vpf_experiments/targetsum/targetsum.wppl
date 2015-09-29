@@ -35,7 +35,6 @@ var vparams = VPF.newParams();
 
 // var _gaussian = gaussian;
 var _gaussian = function(mu, sigma, prevs) {
-	// var prms = params.gaussianParams(vparams, prevs.length, prevs);
 	var prms = params.generalParams(vparams, prevs.length, prevs);
 	VPF.gaussianERP.importanceERP.setParams(prms);
 	return sample(VPF.gaussianERP, [mu, sigma]);
