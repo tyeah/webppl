@@ -22,74 +22,109 @@ var polar2rect = function(r, theta) {
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-var targetWidth = 8;
+// var targetWidth = 8;
+var targetWidth = 15;
 var targetYmax = 0;
 var targetXcenter = 0;
+var targetWidthTightness = targetWidth / 10;
+// var targetWidthTightness = 0.8;
+// var targetWidthTightness = 1.6;
+// var targetWidthTightness = 0.4;
+// var targetWidthTightness = 0.1;
+// var targetYmaxTightness = 0.1;
+var targetYmaxTightness = 0.2;
+// var targetXcenterTightness = 0.1;
+var targetXcenterTightness = 0.2;
+
+
 
 var vparams = VPF.newParams();
 
 
+
 var makeProgram = function(variational, heuristicFactors) {
 
+	var targetFactor = function(mult) {
+		var size = globalStore.bbox.size();
+		var f = 
+				gaussianERP.score([targetWidth, targetWidthTightness], size.x)
+		        // + gaussianERP.score([targetYmax, targetYmaxTightness], globalStore.bbox.max.y)
+		        // + gaussianERP.score([targetXcenter, targetXcenterTightness], globalStore.bbox.center().x);
+		factor(mult * f);
+	}
+
+	// var _gaussian = gaussian;
 	var _gaussian = !variational ? gaussian :
 	function(mu, sigma) {
 		var addr = currentAddress();
 		var callsite = addr.slice(addr.lastIndexOf('_'));
 		var bnds = [bounds.none, bounds.nonNegative];
 		var features = globalStore.currFeatures;
-		var params = lsysParams.paramsByLinReg(vparams, callsite, bnds, features);
+		var origprms = [mu, sigma];
+		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
 		VPF.gaussianERP.importanceERP.setParams(params);
-		return sample(VPF.gaussianERP, [mu, sigma]);
+		return sample(VPF.gaussianERP, origprms);
 	};
 
+	// var _uniform = uniform;
 	var _uniform = !variational ? uniform :
 	function(lo, hi) {
 		var addr = currentAddress();
 		var callsite = addr.slice(addr.lastIndexOf('_'));
 		var bnds = [bounds.nonNegative, bounds.nonNegative];
 		var features = globalStore.currFeatures;
-		var params = lsysParams.paramsByLinReg(vparams, callsite, bnds, features);
+		var origprms = [1, 1];
+		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
 		VPF.betaERP.importanceERP.setParams(params);
-		var t = sample(VPF.betaERP, [1, 1]);
+		var t = sample(VPF.betaERP, origprms);
 		return (1-t)*lo + t*hi;
 	};
 
-	var _flip = flip;
-
-
-	var targetFactor = function(mult) {
-		var size = globalStore.bbox.size();
-		var f = 
-				gaussianERP.score([targetWidth, 0.8], size.x)
-		        // + gaussianERP.score([targetYmax, 0.1], globalStore.bbox.max.y)
-		        // + gaussianERP.score([targetXcenter, 0.1], globalStore.bbox.center().x);
-		factor(mult * f);
+	// var _flip = flip;
+	var _flip = !variational ? flip :
+	function(p) {
+		var addr = currentAddress();
+		var callsite = addr.slice(addr.lastIndexOf('_'));
+		var bnds = [bounds.unitInterval];
+		var features = globalStore.currFeatures;
+		var origprms = [p];
+		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
+		VPF.bernoulliERP.importanceERP.setParams(params);
+		return sample(VPF.bernoulliERP, origprms);
 	}
+
 
 	var fuzz = [0, 1e-8];
 	var normalize = function(x, lo, hi) {
-		// Fuzz prevents values that are exactly in the middle of [lo, hi] from normalizing
-		//    to zero and causing zero derivatives. Also might make learning a bit more robust(?)
+		// Fuzz prevents values from normalizing to zero and causing zero derivatives.
+		// Also might make learning a bit more robust(?)
 		return (2 * (x - lo) / (hi - lo)) - 1 + gaussianERP.sample(fuzz);
+		// return (x - lo) / (hi - lo) + gaussianERP.sample(fuzz);
+	}
+	var TWOPI = 2*Math.PI;
+	var normang = function(theta) {
+		if (theta >= 0) {
+			return theta - (TWOPI*Math.floor(theta / TWOPI));
+		} else {
+			return theta - (TWOPI*Math.ceil(theta / TWOPI)) + TWOPI;
+		}
 	}
 	var setCurrFeatures = function(currState) {
 		var x = normalize(currState.pos.x, viewport.xmin, viewport.xmax);
 		var y = normalize(currState.pos.y, viewport.ymin, viewport.ymax);
-		// var angle1 = currState.angle - Math.floor(currState.angle / 2*Math.PI)*2*Math.PI;
-		// var angle2 = angle1 > 0 ? angle1 : 2*Math.PI + angle1;
-		// var angle = normalize(angle1, 0, 2*Math.PI);
 		var depth = normalize(currState.depth, 0, 5);
-		var sang = 0.5 * Math.sin(currState.angle);
-		var cang = 0.5 * Math.cos(currState.angle);
+		var sang = Math.sin(currState.angle);
+		var cang = Math.cos(currState.angle);
+		var ang = normalize(normang(currState.angle), 0, TWOPI);
 		var bb = globalStore.bbox;
 		if (bb.empty()) {
-			globalStore.currFeatures = [x, y, depth, sang, cang];
-			// globalStore.currFeatures = [x, y, depth];
+			globalStore.currFeatures = [x, y, depth, ang, sang, cang];
 		} else {
 			var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
 			var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
-			globalStore.currFeatures = [x, y, depth, sang, cang, xmin, xmax];
-			// globalStore.currFeatures = [x, y, depth, xmin, xmax];
+			var ymin = normalize(bb.min.y, viewport.ymin, viewport.ymax);
+			var ymax = normalize(bb.max.y, viewport.ymin, viewport.ymax);
+			globalStore.currFeatures = [x, y, depth, ang, sang, cang, xmin, xmax, ymin, ymax];
 		}
 	}
 
@@ -132,11 +167,13 @@ var makeProgram = function(variational, heuristicFactors) {
 
 		// Terminate?
 		future(function() {
-			// if (_flip(Math.exp(-0.045*currState.depth))) {
-			if (currState.depth < 5) {
+			if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
+			// if (currState.depth < 10 && _flip(0.5)) {
+			// if (currState.depth < 5) {
 				future(function() {
 					// Continue or fork?
 					if (_flip(0.5)) {
+					// if (false) {
 						branch({
 							depth: currState.depth + 1,
 							pos: newbranch.end,
@@ -202,20 +239,19 @@ var generate = makeProgram(variational, heuristicFactors);
 if (variational) {
 	VPF(generate, vparams, {
 		numParticles: 100,
-		maxNumFlights: 400,
-		convergeEps: 0.1,
+		maxNumFlights: 300,
+		// convergeEps: 0.1,
+		convergeEps: 0.01,
 		adagradInitLearnRate: 0.25,
+		// adagradInitLearnRate: 0.1,
+		// adagradInitLearnRate: 0.05,
 
 		objective: 'ELBO',
 
 		verbosity: {
 			flightNum: true,
-			// numUniqueParticles: true,
-			// particleNum: true,
-			// params: true,
 			scoreDiff: true,
-			// gradientEstimate: true,
-			// gradientSamples: true,
+			processRetVals: lsysUtils.processRetVals_width(targetWidth),
 			endStatus: true
 		}
 	});
@@ -238,7 +274,7 @@ var errs = repeat(n, function(i) {
 							 sample(ParticleFilter(generate, 1));
 	var width = ret.bbox.size().x;
 	var err =  Math.abs(targetWidth - width) / targetWidth;
-	console.log('width: ' + width + ', relative error: ' + err);
+	console.log(i + ' | width: ' + width + ', relative error: ' + err);
 	lsysUtils.renderOut('vpf_experiments/lsystem/results/' + name + '/' + i + '.png', res, viewport, ret.branches);
 	return err;
 });

@@ -81,6 +81,7 @@ module.exports = function(env) {
     this.tempSchedule = opt('tempSchedule', function() { return 1; });
     this.regularizationWeight = opt('regularizationWeight', 0);
     this.objective = opt('objective', 'EUBO');
+    this.warnOnZeroGradient = opt('warnOnZeroGradient', false);
 
     // Variational parameters
     this.vparams = vparams;
@@ -293,6 +294,9 @@ module.exports = function(env) {
 
   VariationalParticleFilter.prototype.finish = function() {
     this.flightsLeft--;
+    if (this.verbosity.processRetVals) {
+      this.verbosity.processRetVals(this.particles.map(function(p) { return p.value; }))
+    }
     this.doGradientUpdate();
     var converged = this.maxDeltaAvg < this.convergeEps;
     if (converged || this.flightsLeft === 0) {
@@ -466,16 +470,11 @@ module.exports = function(env) {
       }
     }
     // Control variate
-    var numerSum = 0;
-    var denomSum = 0;
-    for (var name in sumGrad) {
-      numerSum += numeric.sum(sumWeightedGradSq[name]);
-      denomSum += numeric.sum(sumGradSq[name]);
-    }
-    var aStar = numerSum / denomSum;
     var elboGradEst = {};
+    var aStar = {};
     for (var name in sumGrad) {
-      elboGradEst[name] = numeric.div(numeric.sub(sumWeightedGrad[name], numeric.mul(sumGrad[name], aStar)), this.numParticles);
+      aStar[name] = numeric.div(sumWeightedGradSq[name], sumGradSq[name]);
+      elboGradEst[name] = numeric.div(numeric.sub(sumWeightedGrad[name], numeric.mul(sumGrad[name], aStar[name])), this.numParticles);
     }
     if (this.verbosity.gradientIntermediates) {
       console.log('  sumGrad: ' + JSON.stringify(sumGrad));
@@ -496,10 +495,15 @@ module.exports = function(env) {
     particle.guideScore.reversePhaseResetting(1);
     for (var name in this.vparams) {
       var param = this.vparams[name];
-      // TODO(?): Only add if some element of grad is non-zero.
       var grad = param.sensitivity;
-      param.sensitivity = numeric.rep(numeric.dim(param.sensitivity), 0);
-      gradient[name] = grad;
+      // Only add if some element of grad is non-zero.
+      if (numeric.norminf(grad) > 0) {
+        if (this.warnOnZeroGradient) {
+          console.log('  -- WARN: Parameter ' + name + ' has zero gradient --');
+        }
+        param.sensitivity = numeric.rep(numeric.dim(param.sensitivity), 0);
+        gradient[name] = grad;
+      }
     }
     if (this.verbosity.gradientSamples) {
       console.log('    gradientSamp: ' + JSON.stringify(gradient));

@@ -2,6 +2,7 @@ var fs = require('fs');
 var Canvas = require('canvas');
 var THREE = require('three');
 var assert = require('assert');
+var numeric = require('numeric');
 
 function render(canvas, viewport, branches) {
 	if (viewport === undefined)
@@ -103,11 +104,23 @@ ImageData2D.prototype = {
 };
 
 
+function processRetVals_width(targetWidth) {
+	return function(vals) {
+		var errs = vals.map(function(v) {
+			var width = v.bbox.size().x;
+			return Math.abs(targetWidth - width) / targetWidth;
+		});
+		console.log('  avg relative error: ' + numeric.sum(errs)/vals.length);
+	}
+}
+
+
 module.exports = {
 	render: render,
 	renderOut: renderOut,
 	newImageData2D: function(canvas) { return new ImageData2D(canvas); },
-	newCanvas: function(w, h) { return new Canvas(w, h); }
+	newCanvas: function(w, h) { return new Canvas(w, h); },
+	processRetVals_width: processRetVals_width
 };
 
 
