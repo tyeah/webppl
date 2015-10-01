@@ -17,8 +17,8 @@ var variParams = {
 	convergeEps: 0.1,
 	adagradInitLearnRate: 1,
 
-	objective: autoparam('objective', 'ELBO'),
-	// objective: autoparam('objective', 'EUBO'),
+	gradientEstimator: autoparam('objective', 'ELBO'),
+	// gradientEstimator: autoparam('objective', 'EUBO'),
 
 	verbosity: autoparam('verbosity', {
 		flightNum: true,

@@ -165,48 +165,106 @@ var lift_real_to_real = function(f, df_dx, mulfn) {
 
 
 // Lifted function to select an element from a 1D vector
-// elem -> primal, vector -> tape, index -> factor
-var ST_tape = function(elem, vector, index) {
-	scalar.tape1.call(this, 'select', elem, index, vector);
+// elem -> primal, vector -> tape
+var Vecselect_tape = function(elem, vector, index) {
+	scalar.tape1.call(this, 'vecselect', elem, undefined, vector);
+  this.index = index;
 };
-ST_tape.prototype = new scalar.tape1();
-ST_tape.prototype.reversePhase = function(sensitivity) {
+Vecselect_tape.prototype = new scalar.tape1();
+Vecselect_tape.prototype.reversePhase = function(sensitivity) {
 	this.sensitivity += sensitivity;
 	this.fanout -= 1;
 	if (this.fanout === 0) {
 		// Accumulate scalar derivative into correct component of
 		//    vector derivative
 		var vectorderiv = numeric.rep(numeric.dim(this.tape.primal), 0);
-		vectorderiv[this.factor] = this.sensitivity;
+		vectorderiv[this.index] = this.sensitivity;
 		this.tape.reversePhase(vectorderiv);
 	}
 };
-ST_tape.prototype.reversePhaseResetting = function(sensitivity) {
+Vecselect_tape.prototype.reversePhaseResetting = function(sensitivity) {
 	this.sensitivity += sensitivity;
 	this.fanout -= 1;
 	if (this.fanout === 0) {
 		// Accumulate scalar derivative into correct component of
 		//    vector derivative
 		var vectorderiv = numeric.rep(numeric.dim(this.tape.primal), 0);
-		vectorderiv[this.factor] = this.sensitivity;
+		vectorderiv[this.index] = this.sensitivity;
 		this.sensitivity = 0;
 		this.tape.reversePhaseResetting(vectorderiv);
 	}
 };
 function vecselect(x, i) {
 	if (isTape(x)) {
-		return new ST_tape(x.primal[i], x, i);
+		return new Vecselect_tape(x.primal[i], x, i);
 	} else {
 		return x[i];
 	}
 };
 function vec2scalars(x) {
-	var xlen = x.primal === undefined ? x.length : x.primal.length;
-	var out = Array(xlen);
-	for (var i = 0; i < out.length; i++) {
-		out[i] = vecselect(x, i);
-	}
-	return out;
+  if (x.primal === undefined) {
+    return x;
+  } else {
+    var xlen = x.primal.length;
+    var out = Array(xlen);
+    for (var i = 0; i < out.length; i++) {
+      out[i] = vecselect(x, i);
+    }
+    return out;
+  }
+}
+
+// Lifted function to select an element from a 2D matrix
+// elem -> primal, matrix -> tape
+var Matselect_tape = function(elem, matrix, i, j) {
+  scalar.tape1.call(this, 'matselect', elem, undefined, matrix);
+  this.i = i;
+  this.j = j;
+};
+Matselect_tape.prototype = new scalar.tape1();
+Matselect_tape.prototype.reversePhase = function(sensitivity) {
+  this.sensitivity += sensitivity;
+  this.fanout -= 1;
+  if (this.fanout === 0) {
+    // Accumulate scalar derivative into correct component of
+    //    matrix derivative
+    var matrixderiv = numeric.rep(numeric.dim(this.tape.primal), 0);
+    matrixderiv[this.i][this.j] = this.sensitivity;
+    this.tape.reversePhase(matrixderiv);
+  }
+};
+Matselect_tape.prototype.reversePhaseResetting = function(sensitivity) {
+  this.sensitivity += sensitivity;
+  this.fanout -= 1;
+  if (this.fanout === 0) {
+    // Accumulate scalar derivative into correct component of
+    //    matrix derivative
+    var matrixderiv = numeric.rep(numeric.dim(this.tape.primal), 0);
+    matrixderiv[this.i][this.j] = this.sensitivity;
+    this.sensitivity = 0;
+    this.tape.reversePhaseResetting(matrixderiv);
+  }
+};
+function matselect(x, i, j) {
+  if (isTape(x)) {
+    return new Matselect_tape(x.primal[i][j], x, i, j);
+  } else {
+    return x[i][j];
+  }
+};
+function mat2scalars(x) {
+  if (x.primal === undefined) {
+    return x;
+  } else {
+    var xdim = numeric.dim(x.primal);
+    var out = numeric.rep(xdim, 0);
+    for (var i = 0; i < xdim[0]; i++) {
+      for (var j = 0; j < xdim[1]; j++) {
+        out[i][j] = matselect(x, i, j);
+      }
+    }
+    return out;
+  }
 }
 
 
@@ -286,7 +344,9 @@ module.exports = {
 	makeUnaryFunction: lift_real_to_real,
 	makeBinaryFunction: lift_realreal_to_real,
 	vecselect: vecselect,
-	vec2scalars: vec2scalars
+	vec2scalars: vec2scalars,
+  matselect: matselect,
+  mat2scalars: mat2scalars
 };
 
 

@@ -27,7 +27,7 @@ module.exports = function(env) {
     return particle.active;
   }
 
-  function newParticle(s, k) {
+  function newParticle(s, k, optTrace) {
     return {
       continuation: k,
       weight: 0,
@@ -36,7 +36,8 @@ module.exports = function(env) {
       value: undefined,
       store: _.clone(s),
       active: true,
-      ancestor: -1
+      ancestor: -1,
+      trace: optTrace
     };
   }
 
@@ -49,9 +50,22 @@ module.exports = function(env) {
       value: particle.value,
       store: _.clone(particle.store),
       active: particle.active,
-      ancestor: ancestorIdx
+      ancestor: ancestorIdx,
+      trace: particle.trace
     };
   }
+
+  function Trace(choiceList) {
+    this.choiceList = choiceList;
+    this.index = 0;
+  }
+  Trace.prototype = {
+    nextVal: function() {
+      var val = this.choiceList[this.index];
+      this.index++;
+      return val;
+    }
+  };
 
   function avgWeight(particles) {
     var m = particles.length;
@@ -74,14 +88,17 @@ module.exports = function(env) {
     this.numParticles = opt('numParticles');
     this.maxNumFlights = opt('maxNumFlights');
     this.flightsLeft = this.maxNumFlights;
-    this.strict = opt('strict', false);
     this.convergeEps = opt('convergeEps', 0.1);
     this.verbosity = opt('verbosity', {});
     this.adagradInitLearnRate = opt('adagradInitLearnRate', 1);
     this.tempSchedule = opt('tempSchedule', function() { return 1; });
     this.regularizationWeight = opt('regularizationWeight', 0);
-    this.optimizationMethod = opt('optimizationMethod', 'ELBO');
+    this.gradientEstimator = opt('gradientEstimator', 'ELBO');
+    this.exampleTraces = opt('exampleTraces', []);
     this.warnOnZeroGradient = opt('warnOnZeroGradient', false);
+
+    assert(this.gradientEstimator !== 'EUBO' || this.exampleTraces.length > 0,
+      'gradientEstimator EUBO requires exampleTraces');
 
     // Variational parameters
     this.vparams = vparams;
@@ -125,7 +142,12 @@ module.exports = function(env) {
       return wpplFn(s, env.exit, a);
     };
     for (var i = 0; i < this.numParticles; i++) {
-      this.particles.push(newParticle(this.oldStore, exitK));
+      var trace = undefined;
+      if (this.gradientEstimator === 'EUBO') {
+        var ti = Math.floor(Math.random() * this.exampleTraces.length); 
+        trace = new Trace(this.exampleTraces[ti]);
+      }
+      this.particles.push(newParticle(this.oldStore, exitK, trace));
     }
 
     // Run first particle
@@ -133,11 +155,11 @@ module.exports = function(env) {
   };
 
   Variational.prototype.sample = function(s, cc, a, erp, params) {
+    var particle = this.currentParticle();
     var importanceERP = erp.importanceERP || erp;
-    var val = importanceERP.sample(params);
+    var val = particle.trace ? particle.trace.nextVal() : importanceERP.sample(params);
     var importanceScore = importanceERP.adscore(params, val);
     var choiceScore = erp.score(params, val);
-    var particle = this.currentParticle();
     particle.weight += choiceScore - ad.untapify(importanceScore);
     particle.targetScore += choiceScore;
     particle.guideScore = ad.add(particle.guideScore, importanceScore);
@@ -211,7 +233,7 @@ module.exports = function(env) {
   };
 
   Variational.prototype.resampleParticles = function() {
-    if (this.optimizationMethod !== 'VPF') {
+    if (this.gradientEstimator !== 'VPF') {
       return;
     }
     // Residual resampling following Liu 2008; p. 72, section 3.4.4
@@ -347,7 +369,7 @@ module.exports = function(env) {
       if (!numeric.all(numeric.isFinite(weight))) {
         console.log('name: ' + name);
         console.log('grad: ' + JSON.stringify(grad));
-        console.log('weight: ' + weight);
+        console.log('weight: ' + JSON.stringify(weight));
         assert(false, 'Found non-finite AdaGrad weight!');
       }
       numeric.muleq(grad, weight);
@@ -362,12 +384,14 @@ module.exports = function(env) {
 
   Variational.prototype.estimateGradient = function() {
     var gradient;
-    if (this.optimizationMethod === 'VPF') {
+    if (this.gradientEstimator === 'VPF') {
       gradient = this.estimateGradientVPF();
-    } else if (this.optimizationMethod === 'ELBO') {
+    } else if (this.gradientEstimator === 'ELBO') {
       gradient = this.estimateGradientELBO();
+    } else if (this.gradientEstimator === 'EUBO') {
+      gradient = this.estimateGradientEUBO();
     } else {
-      throw 'Unrecognized variational optimizationMethod ' + this.optimizationMethod;
+      throw 'Unrecognized variational gradientEstimator ' + this.gradientEstimator;
     }
 
     // Turn all params from tapes into doubles
@@ -487,6 +511,26 @@ module.exports = function(env) {
       console.log('  elboGradEst: ' + JSON.stringify(elboGradEst));
     }
     return elboGradEst;
+  };
+
+  Variational.prototype.estimateGradientEUBO = function() {
+    var sumGrad = {};
+    for (var i = 0; i < this.particles.length; i++) {
+      var particle = this.particles[i];
+      var grad = this.getParticleGradient(particle);
+      for (var name in grad) {
+        var g = grad[name];
+        if (!sumGrad.hasOwnProperty(name)) {
+          var dim = numeric.dim(g);
+          sumGrad[name] = numeric.rep(dim, 0);
+        }
+        numeric.addeq(sumGrad[name], g);
+      }
+    }
+    for (var name in sumGrad) {
+      numeric.diveq(sumGrad[name], this.numParticles);
+    }
+    return sumGrad;
   };
 
   Variational.prototype.getParticleGradient = function(particle) {

@@ -124,6 +124,12 @@ var mult = function(a, b) {
 var div = function(a, b) {
   return a / b;
 };
+var min = function(a, b) {
+  return Math.min(a, b);
+};
+var max = function(a, b) {
+  return Math.max(a, b);
+}
 
 var and = function(a, b) {
   return a && b
@@ -326,6 +332,12 @@ var sum = function(l) {
 };
 var product = function(l) {
   return reduce(mult, 1, l);
+};
+var listMin = function(l) {
+  return reduce(min, Infinity, l);
+};
+var listMax = function(l) {
+  return reduce(max, -Infinity, l);
 };
 
 var listMean = function(l) {

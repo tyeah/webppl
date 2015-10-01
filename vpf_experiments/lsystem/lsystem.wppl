@@ -2,6 +2,7 @@ var THREE = require.call(null, 'three');
 var lsysParams = require.call(null, 'vpf_experiments/lsystem/params.js');
 var lsysUtils = require.call(null, 'vpf_experiments/lsystem/utils.js');
 var bounds = require.call(null, 'src/bounds');
+var utils = require.call(null, 'vpf_experiments/utils.js');
 
 var vec2 = function(x, y) {
 	var v = Object.create(THREE.Vector2.prototype);
@@ -239,14 +240,16 @@ var generate = makeProgram(variational, heuristicFactors);
 if (variational) {
 	Variational(generate, vparams, {
 		numParticles: 100,
-		maxNumFlights: 600,
-		// convergeEps: 0.1,
-		convergeEps: 0.01,
-		// adagradInitLearnRate: 0.25,
+		maxNumFlights: 300,
+		convergeEps: 0.1,
+		// convergeEps: 0.01,
+		adagradInitLearnRate: 0.25,
 		// adagradInitLearnRate: 0.1,
-		adagradInitLearnRate: 0.05,
+		// adagradInitLearnRate: 0.05,
 
-		optimizationMethod: 'ELBO',
+		// gradientEstimator: 'ELBO',
+		gradientEstimator: 'EUBO',
+		exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/targetWidth=8.txt'),
 
 		verbosity: {
 			flightNum: true,
@@ -260,7 +263,7 @@ if (variational) {
 
 
 var res = {width: 600, height: 600};
-var n = 20;
+var n = 100;
 var name = 'test';
 var resultsDir = 'vpf_experiments/lsystem/results/' + name;
 var fs = require.call(null, 'fs');
@@ -275,10 +278,13 @@ var errs = repeat(n, function(i) {
 	var width = ret.bbox.size().x;
 	var err =  Math.abs(targetWidth - width) / targetWidth;
 	console.log(i + ' | width: ' + width + ', relative error: ' + err);
-	lsysUtils.renderOut('vpf_experiments/lsystem/results/' + name + '/' + i + '.png', res, viewport, ret.branches);
+	if (i % 5 === 0) {
+		lsysUtils.renderOut('vpf_experiments/lsystem/results/' + name + '/' + (i/5) + '.png', res, viewport, ret.branches);
+	}
 	return err;
 });
-console.log('avg relative error: ' + sum(errs)/n);
+console.log('error -  min: ' + listMin(errs) + ', max: ' + listMax(errs) +
+	               ', avg: ' + listMean(errs) + ', stddev: ' + listStdev(errs));
 
 
 // var dataDir = 'vpf_experiments/lsystem/data';
