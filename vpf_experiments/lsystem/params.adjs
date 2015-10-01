@@ -1,5 +1,6 @@
 var nnlayers = require('../../src/nn/layers');
 
+var vparam = Variational.param;
 
 var sampleprms = [0, 1e-6];
 
@@ -26,11 +27,11 @@ function get(params, name, origparams, bounds, features) {
 	var output;
 	if (features.length === 0) {
 		// Mean field
-		output = VPF.param(params, name, [bounds.length], gaussianERP.sample, sampleprms);
+		output = vparam(params, name, [bounds.length], gaussianERP.sample, sampleprms);
 	} else {
 		// // Linear network
-		// var intercepts = VPF.param(params, name + '[b]', [bounds.length], gaussianERP.sample, sampleprms);
-		// var coeffs = VPF.param(params, name + '[w]', [bounds.length, features.length], gaussianERP.sample, sampleprms);
+		// var intercepts = vparam(params, name + '[b]', [bounds.length], gaussianERP.sample, sampleprms);
+		// var coeffs = vparam(params, name + '[w]', [bounds.length, features.length], gaussianERP.sample, sampleprms);
 		// output = nnlayers.fullyConnected(features, coeffs, intercepts);
 
 		// Neural network
@@ -47,13 +48,13 @@ function get(params, name, origparams, bounds, features) {
 		var weights;
 		var biases;
 		for (var i = 0; i < nHiddenLayers; i++) {
-			weights = VPF.param(params, name + '[w'+i+']', [nHidden, n], gaussianERP.sample, sampleprms);
-			biases = VPF.param(params, name + '[b'+i+']', [nHidden], gaussianERP.sample, sampleprms);
+			weights = vparam(params, name + '[w'+i+']', [nHidden, n], gaussianERP.sample, sampleprms);
+			biases = vparam(params, name + '[b'+i+']', [nHidden], gaussianERP.sample, sampleprms);
 			x = activation(nnlayers.fullyConnected(x, weights, biases));
 			n = nHidden;
 		}
-		weights = VPF.param(params, name + '[wOut]', [bounds.length, nHidden], gaussianERP.sample, sampleprms);
-		biases = VPF.param(params, name + '[bOut]', [bounds.length], gaussianERP.sample, sampleprms);
+		weights = vparam(params, name + '[wOut]', [bounds.length, nHidden], gaussianERP.sample, sampleprms);
+		biases = vparam(params, name + '[bOut]', [bounds.length], gaussianERP.sample, sampleprms);
 		output = nnlayers.fullyConnected(x, weights, biases);
 	}
 	var result = __AD__.vec2scalars(output);

@@ -28,7 +28,8 @@ module.exports = function(env) {
       weight: particle.weight,
       value: particle.value,
       store: _.clone(particle.store),
-      active: particle.active
+      active: particle.active,
+      trace: particle.trace.slice()
     };
   }
 
@@ -47,7 +48,8 @@ module.exports = function(env) {
         weight: 0,
         value: undefined,
         store: _.clone(s),
-        active: true
+        active: true,
+        trace: []
       };
       this.particles.push(particle);
     }
@@ -74,6 +76,7 @@ module.exports = function(env) {
     var importanceScore = importanceERP.score(params, val);
     var choiceScore = erp.score(params, val);
     this.currentParticle().weight += choiceScore - importanceScore;
+    this.currentParticle().trace.push(val);
     return cc(s, val);
   };
 
@@ -210,6 +213,12 @@ module.exports = function(env) {
 
     // Save estimated normalization constant in erp (average particle weight)
     dist.normalizationConstant = this.particles[0].weight;
+
+    ////
+    var randi = Math.floor(Math.random() * this.particles.length);
+    dist.trace = this.particles[randi].trace;
+    // dist.value = this.particles[randi].value;
+    ////
 
     // Reinstate previous coroutine:
     env.coroutine = this.oldCoroutine;

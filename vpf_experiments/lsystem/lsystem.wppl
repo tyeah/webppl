@@ -22,8 +22,8 @@ var polar2rect = function(r, theta) {
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-// var targetWidth = 8;
-var targetWidth = 15;
+var targetWidth = 8;
+// var targetWidth = 15;
 var targetYmax = 0;
 var targetXcenter = 0;
 var targetWidthTightness = targetWidth / 10;
@@ -38,7 +38,7 @@ var targetXcenterTightness = 0.2;
 
 
 
-var vparams = VPF.newParams();
+var vparams = Variational.newParams();
 
 
 
@@ -62,8 +62,8 @@ var makeProgram = function(variational, heuristicFactors) {
 		var features = globalStore.currFeatures;
 		var origprms = [mu, sigma];
 		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
-		VPF.gaussianERP.importanceERP.setParams(params);
-		return sample(VPF.gaussianERP, origprms);
+		Variational.gaussianERP.importanceERP.setParams(params);
+		return sample(Variational.gaussianERP, origprms);
 	};
 
 	// var _uniform = uniform;
@@ -75,8 +75,8 @@ var makeProgram = function(variational, heuristicFactors) {
 		var features = globalStore.currFeatures;
 		var origprms = [1, 1];
 		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
-		VPF.betaERP.importanceERP.setParams(params);
-		var t = sample(VPF.betaERP, origprms);
+		Variational.betaERP.importanceERP.setParams(params);
+		var t = sample(Variational.betaERP, origprms);
 		return (1-t)*lo + t*hi;
 	};
 
@@ -89,8 +89,8 @@ var makeProgram = function(variational, heuristicFactors) {
 		var features = globalStore.currFeatures;
 		var origprms = [p];
 		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
-		VPF.bernoulliERP.importanceERP.setParams(params);
-		return sample(VPF.bernoulliERP, origprms);
+		Variational.bernoulliERP.importanceERP.setParams(params);
+		return sample(Variational.bernoulliERP, origprms);
 	}
 
 
@@ -237,16 +237,16 @@ var generate = makeProgram(variational, heuristicFactors);
 
 
 if (variational) {
-	VPF(generate, vparams, {
+	Variational(generate, vparams, {
 		numParticles: 100,
-		maxNumFlights: 300,
+		maxNumFlights: 600,
 		// convergeEps: 0.1,
 		convergeEps: 0.01,
-		adagradInitLearnRate: 0.25,
+		// adagradInitLearnRate: 0.25,
 		// adagradInitLearnRate: 0.1,
-		// adagradInitLearnRate: 0.05,
+		adagradInitLearnRate: 0.05,
 
-		objective: 'ELBO',
+		optimizationMethod: 'ELBO',
 
 		verbosity: {
 			flightNum: true,
@@ -270,7 +270,7 @@ if (!fs.existsSync(resultsDir)) {
 var errs = repeat(n, function(i) {
 	// var ret = sample(ParticleFilter(generate, 1));
 	// var ret = sample(MH(generate, 1000));
-	var ret = !variational ? sample(ParticleFilter(generate, 300)) :
+	var ret = !variational ? sample(ParticleFilter(generate, 100)) :
 							 sample(ParticleFilter(generate, 1));
 	var width = ret.bbox.size().x;
 	var err =  Math.abs(targetWidth - width) / targetWidth;
@@ -279,6 +279,24 @@ var errs = repeat(n, function(i) {
 	return err;
 });
 console.log('avg relative error: ' + sum(errs)/n);
+
+
+// var dataDir = 'vpf_experiments/lsystem/data';
+// var name = 'targetWidth=8';
+// var fs = require.call(null, 'fs');
+// if (!fs.existsSync(dataDir)) {
+// 	fs.mkdirSync(dataDir);
+// }
+// var filename = dataDir + '/' + name + '.txt';
+// var genData = function(counter) {
+// 	var trace = ParticleFilter(generate, 100).trace;
+// 	fs.appendFileSync(filename, JSON.stringify(trace) + '\n');
+// 	console.log('Generated trace ' + counter);
+// 	genData(counter + 1);
+// }
+// genData(0);
+
+
 undefined;
 
 

@@ -33,7 +33,6 @@ var smc = require('./inference/smc.js');
 var variational = require('./inference/variational.js');
 var rejection = require('./inference/rejection.js');
 var incrementalmh = require('./inference/incrementalmh.js');
-var vpf = require('./inference/vpf.js');
 var headerUtils = require('./headerUtils.js');
 var Query = require('./query.js').Query;
 var futures = require('./futures.js');
@@ -129,7 +128,7 @@ module.exports = function(env) {
 
   // Inference functions and header utils
   var headerModules = [
-    enumerate, particlefilter, asyncpf, mh, hashmh, incrementalmh, vpf, pmcmc,
+    enumerate, particlefilter, asyncpf, mh, hashmh, incrementalmh, pmcmc,
     smc, variational, rejection, headerUtils, futures
   ];
   headerModules.forEach(function(mod) {

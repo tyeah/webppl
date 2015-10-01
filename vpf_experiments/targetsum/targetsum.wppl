@@ -11,7 +11,7 @@ var nVars = autoparam('nVars', 3);
 var targetsum = 10 * nVars / 3;
 var tightness = autoparam('tightness', targetsum / 10);
 
-var vpfParams = {
+var variParams = {
 	numParticles: autoparam('numParticles', 100),
 	maxNumFlights: autoparam('maxNumFlights', 1000),
 	convergeEps: 0.1,
@@ -31,13 +31,13 @@ var vpfParams = {
 
 var params = require.call(null, 'vpf_experiments/targetsum/params');
 
-var vparams = VPF.newParams();
+var vparams = Variational.newParams();
 
 // var _gaussian = gaussian;
 var _gaussian = function(mu, sigma, prevs) {
 	var prms = params.generalParams(vparams, prevs.length, prevs);
-	VPF.gaussianERP.importanceERP.setParams(prms);
-	return sample(VPF.gaussianERP, [mu, sigma]);
+	Variational.gaussianERP.importanceERP.setParams(prms);
+	return sample(Variational.gaussianERP, [mu, sigma]);
 }
 
 var genvars = function(prevVars) {
@@ -56,7 +56,7 @@ var program = function() {
 	return vars;
 }
 
-var result = VPF(program, vparams, vpfParams);
+var result = Variational(program, vparams, variParams);
 
 if (!isautomated()) {
 	console.log('target sum: ' + targetsum);
