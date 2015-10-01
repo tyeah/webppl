@@ -13,3 +13,4 @@ vpf_experiments/targetsum/params.js
 vpf_experiments/lsystem/params.js
 vpf_experiments/*/results/*
 vpf_experiments/*/experiment_results/*
+vpf_experiments/*/data/*
