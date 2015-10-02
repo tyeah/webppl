@@ -15,32 +15,32 @@ function get(params, name, origparams, bounds, features) {
 		// Mean field
 		output = vparam(params, name, [bounds.length], gaussianERP.sample, sampleprms);
 	} else {
-		// Linear network
-		var intercepts = vparam(params, name + '[b]', [bounds.length], gaussianERP.sample, sampleprms);
-		var coeffs = vparam(params, name + '[w]', [bounds.length, features.length], gaussianERP.sample, sampleprms);
-		output = nnlayers.fullyConnected(features, coeffs, intercepts);
+		// // Linear network
+		// var intercepts = vparam(params, name + '[b]', [bounds.length], gaussianERP.sample, sampleprms);
+		// var coeffs = vparam(params, name + '[w]', [bounds.length, features.length], gaussianERP.sample, sampleprms);
+		// output = nnlayers.fullyConnected(features, coeffs, intercepts);
 
-		// // Neural network
-		// var nHidden = features.length;
-		// // var nHidden = 100;
-		// var nHiddenLayers = 1;
-		// // var nHiddenLayers = 4;
-		// var activation = nnlayers.tanh;
-		// // var activation = nnlayers.sigmoid;
-		// // var activation = nnlayers.rectifiedLinear;
-		// var x = features;
-		// var n = features.length;
-		// var weights;
-		// var biases;
-		// for (var i = 0; i < nHiddenLayers; i++) {
-		// 	weights = vparam(params, name + '[w'+i+']', [nHidden, n], gaussianERP.sample, sampleprms);
-		// 	biases = vparam(params, name + '[b'+i+']', [nHidden], gaussianERP.sample, sampleprms);
-		// 	x = activation(nnlayers.fullyConnected(x, weights, biases));
-		// 	n = nHidden;
-		// }
-		// weights = vparam(params, name + '[wOut]', [bounds.length, nHidden], gaussianERP.sample, sampleprms);
-		// biases = vparam(params, name + '[bOut]', [bounds.length], gaussianERP.sample, sampleprms);
-		// output = nnlayers.fullyConnected(x, weights, biases);
+		// Neural network
+		var nHidden = features.length;
+		// var nHidden = 10;
+		var nHiddenLayers = 1;
+		// var nHiddenLayers = 4;
+		var activation = nnlayers.tanh;
+		// var activation = nnlayers.sigmoid;
+		// var activation = nnlayers.rectifiedLinear;
+		var x = features;
+		var n = features.length;
+		var weights;
+		var biases;
+		for (var i = 0; i < nHiddenLayers; i++) {
+			weights = vparam(params, name + '[w'+i+']', [nHidden, n], gaussianERP.sample, sampleprms);
+			biases = vparam(params, name + '[b'+i+']', [nHidden], gaussianERP.sample, sampleprms);
+			x = activation(nnlayers.fullyConnected(x, weights, biases));
+			n = nHidden;
+		}
+		weights = vparam(params, name + '[wOut]', [bounds.length, nHidden], gaussianERP.sample, sampleprms);
+		biases = vparam(params, name + '[bOut]', [bounds.length], gaussianERP.sample, sampleprms);
+		output = nnlayers.fullyConnected(x, weights, biases);
 	}
 	var result = __AD__.vec2scalars(output);
 	for (var i = 0; i < bounds.length; i++) {

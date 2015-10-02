@@ -120,14 +120,26 @@ var makeProgram = function(variational, heuristicFactors) {
 		var bb = globalStore.bbox;
 		if (bb.empty()) {
 			globalStore.currFeatures = [x, y, depth, ang, sang, cang];
+			// globalStore.currFeatures = [x];
 		} else {
 			var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
 			var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
 			var ymin = normalize(bb.min.y, viewport.ymin, viewport.ymax);
 			var ymax = normalize(bb.max.y, viewport.ymin, viewport.ymax);
 			globalStore.currFeatures = [x, y, depth, ang, sang, cang, xmin, xmax, ymin, ymax];
+			// globalStore.currFeatures = [x, xmin, xmax];
 		}
 	}
+
+	// var shouldContinue = function(newState) {
+	// 	var bb = globalStore.bbox;
+	// 	var len1 = newState.pos.x - bb.min.x + 2;
+	// 	var len2 = bb.max.x - newState.pos.x + 2;
+	// 	// return (len1 < targetWidth && len2 < targetWidth);
+	// 	var k = 10;
+	// 	var p = Math.exp(k*Math.min(0, targetWidth-len1)) * Math.exp(k*Math.min(0, targetWidth-len2));
+	// 	return flip(p);
+	// }
 
 	var branch = function(currState, treeNode) {
 		setCurrFeatures(currState);
@@ -166,21 +178,23 @@ var makeProgram = function(variational, heuristicFactors) {
 			targetFactor(1);
 		}
 
+		var newState = {
+			depth: currState.depth + 1,
+			pos: newbranch.end,
+			angle: newbranch.angle,
+			width: newbranch.width
+		};
+
 		// Terminate?
 		future(function() {
 			if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
-			// if (currState.depth < 10 && _flip(0.5)) {
-			// if (currState.depth < 5) {
+			// if (currState.depth < 10 && shouldContinue(newState)) {
+			// if (_flip(0.5)) {
 				future(function() {
 					// Continue or fork?
 					if (_flip(0.5)) {
-					// if (false) {
-						branch({
-							depth: currState.depth + 1,
-							pos: newbranch.end,
-							angle: newbranch.angle,
-							width: newbranch.width},
-						newNode);
+					// if (flip(0.5)) {
+						branch(newState, newNode);
 					} else {
 						var branchState1 = {
 							depth: currState.depth + 1,
@@ -240,16 +254,16 @@ var generate = makeProgram(variational, heuristicFactors);
 if (variational) {
 	Variational(generate, vparams, {
 		numParticles: 100,
-		maxNumFlights: 300,
-		convergeEps: 0.1,
-		// convergeEps: 0.01,
+		maxNumFlights: 1000,
+		// convergeEps: 0.1,
+		convergeEps: 0.01,
 		adagradInitLearnRate: 0.25,
 		// adagradInitLearnRate: 0.1,
 		// adagradInitLearnRate: 0.05,
 
-		// gradientEstimator: 'ELBO',
-		gradientEstimator: 'EUBO',
-		exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/targetWidth=8.txt'),
+		gradientEstimator: 'ELBO',
+		// gradientEstimator: 'EUBO',
+		// exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/targetWidth=8.txt'),
 
 		verbosity: {
 			flightNum: true,
@@ -271,9 +285,9 @@ if (!fs.existsSync(resultsDir)) {
 	fs.mkdirSync(resultsDir);
 }
 var errs = repeat(n, function(i) {
-	// var ret = sample(ParticleFilter(generate, 1));
-	// var ret = sample(MH(generate, 1000));
-	var ret = !variational ? sample(ParticleFilter(generate, 100)) :
+	// var nonVariationalNparticles = 100;
+	var nonVariationalNparticles = 1;
+	var ret = !variational ? sample(ParticleFilter(generate, nonVariationalNparticles)) :
 							 sample(ParticleFilter(generate, 1));
 	var width = ret.bbox.size().x;
 	var err =  Math.abs(targetWidth - width) / targetWidth;
