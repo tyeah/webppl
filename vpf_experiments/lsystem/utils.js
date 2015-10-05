@@ -45,13 +45,25 @@ function renderOut(filename, res, viewport, branches) {
 }
 
 
-function ImageData2D(canvas) {
-	this.data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
-	this.width = canvas.width;
-	this.height = canvas.height;
-}
+function ImageData2D() {}
 ImageData2D.prototype = {
 	constructor: ImageData2D,
+	loadFromCanvas: function(canvas) {
+		this.data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+		this.width = canvas.width;
+		this.height = canvas.height;
+	},
+	loadFromFile: function(filename) {
+		// Sort of a hack: load it to an Image, then draw to a Canvas, then do
+		//    loadFromCanvas.
+		var filedata = fs.readFileSync(filename);
+		var img = new Canvas.Image;
+		img.src = filedata;
+		var canvas = new Canvas(img.width, img.height);
+		var ctx = canvas.getContext('2d');
+		ctx.drawImage(img, 0, 0, img.width, img.height);
+		this.loadFromCanvas(canvas);
+	},
 	getPixel: function(x, y) {
 		var i = y*this.width + x;
 		return [this.data[4*i], this.data[4*i+1], this.data[4*i+2], this.data[4*i+3]];
@@ -100,6 +112,15 @@ ImageData2D.prototype = {
 			}
 		}
 		return sim / n;
+	},
+	percentSameBinary: function(other) {
+		assert(this.width === other.width && this.height === other.height,
+			'percentMatch: image dimensions do not match!');
+		var sim = 0;
+		for (var i = 0; i < this.data.length; i += 4) {  // stride of 4 for RGBA pixels
+			sim += (this.data[i] === other.data[i]);
+		}
+		return sim / (this.height*this.width);
 	}
 };
 
@@ -118,7 +139,7 @@ function processRetVals_width(targetWidth) {
 module.exports = {
 	render: render,
 	renderOut: renderOut,
-	newImageData2D: function(canvas) { return new ImageData2D(canvas); },
+	newImageData2D: function() { return new ImageData2D(); },
 	newCanvas: function(w, h) { return new Canvas(w, h); },
 	processRetVals_width: processRetVals_width
 };

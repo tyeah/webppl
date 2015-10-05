@@ -12,7 +12,8 @@ var erp = require('../erp.js');
 var numeric = require('numeric');
 var tensor = require('../tensor.js');
 var assert = require('assert');
-var ad = require('../ad/main.js')
+var ad = require('../ad/main.js');
+var fs = require('fs');
 
 
 function hrtimeToSeconds(t) {
@@ -33,6 +34,7 @@ module.exports = function(env) {
       weight: 0,
       targetScore: 0,
       guideScore: 0,
+      reward: 0,
       value: undefined,
       store: _.clone(s),
       active: true,
@@ -47,6 +49,7 @@ module.exports = function(env) {
       weight: particle.weight,
       targetScore: particle.targetScore,
       guideScore: particle.guideScore,
+      reward: particle.reward,
       value: particle.value,
       store: _.clone(particle.store),
       active: particle.active,
@@ -154,10 +157,13 @@ module.exports = function(env) {
     return this.currentParticle().continuation(this.currentParticle().store);
   };
 
+  // var EPSILON = 0.25;
   Variational.prototype.sample = function(s, cc, a, erp, params) {
     var particle = this.currentParticle();
     var importanceERP = erp.importanceERP || erp;
-    var val = particle.trace ? particle.trace.nextVal() : importanceERP.sample(params);
+    // var val = particle.trace ? particle.trace.nextVal() : 
+    //           Math.random() < EPSILON ? erp.sample(params) : importanceERP.sample(params);
+     var val = particle.trace ? particle.trace.nextVal() : importanceERP.sample(params);
     var importanceScore = importanceERP.adscore(params, val);
     var choiceScore = erp.score(params, val);
     particle.weight += choiceScore - ad.untapify(importanceScore);
@@ -182,6 +188,7 @@ module.exports = function(env) {
     var particle = this.currentParticle();
     particle.weight += score;
     particle.targetScore += score;
+    particle.reward += score;
     particle.continuation = cc;
     particle.store = s;
 
@@ -465,16 +472,15 @@ module.exports = function(env) {
   }
 
   Variational.prototype.estimateGradientELBO = function() {
-    var sumScoreDiff = 0;
     var sumGrad = {};
     var sumWeightedGrad = {};
     var sumGradSq = {};
     var sumWeightedGradSq = {};
     for (var i = 0; i < this.particles.length; i++) {
       var particle = this.particles[i];
-      var scoreDiff = particle.targetScore - ad.untapify(particle.guideScore);
+      var weight = particle.targetScore - ad.untapify(particle.guideScore);
+      // var weight = particle.reward;
       var grad = this.getParticleGradient(particle);
-      sumScoreDiff += scoreDiff;
       for (var name in grad) {
         var g = grad[name];
         if (!sumGrad.hasOwnProperty(name)) {
@@ -485,11 +491,11 @@ module.exports = function(env) {
           sumWeightedGradSq[name] = numeric.rep(dim, 0);
         }
         numeric.addeq(sumGrad[name], g);
-        var weightedGrad = numeric.mul(g, scoreDiff);
+        var weightedGrad = numeric.mul(g, weight);
         numeric.addeq(sumWeightedGrad[name], weightedGrad);
         var gSq = numeric.mul(g, g);
         numeric.addeq(sumGradSq[name], gSq);
-        var weightedGradSq = numeric.mul(gSq, scoreDiff);
+        var weightedGradSq = numeric.mul(gSq, weight);
         numeric.addeq(sumWeightedGradSq[name], weightedGradSq);
       }
     }
@@ -506,8 +512,6 @@ module.exports = function(env) {
       console.log('  sumWeightedGrad: ' + JSON.stringify(sumWeightedGrad));
       console.log('  sumWeightedGradSq: ' + JSON.stringify(sumWeightedGradSq));
       console.log('  aStar: ' + JSON.stringify(aStar));
-      console.log('  sumScoreDiff: ' + sumScoreDiff);
-      console.log('  avgScoreDiff: ' + sumScoreDiff / this.numParticles);
       console.log('  elboGradEst: ' + JSON.stringify(elboGradEst));
     }
     return elboGradEst;
@@ -574,7 +578,9 @@ module.exports = function(env) {
         params[name] = ad.tensorTapify(val);
       }
       return params[name];
-    }
+    },
+    saveParams: function(params, filename) { fs.writeFileSync(filename, JSON.stringify(params)); },
+    loadParams: function(filename) { return JSON.parse(fs.readFileSync(filename)); }
   });
 
 

@@ -14,3 +14,4 @@ vpf_experiments/lsystem/params.js
 vpf_experiments/*/results/*
 vpf_experiments/*/experiment_results/*
 vpf_experiments/*/data/*
+vpf_experiments/*/saved_params/*
