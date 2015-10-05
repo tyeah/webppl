@@ -37,10 +37,11 @@ var computeWidthErr = function(bbox) {
 }
 var targetFactor = function(mult) {
 	var size = globalStore.bbox.size();
-	var f = 
-			gaussianERP.score([targetWidth, targetWidthTightness], size.x);
+	// var f = gaussianERP.score([targetWidth, targetWidthTightness], size.x);
+	var f = -((size.x - targetWidth) * (size.x - targetWidth)) / (targetWidthTightness * targetWidthTightness);
 	factor(mult * f);
 }
+
 
 
 var vparams = Variational.newParams();
@@ -231,7 +232,8 @@ var makeProgram = function(variational, heuristicFactors) {
 }
 
 var variational = true;
-var useSavedParams = true;
+var useSavedParams = false;
+var saveParams = false;
 var paramFile = 'vpf_experiments/lsystem/saved_params/test_params_bbox.txt';
 var heuristicFactors = false;
 var futurePolicy = 'deterministic';
@@ -244,16 +246,16 @@ if (variational) {
 	if (!useSavedParams) {
 		Variational(generate, vparams, {
 			numParticles: 100,
-			maxNumFlights: 1000,
+			maxNumFlights: 300,
 			// convergeEps: 0.1,
 			convergeEps: 0.01,
 			adagradInitLearnRate: 0.25,
 			// adagradInitLearnRate: 0.1,
 			// adagradInitLearnRate: 0.05,
 
-			// gradientEstimator: 'ELBO',
-			gradientEstimator: 'EUBO',
-			exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/targetWidth=8.txt'),
+			gradientEstimator: 'ELBO',
+			// gradientEstimator: 'EUBO',
+			// exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/targetWidth=8.txt'),
 
 			verbosity: {
 				flightNum: true,
@@ -262,7 +264,9 @@ if (variational) {
 				endStatus: true
 			}
 		});
-		Variational.saveParams(vparams, paramFile);
+		if (saveParams) {
+			Variational.saveParams(vparams, paramFile);
+		}
 	} else {
 		_.extend(vparams, Variational.loadParams(paramFile));
 	}
@@ -279,6 +283,7 @@ var errs = repeat(n, function(i) {
 	var nParticles = 1;
 	var ret = !variational ? sample(ParticleFilter(generate, nParticles)) :
 							 sample(ParticleFilter(generate, nParticles));
+	var width = ret.bbox.size().x;
 	var err = computeWidthErr(ret.bbox);
 	console.log(i + ' | width: ' + width + ', relative error: ' + err);
 	if (i % 5 === 0) {

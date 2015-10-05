@@ -201,7 +201,7 @@ var makeProgram = function(variational, heuristicFactors) {
 	return generate;
 }
 
-var variational = true;
+var variational = false;
 var heuristicFactors = false;
 var futurePolicy = 'deterministic';
 // var futurePolicy = 'stochastic';
@@ -219,8 +219,8 @@ if (variational) {
 		// adagradInitLearnRate: 0.1,
 		// adagradInitLearnRate: 0.05,
 
-		// gradientEstimator: 'ELBO',
-		gradientEstimator: 'VPF',
+		gradientEstimator: 'ELBO',
+		// gradientEstimator: 'VPF',
 
 		verbosity: {
 			flightNum: true,

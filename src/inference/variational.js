@@ -157,13 +157,11 @@ module.exports = function(env) {
     return this.currentParticle().continuation(this.currentParticle().store);
   };
 
-  // var EPSILON = 0.25;
   Variational.prototype.sample = function(s, cc, a, erp, params) {
     var particle = this.currentParticle();
     var importanceERP = erp.importanceERP || erp;
-    // var val = particle.trace ? particle.trace.nextVal() : 
-    //           Math.random() < EPSILON ? erp.sample(params) : importanceERP.sample(params);
-     var val = particle.trace ? particle.trace.nextVal() : importanceERP.sample(params);
+    var val = particle.trace ? particle.trace.nextVal() : importanceERP.sample(params);
+    // var val = erp.sample(params);
     var importanceScore = importanceERP.adscore(params, val);
     var choiceScore = erp.score(params, val);
     particle.weight += choiceScore - ad.untapify(importanceScore);
