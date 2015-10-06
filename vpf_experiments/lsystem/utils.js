@@ -138,14 +138,13 @@ ImageData2D.prototype = {
 };
 
 
-function processRetVals_width(targetWidth) {
-	return function(vals) {
-		var errs = vals.map(function(v) {
-			var width = v.bbox.size().x;
-			return Math.abs(targetWidth - width) / targetWidth;
-		});
-		console.log('  avg relative error: ' + numeric.sum(errs)/vals.length);
-	}
+function processRetVals_width(vals) {
+	var errs = vals.map(function(v) {
+		var width = v.bbox.size().x;
+		var targetWidth = v.targetWidth;
+		return Math.abs(targetWidth - width) / targetWidth;
+	});
+	console.log('  avg relative error: ' + numeric.sum(errs)/vals.length);
 }
 
 

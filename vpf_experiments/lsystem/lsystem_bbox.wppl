@@ -25,30 +25,26 @@ var polar2rect = function(r, theta) {
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
 
-var targetWidth = 8;
-// var targetWidth = 15;
-var targetYmax = 0;
-var targetXcenter = 0;
-var targetWidthTightness = targetWidth / 10;
-// var targetWidthTightness = 0.1;
-var computeWidthErr = function(bbox) {
-	var size = bbox.size();
-	return Math.abs(size.x - targetWidth) / targetWidth;
-}
-var targetFactor = function(mult) {
-	var size = globalStore.bbox.size();
-	// var f = gaussianERP.score([targetWidth, targetWidthTightness], size.x);
-	var f = -((size.x - targetWidth) * (size.x - targetWidth)) / (targetWidthTightness * targetWidthTightness);
-	factor(mult * f);
-}
-
-
 
 var vparams = Variational.newParams();
 
 
 
-var makeProgram = function(variational, heuristicFactors) {
+
+var makeProgram = function(opts) {
+
+	var variational = opts.variational === undefined ? false : opts.variational;
+	var heuristicFactors = opts.heuristicFactors === undefined ? false : opts.heuristicFactors;
+	var futurePolicy = opts.futurePolicy || 'deterministic';
+
+	var targetFactor = function(mult) {
+		var tw = globalStore.targetWidth;
+		var twt = globalStore.targetWidthTightness;
+		var size = globalStore.bbox.size();
+		// var f = gaussianERP.score([tw, twt], size.x);
+		var f = -((size.x - tw) * (size.x - tw)) / (twt * twt);
+		factor(mult * f);
+	}
 
 	// var _gaussian = gaussian;
 	var _gaussian = !variational ? gaussian :
@@ -114,26 +110,15 @@ var makeProgram = function(variational, heuristicFactors) {
 		var cang = Math.cos(currState.angle);
 		var ang = normalize(normang(currState.angle), 0, TWOPI);
 		var bb = globalStore.bbox;
-		if (bb.empty()) {
-			globalStore.currFeatures = [x, y, depth, ang, sang, cang];
-		} else {
+		globalStore.currFeatures = [x, y, depth, ang, sang, cang, globalStore.targetWidth];
+		if (!bb.empty()) {
 			var xmin = normalize(bb.min.x, viewport.xmin, viewport.xmax);
 			var xmax = normalize(bb.max.x, viewport.xmin, viewport.xmax);
 			var ymin = normalize(bb.min.y, viewport.ymin, viewport.ymax);
 			var ymax = normalize(bb.max.y, viewport.ymin, viewport.ymax);
-			globalStore.currFeatures = [x, y, depth, ang, sang, cang, xmin, xmax, ymin, ymax];
+			globalStore.currFeatures = globalStore.currFeatures.concat([xmin, xmax, ymin, ymax]);
 		}
 	}
-
-	// var shouldContinue = function(newState) {
-	// 	var bb = globalStore.bbox;
-	// 	var len1 = newState.pos.x - bb.min.x + 2;
-	// 	var len2 = bb.max.x - newState.pos.x + 2;
-	// 	// return (len1 < targetWidth && len2 < targetWidth);
-	// 	var k = 10;
-	// 	var p = Math.exp(k*Math.min(0, targetWidth-len1)) * Math.exp(k*Math.min(0, targetWidth-len2));
-	// 	return flip(p);
-	// }
 
 	var branch = function(currState) {
 		setCurrFeatures(currState);
@@ -177,7 +162,6 @@ var makeProgram = function(variational, heuristicFactors) {
 		future(function() {
 			if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
 			// if (currState.depth < 10 && _flip(0.5)) {
-			// if (currState.depth < 10 && shouldContinue(newState)) {
 			// if (_flip(0.5)) {
 				future(function() {
 					// Continue or fork?
@@ -208,6 +192,11 @@ var makeProgram = function(variational, heuristicFactors) {
 	};
 
 	var generate = function() {
+		setFuturePolicy(futurePolicy);
+
+		globalStore.targetWidth = opts.targetWidth || uniform(1, 15);
+		globalStore.targetWidthTightness = opts.targetWidthTightness || globalStore.targetWidth / 10;
+
 		globalStore.branches = [];
 		globalStore.bbox = box2();
 		globalStore.currFeatures = [];
@@ -225,33 +214,35 @@ var makeProgram = function(variational, heuristicFactors) {
 			targetFactor(1);
 		}
 
-		return { branches: globalStore.branches, bbox: globalStore.bbox };
+		return { branches: globalStore.branches, bbox: globalStore.bbox, targetWidth: globalStore.targetWidth };
 	};
 
 	return generate;
 }
 
-var variational = true;
+var progOpts = {
+	variational: true,
+	heuristicFactors: false,
+	targetWidth: 8,
+	// targetWidthTightness: 0.1
+	futurePolicy: 'deterministic'
+};
+var generate = makeProgram(progOpts);
+
 var useSavedParams = false;
 var saveParams = false;
 var paramFile = 'vpf_experiments/lsystem/saved_params/test_params_bbox.txt';
-var heuristicFactors = false;
-var futurePolicy = 'deterministic';
-// var futurePolicy = 'stochastic';
-setFuturePolicy(futurePolicy);
-var generate = makeProgram(variational, heuristicFactors);
 
-
-if (variational) {
+if (progOpts.variational) {
 	if (!useSavedParams) {
 		Variational(generate, vparams, {
 			numParticles: 100,
-			maxNumFlights: 300,
+			maxNumFlights: 1000,
 			// convergeEps: 0.1,
 			convergeEps: 0.01,
-			adagradInitLearnRate: 0.25,
+			// adagradInitLearnRate: 0.25,
 			// adagradInitLearnRate: 0.1,
-			// adagradInitLearnRate: 0.05,
+			adagradInitLearnRate: 0.05,
 
 			gradientEstimator: 'ELBO',
 			// gradientEstimator: 'EUBO',
@@ -260,7 +251,7 @@ if (variational) {
 			verbosity: {
 				flightNum: true,
 				scoreDiff: true,
-				processRetVals: lsysUtils.processRetVals_width(targetWidth),
+				processRetVals: lsysUtils.processRetVals_width,
 				endStatus: true
 			}
 		});
@@ -272,6 +263,11 @@ if (variational) {
 	}
 }
 
+var computeWidthErr = function(bbox, targetWidth) {
+	var size = bbox.size();
+	return Math.abs(size.x - targetWidth) / targetWidth;
+}
+
 var res = {width: 600, height: 600};
 var n = 100;
 var name = 'test';
@@ -281,11 +277,10 @@ if (!fs.existsSync(resultsDir)) {
 }
 var errs = repeat(n, function(i) {
 	var nParticles = 1;
-	var ret = !variational ? sample(ParticleFilter(generate, nParticles)) :
-							 sample(ParticleFilter(generate, nParticles));
+	var ret = sample(ParticleFilter(generate, nParticles));
 	var width = ret.bbox.size().x;
-	var err = computeWidthErr(ret.bbox);
-	console.log(i + ' | width: ' + width + ', relative error: ' + err);
+	var err = computeWidthErr(ret.bbox, ret.targetWidth);
+	console.log(i + ' | width: ' + width + ', target: ' + ret.targetWidth + ', relative error: ' + err);
 	if (i % 5 === 0) {
 		lsysUtils.renderOut(resultsDir + '/' + (i/5) + '.png', res, viewport, ret.branches);
 	}
@@ -308,7 +303,7 @@ var compareVariationalToPrior = function() {
 	var nReps = 100;
 	map(function(isVariational) {
 		console.log('isVariational = ' + isVariational);
-		var genFn = makeProgram(isVariational, heuristicFactors);
+		var genFn = makeProgram(_.extend(_.clone(progOpts), { variational: isVariational }));
 		repeat(10, function(np) {
 			var nParticles = np + 1;
 			console.log('  nParticles = ' + nParticles);
@@ -318,7 +313,7 @@ var compareVariationalToPrior = function() {
 				var ret = sample(ParticleFilter(genFn, nParticles));
 				var t1 = present.present();
 				var time = t1 - t0;
-				var err = computeWidthErr(ret.bbox);
+				var err = computeWidthErr(ret.bbox, ret.targetWidth);
 				return [err, time];
 			});
 			var sums = reduce(function(a, b) { return numeric.add(a, b); }, [0, 0], errsAndTimes);
@@ -331,9 +326,8 @@ var compareVariationalToPrior = function() {
 }
 // compareVariationalToPrior();
 
-var generateTrainingData = function() {
+var generateTrainingData = function(name) {
 	var dataDir = 'vpf_experiments/lsystem/data';
-	var name = 'targetWidth=8';
 	var fs = require.call(null, 'fs');
 	if (!fs.existsSync(dataDir)) {
 		fs.mkdirSync(dataDir);
@@ -347,7 +341,7 @@ var generateTrainingData = function() {
 	}
 	genData(0);
 };
-// generateTrainingData();
+// generateTrainingData('targetWidth=8');
 
 undefined;
 
