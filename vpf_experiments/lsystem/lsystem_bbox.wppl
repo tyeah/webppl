@@ -29,13 +29,12 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 var vparams = Variational.newParams();
 
 
+var randomTargetWidth = function() {
+	return uniform(1, 15);
+}
 
 
 var makeProgram = function(opts) {
-
-	var variational = opts.variational === undefined ? false : opts.variational;
-	var heuristicFactors = opts.heuristicFactors === undefined ? false : opts.heuristicFactors;
-	var futurePolicy = opts.futurePolicy || 'deterministic';
 
 	var targetFactor = function(mult) {
 		var tw = globalStore.targetWidth;
@@ -47,7 +46,7 @@ var makeProgram = function(opts) {
 	}
 
 	// var _gaussian = gaussian;
-	var _gaussian = !variational ? gaussian :
+	var _gaussian = !opts.variational ? gaussian :
 	function(mu, sigma) {
 		var addr = currentAddress();
 		var callsite = addr.slice(addr.lastIndexOf('_'));
@@ -60,7 +59,7 @@ var makeProgram = function(opts) {
 	};
 
 	// var _uniform = uniform;
-	var _uniform = !variational ? uniform :
+	var _uniform = !opts.variational ? uniform :
 	function(lo, hi) {
 		var addr = currentAddress();
 		var callsite = addr.slice(addr.lastIndexOf('_'));
@@ -74,7 +73,7 @@ var makeProgram = function(opts) {
 	};
 
 	// var _flip = flip;
-	var _flip = !variational ? flip :
+	var _flip = !opts.variational ? flip :
 	function(p) {
 		var addr = currentAddress();
 		var callsite = addr.slice(addr.lastIndexOf('_'));
@@ -134,7 +133,7 @@ var makeProgram = function(opts) {
 			end: currState.pos.clone().add(polar2rect(length, newang))
 		};
 
-		if (heuristicFactors) {
+		if (opts.heuristicFactors) {
 			// Subtract previous heuristic factor
 			if (globalStore.branches.length > 0) {
 				targetFactor(-1);
@@ -146,7 +145,7 @@ var makeProgram = function(opts) {
 		globalStore.bbox.expandByPoint(newbranch.start);
 		globalStore.bbox.expandByPoint(newbranch.end);
 
-		if (heuristicFactors) {
+		if (opts.heuristicFactors) {
 			// Add new heuristic factor
 			targetFactor(1);
 		}
@@ -191,47 +190,53 @@ var makeProgram = function(opts) {
 		});
 	};
 
-	var generate = function() {
-		setFuturePolicy(futurePolicy);
+	var main = function(targetWidth) {
+		return function() {
+			globalStore.targetWidth = targetWidth || randomTargetWidth();
+			globalStore.targetWidthTightness = opts.targetWidthTightness || globalStore.targetWidth / 10;
 
-		globalStore.targetWidth = opts.targetWidth || uniform(1, 15);
-		globalStore.targetWidthTightness = opts.targetWidthTightness || globalStore.targetWidth / 10;
+			globalStore.branches = [];
+			globalStore.bbox = box2();
+			globalStore.currFeatures = [];
+			var startState = {
+				depth: 0,
+				pos: vec2(0, 0),
+				angle: -Math.PI/2,
+				width: 0.75
+			};
+			future(function() { branch(startState); });
+			finishAllFutures();
 
-		globalStore.branches = [];
-		globalStore.bbox = box2();
-		globalStore.currFeatures = [];
-		var startState = {
-			depth: 0,
-			pos: vec2(0, 0),
-			angle: -Math.PI/2,
-			width: 0.75
+			if (!opts.heuristicFactors) {
+				// Target factor only once, at very end
+				targetFactor(1);
+			}
+
+			return { branches: globalStore.branches, bbox: globalStore.bbox, targetWidth: globalStore.targetWidth };
 		};
-		future(function() { branch(startState); });
-		finishAllFutures();
+	}
 
-		if (!heuristicFactors) {
-			// Target factor only once, at very end
-			targetFactor(1);
-		}
-
-		return { branches: globalStore.branches, bbox: globalStore.bbox, targetWidth: globalStore.targetWidth };
-	};
-
-	return generate;
+	return main;
 }
+
+// ----------------------------------------------------------------------------
 
 var progOpts = {
 	variational: true,
-	heuristicFactors: false,
-	targetWidth: 8,
-	// targetWidthTightness: 0.1
-	futurePolicy: 'deterministic'
+	heuristicFactors: false
 };
-var generate = makeProgram(progOpts);
+
+// var targetWidth = 8;
+var targetWidth = undefined;
+var generate = makeProgram(progOpts)(targetWidth);
 
 var useSavedParams = false;
 var saveParams = false;
 var paramFile = 'vpf_experiments/lsystem/saved_params/test_params_bbox.txt';
+
+
+var futurePolicy = 'deterministic';
+setFuturePolicy(futurePolicy);
 
 if (progOpts.variational) {
 	if (!useSavedParams) {
@@ -259,7 +264,7 @@ if (progOpts.variational) {
 			Variational.saveParams(vparams, paramFile);
 		}
 	} else {
-		_.extend(vparams, Variational.loadParams(paramFile));
+		Variational.loadParams(vparams, paramFile);
 	}
 }
 
@@ -268,26 +273,32 @@ var computeWidthErr = function(bbox, targetWidth) {
 	return Math.abs(size.x - targetWidth) / targetWidth;
 }
 
-var res = {width: 600, height: 600};
-var n = 100;
-var name = 'test';
-var resultsDir = 'vpf_experiments/lsystem/results/bbox/' + name;
-if (!fs.existsSync(resultsDir)) {
-	fs.mkdirSync(resultsDir);
-}
-var errs = repeat(n, function(i) {
-	var nParticles = 1;
-	var ret = sample(ParticleFilter(generate, nParticles));
-	var width = ret.bbox.size().x;
-	var err = computeWidthErr(ret.bbox, ret.targetWidth);
-	console.log(i + ' | width: ' + width + ', target: ' + ret.targetWidth + ', relative error: ' + err);
-	if (i % 5 === 0) {
-		lsysUtils.renderOut(resultsDir + '/' + (i/5) + '.png', res, viewport, ret.branches);
+// ----------------------------------------------------------------------------
+
+var testRun = function() {
+	var res = {width: 600, height: 600};
+	var n = 100;
+	var name = 'test';
+	var resultsDir = 'vpf_experiments/lsystem/results/bbox/' + name;
+	if (!fs.existsSync(resultsDir)) {
+		fs.mkdirSync(resultsDir);
 	}
-	return err;
-});
-console.log('error -  min: ' + listMin(errs) + ', max: ' + listMax(errs) +
-	               ', avg: ' + listMean(errs) + ', stddev: ' + listStdev(errs));
+	var errs = repeat(n, function(i) {
+		// var nParticles = 100;
+		var nParticles = 1;
+		var ret = sample(ParticleFilter(generate, nParticles));
+		var width = ret.bbox.size().x;
+		var err = computeWidthErr(ret.bbox, ret.targetWidth);
+		console.log(i + ' | width: ' + width + ', target: ' + ret.targetWidth + ', relative error: ' + err);
+		if (i % 5 === 0) {
+			lsysUtils.renderOut(resultsDir + '/' + (i/5) + '.png', res, viewport, ret.branches);
+		}
+		return err;
+	});
+	console.log('error -  min: ' + listMin(errs) + ', max: ' + listMax(errs) +
+		               ', avg: ' + listMean(errs) + ', stddev: ' + listStdev(errs));
+}
+testRun();
 
 
 // ----------------------------------------------------------------------------
@@ -303,12 +314,14 @@ var compareVariationalToPrior = function() {
 	var nReps = 100;
 	map(function(isVariational) {
 		console.log('isVariational = ' + isVariational);
-		var genFn = makeProgram(_.extend(_.clone(progOpts), { variational: isVariational }));
+		var makeGenFn = makeProgram(_.extend(_.clone(progOpts), { variational: isVariational }));
 		repeat(10, function(np) {
 			var nParticles = np + 1;
 			console.log('  nParticles = ' + nParticles);
 			var errsAndTimes = repeat(nReps, function(i) {
 				console.log('    repetition ' + i);
+				var tw = targetWidth || randomTargetWidth();
+				var genFn = makeGenFn(tw);
 				var t0 = present.present();
 				var ret = sample(ParticleFilter(genFn, nParticles));
 				var t1 = present.present();
@@ -326,6 +339,8 @@ var compareVariationalToPrior = function() {
 }
 // compareVariationalToPrior();
 
+// ----------------------------------------------------------------------------
+
 var generateTrainingData = function(name) {
 	var dataDir = 'vpf_experiments/lsystem/data';
 	var fs = require.call(null, 'fs');
@@ -333,8 +348,19 @@ var generateTrainingData = function(name) {
 		fs.mkdirSync(dataDir);
 	}
 	var filename = dataDir + '/' + name + '.txt';
+	var pOpts = _.extend(_.clone(progOpts), {
+		variational: false,
+		targetWidthTightness: 0.1
+	});
+	var makeGenFn = makeProgram(pOpts);
 	var genData = function(counter) {
-		var trace = ParticleFilter(generate, 100).trace;
+		// var trace = ParticleFilter(generate, 100).trace;
+
+		var tw = targetWidth || randomTargetWidth;
+		var genFn = makeGenFn(tw);
+		var _trace = ParticleFilter(genFn, 100).trace;
+		var trace = [tw].concat(_trace);
+
 		fs.appendFileSync(filename, JSON.stringify(trace) + '\n');
 		console.log('Generated trace ' + counter);
 		genData(counter + 1);
@@ -342,6 +368,7 @@ var generateTrainingData = function(name) {
 	genData(0);
 };
 // generateTrainingData('targetWidth=8');
+// generateTrainingData('targetWidth=random');
 
 undefined;
 

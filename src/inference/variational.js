@@ -578,7 +578,7 @@ module.exports = function(env) {
       return params[name];
     },
     saveParams: function(params, filename) { fs.writeFileSync(filename, JSON.stringify(params)); },
-    loadParams: function(filename) { return JSON.parse(fs.readFileSync(filename)); }
+    loadParams: function(params, filename) { _.extend(params, JSON.parse(fs.readFileSync(filename))); }
   });
 
 
