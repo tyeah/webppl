@@ -30,18 +30,20 @@ var vparams = Variational.newParams();
 
 
 var randomTargetWidth = function() {
-	return uniform(1, 15);
+	return uniform(5, 15);
 }
 
 
 var makeProgram = function(opts) {
 
+	var targetWidthTightness = opts.targetWidthTightness || 0.1;
+
 	var targetFactor = function(mult) {
 		var tw = globalStore.targetWidth;
-		var twt = globalStore.targetWidthTightness;
+		var twt = targetWidthTightness;
 		var size = globalStore.bbox.size();
-		// var f = gaussianERP.score([tw, twt], size.x);
-		var f = -((size.x - tw) * (size.x - tw)) / (twt * twt);
+		var relErr = (size.x - tw) / tw;
+		var f = - (relErr * relErr) / (twt * twt);
 		factor(mult * f);
 	}
 
@@ -193,7 +195,6 @@ var makeProgram = function(opts) {
 	var main = function(targetWidth) {
 		return function() {
 			globalStore.targetWidth = targetWidth || randomTargetWidth();
-			globalStore.targetWidthTightness = opts.targetWidthTightness || globalStore.targetWidth / 10;
 
 			globalStore.branches = [];
 			globalStore.bbox = box2();
@@ -222,11 +223,12 @@ var makeProgram = function(opts) {
 // ----------------------------------------------------------------------------
 
 var progOpts = {
-	variational: true,
-	heuristicFactors: false
+	variational: false,
+	heuristicFactors: false,
+	targetWidthTightness: 0.1
 };
 
-// var targetWidth = 8;
+// var targetWidth = 5;
 var targetWidth = undefined;
 var generate = makeProgram(progOpts)(targetWidth);
 
@@ -284,8 +286,8 @@ var testRun = function() {
 		fs.mkdirSync(resultsDir);
 	}
 	var errs = repeat(n, function(i) {
-		// var nParticles = 100;
-		var nParticles = 1;
+		var nParticles = 100;
+		// var nParticles = 1;
 		var ret = sample(ParticleFilter(generate, nParticles));
 		var width = ret.bbox.size().x;
 		var err = computeWidthErr(ret.bbox, ret.targetWidth);
@@ -350,7 +352,7 @@ var generateTrainingData = function(name) {
 	var filename = dataDir + '/' + name + '.txt';
 	var pOpts = _.extend(_.clone(progOpts), {
 		variational: false,
-		targetWidthTightness: 0.1
+		targetWidthTightness: 0.01
 	});
 	var makeGenFn = makeProgram(pOpts);
 	var genData = function(counter) {
