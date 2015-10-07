@@ -223,18 +223,18 @@ var makeProgram = function(opts) {
 // ----------------------------------------------------------------------------
 
 var progOpts = {
-	variational: false,
+	variational: true,
 	heuristicFactors: false,
 	targetWidthTightness: 0.1
 };
 
-// var targetWidth = 5;
+// var targetWidth = 8;
 var targetWidth = undefined;
 var generate = makeProgram(progOpts)(targetWidth);
 
 var useSavedParams = false;
 var saveParams = false;
-var paramFile = 'vpf_experiments/lsystem/saved_params/test_params_bbox.txt';
+var paramFile = 'vpf_experiments/lsystem/saved_params/test_params_bbox_random_l1.txt';
 
 
 var futurePolicy = 'deterministic';
@@ -248,12 +248,12 @@ if (progOpts.variational) {
 			// convergeEps: 0.1,
 			convergeEps: 0.01,
 			// adagradInitLearnRate: 0.25,
-			// adagradInitLearnRate: 0.1,
-			adagradInitLearnRate: 0.05,
+			adagradInitLearnRate: 0.1,
+			// adagradInitLearnRate: 0.05,
 
-			gradientEstimator: 'ELBO',
-			// gradientEstimator: 'EUBO',
-			// exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/targetWidth=8.txt'),
+			// gradientEstimator: 'ELBO',
+			gradientEstimator: 'EUBO',
+			exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/targetWidth=random.txt'),
 
 			verbosity: {
 				flightNum: true,
@@ -286,8 +286,8 @@ var testRun = function() {
 		fs.mkdirSync(resultsDir);
 	}
 	var errs = repeat(n, function(i) {
-		var nParticles = 100;
-		// var nParticles = 1;
+		// var nParticles = 100;
+		var nParticles = 1;
 		var ret = sample(ParticleFilter(generate, nParticles));
 		var width = ret.bbox.size().x;
 		var err = computeWidthErr(ret.bbox, ret.targetWidth);
@@ -358,7 +358,7 @@ var generateTrainingData = function(name) {
 	var genData = function(counter) {
 		// var trace = ParticleFilter(generate, 100).trace;
 
-		var tw = targetWidth || randomTargetWidth;
+		var tw = targetWidth || randomTargetWidth();
 		var genFn = makeGenFn(tw);
 		var _trace = ParticleFilter(genFn, 100).trace;
 		var trace = [tw].concat(_trace);

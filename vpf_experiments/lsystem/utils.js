@@ -4,9 +4,12 @@ var THREE = require('three');
 var assert = require('assert');
 var numeric = require('numeric');
 
-function render(canvas, viewport, branches) {
+function render(canvas, viewport, branches, starti, endi) {
 	if (viewport === undefined)
 		viewport = {xmin: 0, ymin: 0, xmax: canvas.width, ymax: canvas.height};
+
+	starti = starti || 0;
+	endi = endi || branches.length;
 
 	function world2img(p) {
 		return new THREE.Vector2(
@@ -25,7 +28,7 @@ function render(canvas, viewport, branches) {
 	// Draw
 	ctx.strokeStyle = 'black';
 	ctx.lineCap = 'round';
-	for (var i = 0; i < branches.length; i++) {
+	for (var i = starti; i < endi; i++) {
 		var branch = branches[i];
 		var istart = world2img(branch.start);
 		var iend = world2img(branch.end);
@@ -49,7 +52,8 @@ function ImageData2D() {}
 ImageData2D.prototype = {
 	constructor: ImageData2D,
 	loadFromCanvas: function(canvas) {
-		this.data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+		this.imgDataObj = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+		this.data = this.imgDataObj.data;
 		this.width = canvas.width;
 		this.height = canvas.height;
 	},
@@ -63,6 +67,9 @@ ImageData2D.prototype = {
 		var ctx = canvas.getContext('2d');
 		ctx.drawImage(img, 0, 0, img.width, img.height);
 		this.loadFromCanvas(canvas);
+	},
+	copyToCanvas: function(canvas) {
+		canvas.getContext('2d').putImageData(this.imgDataObj, 0, 0);
 	},
 	getPixel: function(x, y) {
 		var i = y*this.width + x;
@@ -128,8 +135,8 @@ ImageData2D.prototype = {
 		var sim = 0;
 		var n = 0;
 		for (var i = 0; i < this.data.length; i += 4) {  // stride of 4 for RGBA pixels
-			if (this.data[i] === 0) {
-				sim += other.data[i] === 0;
+			if (this.data[i] !== 255) {
+				sim += (other.data[i] !== 255);
 				n++;
 			}
 		}

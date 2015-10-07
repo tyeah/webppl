@@ -27,16 +27,47 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 var targetImg = lsysUtils.newImageData2D();
 targetImg.loadFromFile('vpf_experiments/lsystem/targets/curl_50.png');
 var canvas = lsysUtils.newCanvas(50, 50);
-var genImg = lsysUtils.newImageData2D();
-var computeSim = function(branches) {
-	lsysUtils.render(canvas, viewport, branches);
-	genImg.loadFromCanvas(canvas);
-	return genImg.percentSameBinary(targetImg);
+var computeSim = function(branches, inInference) {
+	// If not in inference, just render everything
+	if (!inInference) {
+		lsysUtils.render(canvas, viewport, branches);
+	// Otherwise, do an incremental render from the last group of
+	//    branches we saw.
+	} else {
+		if (globalStore.genImg) {
+			globalStore.genImg.copyToCanvas(canvas);
+		}
+		var starti = globalStore.prevBranches ? globalStore.prevBranches.length : 0;
+		lsysUtils.render(canvas, viewport, branches, starti, branches.length);
+		globalStore.prevBranches = branches;
+	}
+	globalStore.genImg = lsysUtils.newImageData2D();
+	globalStore.genImg.loadFromCanvas(canvas);
+	var genImg = globalStore.genImg;
+
+	// return genImg.percentSameBinary(targetImg);
+
+	var accuracy = genImg.percentFilledSameBinary(targetImg);
+	var coverage = targetImg.percentFilledSameBinary(genImg);
+	// return accuracy * coverage;
+	return 0.5*accuracy + 0.5*coverage;
+	// return Math.min(accuracy, coverage);
+	// return accuracy;
+	// return coverage;
 };
-var targetFactor = function(mult) {
-	var sim = computeSim(globalStore.branches);
-	var f = gaussianERP.score([1, 0.01], sim);
-	factor(mult * f);
+var makescore = function(val, target, tightness) {
+	var diff = val - target;
+	return - (diff * diff) / (tightness * tightness);
+}
+var targetFactor = function() {
+	var sim = computeSim(globalStore.branches, true);
+	var f = makescore(sim, 1, 0.02);
+	if (globalStore.prevFactor) {
+		factor(f - globalStore.prevFactor);
+	} else {
+		factor(f);
+	}
+	globalStore.prevFactor = f;
 };
 
 
@@ -106,10 +137,8 @@ var makeProgram = function(variational, heuristicFactors) {
 		var x = normalize(currState.pos.x, viewport.xmin, viewport.xmax);
 		var y = normalize(currState.pos.y, viewport.ymin, viewport.ymax);
 		var depth = normalize(currState.depth, 0, 5);
-		var sang = Math.sin(currState.angle);
-		var cang = Math.cos(currState.angle);
 		var ang = normalize(normang(currState.angle), 0, TWOPI);
-		globalStore.currFeatures = [x, y, depth, ang, sang, cang];
+		globalStore.currFeatures = [x, y, depth, ang];
 	};
 
 	var branch = function(currState) {
@@ -126,18 +155,11 @@ var makeProgram = function(variational, heuristicFactors) {
 			end: currState.pos.clone().add(polar2rect(length, newang))
 		};
 
-		if (heuristicFactors) {
-			// Subtract previous heuristic factor
-			if (globalStore.branches.length > 0) {
-				targetFactor(-1);
-			}
-		}
-
 		globalStore.branches = globalStore.branches.concat([newbranch]);
 
 		if (heuristicFactors) {
 			// Add new heuristic factor
-			targetFactor(1);
+			targetFactor();
 		}
 
 		var newState = {
@@ -192,7 +214,7 @@ var makeProgram = function(variational, heuristicFactors) {
 
 		if (!heuristicFactors) {
 			// Target factor only once, at very end
-			targetFactor(1);
+			targetFactor();
 		}
 
 		return globalStore.branches;
@@ -202,9 +224,9 @@ var makeProgram = function(variational, heuristicFactors) {
 }
 
 var variational = false;
-var heuristicFactors = false;
-var futurePolicy = 'deterministic';
-// var futurePolicy = 'stochastic';
+var heuristicFactors = true;
+// var futurePolicy = 'deterministic';
+var futurePolicy = 'stochastic';
 setFuturePolicy(futurePolicy);
 var generate = makeProgram(variational, heuristicFactors);
 
@@ -242,11 +264,11 @@ if (!fs.existsSync(resultsDir)) {
 	fs.mkdirSync(resultsDir);
 }
 var sims = repeat(n, function(i) {
-	// var ret = sample(MH(generate, 2000));
-	var nonVariationalNparticles = 100;
-	// var nonVariationalNparticles = 1;
-	var ret = !variational ? sample(ParticleFilter(generate, nonVariationalNparticles)) :
-							 sample(ParticleFilter(generate, 1));
+	// var nParticles = 1;
+	// var nParticles = 100;
+	var nParticles = 300;
+	var ret = sample(ParticleFilter(generate, nParticles));
+	// var ret = sample(MH(generate, 1000));
 	var sim = computeSim(ret);
 	console.log(i + ' | sim: ' + sim);
 	if (i % skip === 0) {

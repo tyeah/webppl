@@ -24,7 +24,7 @@ function get(params, name, origparams, bounds, features) {
 		var nHidden = features.length;
 		// var nHidden = 10;
 		var nHiddenLayers = 1;
-		// var nHiddenLayers = 4;
+		// var nHiddenLayers = 2;
 		var activation = nnlayers.tanh;
 		// var activation = nnlayers.sigmoid;
 		// var activation = nnlayers.rectifiedLinear;
