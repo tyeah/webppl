@@ -191,6 +191,12 @@ module.exports = function(env) {
       if (i < this.particleIndex) {
         // We have updated all particles and will now wrap around
         this.resampleParticles();
+         // Resampling can kill all continuing particles
+        i = this.firstActiveParticleIndex();
+        if (i === -1) {
+          // All particles completed, no more computation to do
+          return this.finish();
+        }
       }
       this.particleIndex = i;
       return this.currentParticle().continuation(this.currentParticle().store);
