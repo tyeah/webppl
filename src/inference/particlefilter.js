@@ -26,6 +26,7 @@ module.exports = function(env) {
     return {
       continuation: particle.continuation,
       weight: particle.weight,
+      score: particle.score,
       value: particle.value,
       store: _.clone(particle.store),
       active: particle.active,
@@ -33,7 +34,7 @@ module.exports = function(env) {
     };
   }
 
-  function ParticleFilter(s, k, a, wpplFn, numParticles, strict) {
+  function ParticleFilter(s, k, a, wpplFn, numParticles, strict, saveHistory) {
 
     this.particles = [];
     this.particleIndex = 0;  // marks the active particle
@@ -46,6 +47,7 @@ module.exports = function(env) {
       var particle = {
         continuation: exitK,
         weight: 0,
+        score: 0,
         value: undefined,
         store: _.clone(s),
         active: true,
@@ -55,6 +57,10 @@ module.exports = function(env) {
     }
 
     this.strict = strict;
+
+    if (saveHistory) {
+      this.particleHistory = [];
+    }
 
     // Move old coroutine out of the way and install this as the current
     // handler.
@@ -75,16 +81,20 @@ module.exports = function(env) {
     var val = importanceERP.sample(params);
     var importanceScore = importanceERP.score(params, val);
     var choiceScore = erp.score(params, val);
-    this.currentParticle().weight += choiceScore - importanceScore;
-    this.currentParticle().trace.push(val);
+    var p = this.currentParticle();
+    p.weight += choiceScore - importanceScore;
+    p.score += choiceScore;
+    p.trace.push(val);
     return cc(s, val);
   };
 
   ParticleFilter.prototype.factor = function(s, cc, a, score) {
     // Update particle weight
-    this.currentParticle().weight += score;
-    this.currentParticle().continuation = cc;
-    this.currentParticle().store = s;
+    var p = this.currentParticle();
+    p.weight += score;
+    p.score += score;
+    p.continuation = cc;
+    p.store = s;
 
     if (this.allParticlesAdvanced()) {
       // Resample in proportion to weights
@@ -169,7 +179,15 @@ module.exports = function(env) {
       }
 
       // Particles after update: Retained + new particles
+      if (this.particleHistory) {
+        this.particleHistory.push(this.particles);
+      }
       this.particles = newParticles.concat(retainedParticles);
+      if (this.particleHistory) {
+        this.particleHistory.push(this.particles.map(function(p) {
+          return copyParticle(p);   // To properly preserve this state
+        }));
+      }
     }
 
     // Reset all weights
@@ -224,6 +242,7 @@ module.exports = function(env) {
     var randi = Math.floor(Math.random() * this.particles.length);
     dist.trace = this.particles[randi].trace;
     // dist.value = this.particles[randi].value;
+    dist.particleHistory = this.particleHistory;
     ////
 
     // Reinstate previous coroutine:
@@ -235,8 +254,8 @@ module.exports = function(env) {
 
   ParticleFilter.prototype.incrementalize = env.defaultCoroutine.incrementalize;
 
-  function pf(s, cc, a, wpplFn, numParticles, strict) {
-    return new ParticleFilter(s, cc, a, wpplFn, numParticles, strict === undefined ? true : strict).run();
+  function pf(s, cc, a, wpplFn, numParticles, strict, saveHistory) {
+    return new ParticleFilter(s, cc, a, wpplFn, numParticles, strict === undefined ? true : strict, saveHistory).run();
   }
 
   return {

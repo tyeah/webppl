@@ -1,0 +1,140 @@
+<html>
+	<head>
+		<title>SOSMC L-System Test UI</title>
+		<script src='http://code.jquery.com/jquery-1.11.3.min.js'> </script>
+		<script src='https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5.1/dat.gui.min.js'></script>
+		<script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r72/three.min.js'></script>
+		<script src='../render.js'></script>
+	</head>
+	<body>
+		<script>
+			var particleHistory;
+			var viewport;
+
+			var guistate;
+			var gui;
+			var guicomponents;
+			var generationSlider;
+			var particleSlider;
+			var scoreDisplay;
+			var activeDisplay;
+
+			function showCurrentParticle() {
+				var particle = particleHistory[guistate.generationIndex][guistate.particleIndex];
+				var canvas = $('#canvas')[0];
+				if (particle.imageData) {
+					canvas.getContext('2d').putImageData(particle.imageData, 0, 0);
+				} else {
+					render(canvas, viewport, particle.branches);
+					particle.imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+				}
+				scoreDisplay.setValue(particle.score);
+				activeDisplay.setValue(particle.active);
+			}
+
+			function findBestInGen(genIndex) {
+				var bestscore = -Infinity;
+				var besti = -1;
+				var particles = particleHistory[genIndex];
+				for (var i = 0; i < particles.length; i++) {
+					var p = particles[i];
+					if (p.score > bestscore) {
+						bestscore = p.score;
+						besti = i;
+					}
+				}
+				return besti;
+			}
+
+			function showBestInGen() {
+				var besti = findBestInGen(guistate.generationIndex);
+				particleSlider.setValue(besti);
+			}
+
+			function findBestOverall() {
+				var bestscore = -Infinity;
+				var besti = -1;
+				var bestj = -1;
+				for (var i = 0; i < particleHistory.length; i++) {
+					var j = findBestInGen(i);
+					var p = particleHistory[i][j];
+					if (p.score > bestscore) {
+						bestscore = p.score;
+						besti = i;
+						bestj = j;
+					}
+				}
+				return {generationIndex: i, particleIndex: j};
+			}
+
+			function showBestOverall() {
+				var best = findBestOverall();
+				generationSlider.setValue(best.generationIndex);
+				particleSlider.setValue(best.particleIndex);
+			}
+
+			function computeScoreRange(history) {
+				var minscore = Infinity;
+				var maxscore = -Infinity;
+				for (var i = 0; i < history.length; i++) {
+					var ps = history[i];
+					for (var j = 0; j < ps.length; j++) {
+						var p = ps[j];
+						minscore = Math.min(minscore, p.score);
+						maxscore = Math.max(maxscore, p.score);
+					}
+				}
+				return {min: minscore, max: maxscore};
+			}
+
+			function generate() {
+				console.log('Generating...');
+				$.getJSON('http://localhost:8000', function(data) {
+					// Process data
+					console.log('   Received data; processing...');
+					particleHistory = data.history;
+					var scoreRange = computeScoreRange(particleHistory);
+					viewport = data.viewport;
+
+					// GUI init
+					if (!gui) {
+						gui = new dat.GUI();
+					} else {
+						for (var i = 0; i < guicomponents.length; i++)
+							gui.remove(guicomponents[i]);
+					}
+					guistate = {
+						generationIndex: particleHistory.length - 1,
+						particleIndex: findBestInGen(particleHistory.length - 1),
+						score: 0,
+						active: false,
+						showBestInGen: showBestInGen,
+						showBestOverall: showBestOverall,
+					}
+					generationSlider = gui.add(guistate, 'generationIndex', 0, particleHistory.length-1).step(1).name('Generation');
+					generationSlider.onChange(showCurrentParticle);
+					particleSlider = gui.add(guistate, 'particleIndex', 0, particleHistory[0].length-1).step(1).name('Particle');
+					particleSlider.onChange(showCurrentParticle);
+					scoreDisplay = gui.add(guistate, 'score', scoreRange.min, scoreRange.max).name('Score');
+					activeDisplay = gui.add(guistate, 'active').name('Active?');
+					var bestInGenButton = gui.add(guistate, 'showBestInGen').name('Best in gen.');
+					var bestOverallButton = gui.add(guistate, 'showBestOverall').name('Best overall');
+					guicomponents = [generationSlider, particleSlider, scoreDisplay, activeDisplay, bestInGenButton, bestOverallButton];
+
+					// Display
+					showCurrentParticle();
+
+					console.log('   DONE.');
+				});
+			}
+		</script>
+
+		<img src='../targets/curl_600.png'></img>
+		<canvas id='canvas' width='600' height='600'></canvas>
+		<button style='font-size: 18pt' onclick='generate()'>Generate</button>
+	</body>
+</html>
+
+
+
+

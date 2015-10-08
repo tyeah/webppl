@@ -45,14 +45,14 @@ var computeSim = function(branches, inInference) {
 	globalStore.genImg.loadFromCanvas(canvas);
 	var genImg = globalStore.genImg;
 
-	// return genImg.percentSameBinary(targetImg);
+	return genImg.percentSameBinary(targetImg);
 
-	var accuracy = genImg.percentFilledSameBinary(targetImg);
-	var coverage = targetImg.percentFilledSameBinary(genImg);
-	// return accuracy * coverage;
-	return 0.5*accuracy + 0.5*coverage;
-	// return Math.min(accuracy, coverage);
-	// return accuracy;
+	// // var accuracy = genImg.percentFilledSameBinary(targetImg);
+	// var coverage = targetImg.percentFilledSameBinary(genImg);
+	// // return accuracy * coverage;
+	// // return 0.5*accuracy + 0.5*coverage;
+	// // return Math.min(accuracy, coverage);
+	// // return accuracy;
 	// return coverage;
 };
 var makescore = function(val, target, tightness) {
@@ -61,7 +61,7 @@ var makescore = function(val, target, tightness) {
 }
 var targetFactor = function() {
 	var sim = computeSim(globalStore.branches, true);
-	var f = makescore(sim, 1, 0.02);
+	var f = makescore(sim, 1, 0.01);
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
 	} else {
@@ -171,8 +171,8 @@ var makeProgram = function(variational, heuristicFactors) {
 
 		// Terminate?
 		future(function() {
-			// if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
-			if (currState.depth < 15 && _flip(0.5)) {
+			if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
+			// if (currState.depth < 15 && _flip(0.5)) {
 				future(function() {
 					// Continue or fork?
 					if (_flip(0.5)) {
@@ -253,34 +253,50 @@ if (variational) {
 	// console.log(vparams);
 }
 
-
-var res = {width: 600, height: 600};
-var n = 10;
-var skip = 1;
-var name = 'test';
-var resultsDir = 'vpf_experiments/lsystem/results/image/' + name;
-var fs = require.call(null, 'fs');
-if (!fs.existsSync(resultsDir)) {
-	fs.mkdirSync(resultsDir);
-}
-var sims = repeat(n, function(i) {
-	// var nParticles = 1;
-	// var nParticles = 100;
-	var nParticles = 300;
-	var ret = sample(ParticleFilter(generate, nParticles));
-	// var ret = sample(MH(generate, 1000));
-	var sim = computeSim(ret);
-	console.log(i + ' | sim: ' + sim);
-	if (i % skip === 0) {
-		lsysUtils.renderOut(resultsDir + '/' + (i/skip) + '.png', res, viewport, ret);
+var testRun = function() {
+	var res = {width: 600, height: 600};
+	var n = 10;
+	var skip = 1;
+	var name = 'test';
+	var resultsDir = 'vpf_experiments/lsystem/results/image/' + name;
+	var fs = require.call(null, 'fs');
+	if (!fs.existsSync(resultsDir)) {
+		fs.mkdirSync(resultsDir);
 	}
-	return sim;
-});
-console.log('sim -  min: ' + listMin(sims) + ', max: ' + listMax(sims) +
-	               ', avg: ' + listMean(sims) + ', stddev: ' + listStdev(sims));
+	var sims = repeat(n, function(i) {
+		// var nParticles = 1;
+		// var nParticles = 100;
+		var nParticles = 300;
+		var ret = sample(ParticleFilter(generate, nParticles));
+		// var ret = sample(MH(generate, 1000));
+		var sim = computeSim(ret);
+		console.log(i + ' | sim: ' + sim);
+		if (i % skip === 0) {
+			lsysUtils.renderOut(resultsDir + '/' + (i/skip) + '.png', res, viewport, ret);
+		}
+		return sim;
+	});
+	console.log('sim -  min: ' + listMin(sims) + ', max: ' + listMax(sims) +
+		               ', avg: ' + listMean(sims) + ', stddev: ' + listStdev(sims));
+}
+// testRun();
 
 
-undefined;
+var serverReponse = function() {
+	var nParticles = 300;
+	var dist = ParticleFilter(generate, nParticles, true, true);
+	var history = map(function(particles) {
+		return map(function(particle) {
+			return {
+				score: particle.score,
+				active: particle.active,
+				branches: particle.store.branches
+			};
+		}, particles);
+	}, dist.particleHistory);
+	return {viewport: viewport, history: history};
+}
+serverReponse();
 
 
 
