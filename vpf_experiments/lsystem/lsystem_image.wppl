@@ -38,7 +38,7 @@ var computeSim = function(branches, inInference) {
 			globalStore.genImg.copyToCanvas(canvas);
 		}
 		var starti = globalStore.prevBranches ? globalStore.prevBranches.length : 0;
-		lsysUtils.render(canvas, viewport, branches, starti, branches.length);
+		lsysUtils.render(canvas, viewport, branches, starti, branches.length, starti === 0);
 		globalStore.prevBranches = branches;
 	}
 	globalStore.genImg = lsysUtils.newImageData2D();
@@ -61,6 +61,9 @@ var makescore = function(val, target, tightness) {
 }
 var targetFactor = function() {
 	var sim = computeSim(globalStore.branches, true);
+	/////
+	globalStore.sim = sim;
+	/////
 	var f = makescore(sim, 1, 0.01);
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
@@ -288,8 +291,11 @@ var serverReponse = function() {
 	var history = map(function(particles) {
 		return map(function(particle) {
 			return {
-				score: particle.score,
+				log_prior: particle.logprior,
+				log_like: particle.loglike,
+				log_post: particle.logpost,
 				active: particle.active,
+				similarity: particle.store.sim,
 				branches: particle.store.branches
 			};
 		}, particles);

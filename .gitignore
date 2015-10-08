@@ -6,7 +6,7 @@ npm-debug.log
 compiled/webppl.js
 compiled/webppl.min.js
 
-# .adjs/VPF stuff
+# VPF stuff
 src/erp_scorers.js
 src/bounds.js
 vpf_experiments/targetsum/params.js
@@ -15,3 +15,4 @@ vpf_experiments/*/results/*
 vpf_experiments/*/experiment_results/*
 vpf_experiments/*/data/*
 vpf_experiments/*/saved_params/*
+vpf_experiments/lsystem/test/*.png

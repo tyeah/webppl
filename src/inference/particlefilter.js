@@ -26,11 +26,13 @@ module.exports = function(env) {
     return {
       continuation: particle.continuation,
       weight: particle.weight,
-      score: particle.score,
       value: particle.value,
       store: _.clone(particle.store),
       active: particle.active,
-      trace: particle.trace.slice()
+      trace: particle.trace.slice(),
+      logprior: particle.logprior,
+      loglike: particle.loglike,
+      logpost: particle.logpost
     };
   }
 
@@ -51,7 +53,10 @@ module.exports = function(env) {
         value: undefined,
         store: _.clone(s),
         active: true,
-        trace: []
+        trace: [],
+        logprior: 0,
+        loglike: 0,
+        logpost: 0
       };
       this.particles.push(particle);
     }
@@ -83,7 +88,8 @@ module.exports = function(env) {
     var choiceScore = erp.score(params, val);
     var p = this.currentParticle();
     p.weight += choiceScore - importanceScore;
-    p.score += choiceScore;
+    p.logprior += choiceScore;
+    p.logpost += choiceScore;
     p.trace.push(val);
     return cc(s, val);
   };
@@ -92,7 +98,8 @@ module.exports = function(env) {
     // Update particle weight
     var p = this.currentParticle();
     p.weight += score;
-    p.score += score;
+    p.loglike += score;
+    p.logpost += score;
     p.continuation = cc;
     p.store = s;
 

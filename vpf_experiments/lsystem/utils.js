@@ -19,6 +19,7 @@ ImageData2D.prototype = {
 		this.data = this.imgDataObj.data;
 		this.width = canvas.width;
 		this.height = canvas.height;
+		return this;
 	},
 	loadFromFile: function(filename) {
 		// Sort of a hack: load it to an Image, then draw to a Canvas, then do
@@ -30,6 +31,7 @@ ImageData2D.prototype = {
 		var ctx = canvas.getContext('2d');
 		ctx.drawImage(img, 0, 0, img.width, img.height);
 		this.loadFromCanvas(canvas);
+		return this;
 	},
 	copyToCanvas: function(canvas) {
 		canvas.getContext('2d').putImageData(this.imgDataObj, 0, 0);
@@ -83,15 +85,18 @@ ImageData2D.prototype = {
 		}
 		return sim / n;
 	},
-	percentSameBinary: function(other) {
+	numSameBinary: function(other) {
 		assert(this.width === other.width && this.height === other.height,
-			'percentSameBinary: image dimensions do not match!');
+			'numSameBinary: image dimensions do not match!');
 		var sim = 0;
 		for (var i = 0; i < this.data.length; i += 4) {  // stride of 4 for RGBA pixels
-			// sim += (this.data[i] === other.data[i]);
 			var eq = (this.data[i] === 255) === (other.data[i] === 255);
 			sim += eq;
 		}
+		return sim;
+	},
+	percentSameBinary: function(other) {
+		var sim = this.numSameBinary(other);
 		return sim / (this.height*this.width);
 	},
 	percentFilledSameBinary: function(other) {

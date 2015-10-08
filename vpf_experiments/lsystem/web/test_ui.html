@@ -26,15 +26,17 @@
 
 			function renderParticle(canvas, particle, tgtimage) {
 				var ctx = canvas.getContext('2d');
-				// Draw gray-ed out target as background
-				ctx.drawImage(tgtimage, 0, 0);
-				ctx.globalCompositeOperation = 'lighten';
-				ctx.rect(0, 0, canvas.width, canvas.height);
-				ctx.fillStyle = 'rgb(128, 128, 128)';
-				ctx.fill();
-				ctx.globalCompositeOperation = 'source-over';
+				if (tgtimage) {
+					// Draw gray-ed out target as background
+					ctx.drawImage(tgtimage, 0, 0);
+					ctx.globalCompositeOperation = 'lighten';
+					ctx.rect(0, 0, canvas.width, canvas.height);
+					ctx.fillStyle = 'rgb(128, 128, 128)';
+					ctx.fill();
+					ctx.globalCompositeOperation = 'source-over';
+				}
 				// Draw branches
-				render(canvas, viewport, particle.branches, 0, particle.branches.length, false);
+				render(canvas, viewport, particle.branches, 0, particle.branches.length, tgtimage === undefined);
 			}
 
 			function showCurrentParticle() {
@@ -51,15 +53,18 @@
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
 					renderParticle(canvas, particle, targetImg);
-					renderParticle(canvas_small, particle, smallTargetImg);
+					// renderParticle(canvas_small, particle, smallTargetImg);
+					renderParticle(canvas_small, particle);
 					// Save image
 					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 					particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
 				}
 
 				// Update UI
+				console.log('-------------');
 				for (var propname in propDisplays) {
 					propDisplays[propname].setValue(particle[propname]);
+					console.log(propname + ': ' + particle[propname]);
 				}
 			}
 
@@ -69,8 +74,8 @@
 				var particles = particleHistory[genIndex];
 				for (var i = 0; i < particles.length; i++) {
 					var p = particles[i];
-					if (p.score > bestscore) {
-						bestscore = p.score;
+					if (p.log_post > bestscore) {
+						bestscore = p.log_post;
 						besti = i;
 					}
 				}
@@ -89,8 +94,8 @@
 				for (var i = 0; i < particleHistory.length; i++) {
 					var j = findBestInGen(i);
 					var p = particleHistory[i][j];
-					if (p.score > bestscore) {
-						bestscore = p.score;
+					if (p.log_post > bestscore) {
+						bestscore = p.log_post;
 						besti = i;
 						bestj = j;
 					}
@@ -174,20 +179,29 @@
 
 					// Particle properties that we want to display.
 					var particleProps = [
-						{name: 'score'},
-						{name: 'active'}
+						{name: 'log_prior'},
+						{name: 'log_like'},
+						{name: 'log_post'},
+						{name: 'similarity', range: {min: 0, max: 1}},
+						{name: 'active'},
 					];
 					propDisplays = {};
 					var currparticle = particleHistory[guistate.generationIndex][guistate.particleIndex];
+					function formatname(name, type) {
+						var ret = name.split('_').map(function(word) {
+							return word.charAt(0).toUpperCase() + word.slice(1); // capitalize
+						}).join(' ');
+						if (type === 'boolean') { ret += '?'; }
+						return ret;
+					}
 					for (var i = 0; i < particleProps.length; i++) {
 						var prop = particleProps[i];
 						var propval = currparticle[prop.name];
 						guistate[prop.name] = propval;
-						var displayName = prop.name.charAt(0).toUpperCase() + prop.name.slice(1); // capitalize
-						var displayWidget;
 						var proptype = typeof(propval);
+						var displayName = formatname(prop.name, proptype);
+						var displayWidget;
 						if (proptype === 'boolean') {
-							displayName += '?';
 							displayWidget = gui.add(guistate, prop.name).name(displayName);
 						} else if (proptype === 'number') {
 							var range = prop.range || computePropRange(particleHistory, prop.name);
@@ -206,8 +220,8 @@
 					guicomponents = guicomponents.concat([bestInGenButton, bestOverallButton]);
 
 					// Finish up
-					showCurrentParticle();
 					console.log('   DONE.');
+					showCurrentParticle();
 				});
 			}
 
