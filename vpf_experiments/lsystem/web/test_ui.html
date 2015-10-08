@@ -19,11 +19,6 @@
 			var particleSlider;
 			var propDisplays;
 
-			// var targetName = 'curl';
-			// var targetName = 'bifurcate';
-			var targetName = 'a';
-			var targetImgFile = '../targets/' + targetName + '_600.png';
-			var smallTargetImgFile = '../targets/' + targetName + '_50.png';
 			var targetImg;
 			var smallTargetImg;
 
@@ -136,6 +131,22 @@
 				}
 			}
 
+			function loadTargetImages(basename, callback) {
+				var targetImgFile = '../targets/' + basename + '_600.png';
+				var smallTargetImgFile = '../targets/' + basename + '_50.png';
+				targetImg = new Image();
+				targetImg.addEventListener('load', function() {
+					$('<canvas/>', {id: 'canvas'}).prop({width: targetImg.width, height: targetImg.height}).appendTo('body');
+					smallTargetImg = new Image();
+					smallTargetImg.addEventListener('load', function() {
+						$('<canvas/>', {id: 'canvas-small'}).prop({width: smallTargetImg.width, height: smallTargetImg.height}).appendTo('body');
+						callback();
+					}, false);
+					smallTargetImg.src = smallTargetImgFile;
+				}, false);
+				targetImg.src = targetImgFile;
+			}
+
 			function computePropRange(history, prop) {
 				var minval = Infinity;
 				var maxval = -Infinity;
@@ -159,88 +170,79 @@
 					particleHistory = data.history;
 					numParticles = particleHistory[0].length;
 					viewport = data.viewport;
-
-					// GUI init
-					if (!gui) {
-						gui = new dat.GUI();
-					} else {
-						for (var i = 0; i < guicomponents.length; i++)
-							gui.remove(guicomponents[i]);
-					}
-					guistate = {
-						generationIndex: particleHistory.length - 1,
-						particleIndex: findBestInGen(particleHistory.length - 1),
-						showBestInGen: showBestInGen,
-						showBestOverall: showBestOverall,
-					}
-
-					// Sliders for controlling which generation/particle we're looking at.
-					generationSlider = gui.add(guistate, 'generationIndex', 0, particleHistory.length-1).step(1).name('Generation');
-					generationSlider.onChange(showCurrentParticle);
-					particleSlider = gui.add(guistate, 'particleIndex', 0, particleHistory[0].length-1).step(1).name('Particle');
-					particleSlider.onChange(showCurrentParticle);
-					guicomponents = [generationSlider, particleSlider];
-
-					// Particle properties that we want to display.
-					var particleProps = [
-						{name: 'log_prior'},
-						{name: 'log_like'},
-						{name: 'log_post'},
-						{name: 'similarity', range: {min: 0, max: 1}},
-						{name: 'active'},
-					];
-					propDisplays = {};
-					var currparticle = particleHistory[guistate.generationIndex][guistate.particleIndex];
-					function formatname(name, type) {
-						var ret = name.split('_').map(function(word) {
-							return word.charAt(0).toUpperCase() + word.slice(1); // capitalize
-						}).join(' ');
-						if (type === 'boolean') { ret += '?'; }
-						return ret;
-					}
-					for (var i = 0; i < particleProps.length; i++) {
-						var prop = particleProps[i];
-						var propval = currparticle[prop.name];
-						guistate[prop.name] = propval;
-						var proptype = typeof(propval);
-						var displayName = formatname(prop.name, proptype);
-						var displayWidget;
-						if (proptype === 'boolean') {
-							displayWidget = gui.add(guistate, prop.name).name(displayName);
-						} else if (proptype === 'number') {
-							var range = prop.range || computePropRange(particleHistory, prop.name);
-							displayWidget = gui.add(guistate, prop.name, range.min, range.max).name(displayName);
+					loadTargetImages(data.targetName, function() {
+						// GUI init
+						if (!gui) {
+							gui = new dat.GUI();
 						} else {
-							throw 'Particle property ' + prop.name + ' has unsupported type ' + proptype +
-							'; cannot display';
+							for (var i = 0; i < guicomponents.length; i++)
+								gui.remove(guicomponents[i]);
 						}
-						propDisplays[prop.name] = displayWidget;
-						guicomponents.push(displayWidget);
-					}
+						guistate = {
+							generationIndex: particleHistory.length - 1,
+							particleIndex: findBestInGen(particleHistory.length - 1),
+							showBestInGen: showBestInGen,
+							showBestOverall: showBestOverall,
+						}
 
-					// Buttons for jumping directly to 'best' particles.
-					var bestInGenButton = gui.add(guistate, 'showBestInGen').name('Best in gen.');
-					var bestOverallButton = gui.add(guistate, 'showBestOverall').name('Best overall');
-					guicomponents = guicomponents.concat([bestInGenButton, bestOverallButton]);
+						// Sliders for controlling which generation/particle we're looking at.
+						generationSlider = gui.add(guistate, 'generationIndex', 0, particleHistory.length-1).step(1).name('Generation');
+						generationSlider.onChange(showCurrentParticle);
+						particleSlider = gui.add(guistate, 'particleIndex', 0, particleHistory[0].length-1).step(1).name('Particle');
+						particleSlider.onChange(showCurrentParticle);
+						guicomponents = [generationSlider, particleSlider];
 
-					// Finish up
-					console.log('   DONE.');
-					showCurrentParticle();
+						// Particle properties that we want to display.
+						var particleProps = [
+							{name: 'log_prior'},
+							{name: 'log_like'},
+							{name: 'log_post'},
+							{name: 'similarity', range: {min: 0, max: 1}},
+							{name: 'active'},
+						];
+						propDisplays = {};
+						var currparticle = particleHistory[guistate.generationIndex][guistate.particleIndex];
+						function formatname(name, type) {
+							var ret = name.split('_').map(function(word) {
+								return word.charAt(0).toUpperCase() + word.slice(1); // capitalize
+							}).join(' ');
+							if (type === 'boolean') { ret += '?'; }
+							return ret;
+						}
+						for (var i = 0; i < particleProps.length; i++) {
+							var prop = particleProps[i];
+							var propval = currparticle[prop.name];
+							guistate[prop.name] = propval;
+							var proptype = typeof(propval);
+							var displayName = formatname(prop.name, proptype);
+							var displayWidget;
+							if (proptype === 'boolean') {
+								displayWidget = gui.add(guistate, prop.name).name(displayName);
+							} else if (proptype === 'number') {
+								var range = prop.range || computePropRange(particleHistory, prop.name);
+								displayWidget = gui.add(guistate, prop.name, range.min, range.max).name(displayName);
+							} else {
+								throw 'Particle property ' + prop.name + ' has unsupported type ' + proptype +
+								'; cannot display';
+							}
+							propDisplays[prop.name] = displayWidget;
+							guicomponents.push(displayWidget);
+						}
+
+						// Buttons for jumping directly to 'best' particles.
+						var bestInGenButton = gui.add(guistate, 'showBestInGen').name('Best in gen.');
+						var bestOverallButton = gui.add(guistate, 'showBestOverall').name('Best overall');
+						guicomponents = guicomponents.concat([bestInGenButton, bestOverallButton]);
+
+						// Finish up
+						console.log('   DONE.');
+						showCurrentParticle();
+					});
 				});
 			}
 
-			// Body elements
-			targetImg = new Image();
-			targetImg.addEventListener('load', function() {
-				$('<canvas/>', {id: 'canvas'}).prop({width: targetImg.width, height: targetImg.height}).appendTo('body');
-				smallTargetImg = new Image();
-				smallTargetImg.addEventListener('load', function() {
-					$('<canvas/>', {id: 'canvas-small'}).prop({width: smallTargetImg.width, height: smallTargetImg.height}).appendTo('body');
-					$('<button>Generate</button>').css('font-size', '18pt').click(generate).appendTo('body');
-				}, false);
-				smallTargetImg.src = smallTargetImgFile;
-			}, false);
-			targetImg.src = targetImgFile;
+			// The generate button
+			$('<button>Generate</button>').css('font-size', '18pt').click(generate).appendTo('body');
 
 		</script>
 	</body>
