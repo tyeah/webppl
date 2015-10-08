@@ -19,8 +19,11 @@
 			var particleSlider;
 			var propDisplays;
 
-			var targetImgFile = '../targets/curl_600.png';
-			var smallTargetImgFile = '../targets/curl_50.png';
+			// var targetName = 'curl';
+			// var targetName = 'bifurcate';
+			var targetName = 'a';
+			var targetImgFile = '../targets/' + targetName + '_600.png';
+			var smallTargetImgFile = '../targets/' + targetName + '_50.png';
 			var targetImg;
 			var smallTargetImg;
 
@@ -61,7 +64,7 @@
 				}
 
 				// Update UI
-				console.log('-------------');
+				console.log('------------------------------');
 				for (var propname in propDisplays) {
 					propDisplays[propname].setValue(particle[propname]);
 					console.log(propname + ': ' + particle[propname]);
@@ -148,6 +151,7 @@
 			}
 
 			function generate() {
+				console.log('------------------------------');
 				console.log('Generating...');
 				$.getJSON('http://localhost:8000', function(data) {
 					// Process data

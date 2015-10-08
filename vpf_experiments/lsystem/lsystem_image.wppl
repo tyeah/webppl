@@ -24,8 +24,9 @@ var polar2rect = function(r, theta) {
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
 
-var targetImg = lsysUtils.newImageData2D();
-targetImg.loadFromFile('vpf_experiments/lsystem/targets/curl_50.png');
+// var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/curl_50.png');
+// var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/bifurcate_50.png');
+var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/a_50.png');
 var canvas = lsysUtils.newCanvas(50, 50);
 var computeSim = function(branches, inInference) {
 	// If not in inference, just render everything
@@ -47,10 +48,10 @@ var computeSim = function(branches, inInference) {
 
 	return genImg.percentSameBinary(targetImg);
 
-	// // var accuracy = genImg.percentFilledSameBinary(targetImg);
+	// var accuracy = genImg.percentFilledSameBinary(targetImg);
 	// var coverage = targetImg.percentFilledSameBinary(genImg);
 	// // return accuracy * coverage;
-	// // return 0.5*accuracy + 0.5*coverage;
+	// return 0.25*accuracy + 0.75*coverage;
 	// // return Math.min(accuracy, coverage);
 	// // return accuracy;
 	// return coverage;
@@ -59,12 +60,13 @@ var makescore = function(val, target, tightness) {
 	var diff = val - target;
 	return - (diff * diff) / (tightness * tightness);
 }
+var tightness = 0.01;
 var targetFactor = function() {
 	var sim = computeSim(globalStore.branches, true);
 	/////
 	globalStore.sim = sim;
 	/////
-	var f = makescore(sim, 1, 0.01);
+	var f = makescore(sim, 1, tightness);
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
 	} else {
@@ -287,6 +289,7 @@ var testRun = function() {
 
 var serverReponse = function() {
 	var nParticles = 300;
+	// var nParticles = 100;
 	var dist = ParticleFilter(generate, nParticles, true, true);
 	var history = map(function(particles) {
 		return map(function(particle) {
