@@ -17,8 +17,7 @@
 			var guicomponents;
 			var generationSlider;
 			var particleSlider;
-			var scoreDisplay;
-			var activeDisplay;
+			var propDisplays;
 
 			var targetImgFile = '../targets/curl_600.png';
 			var smallTargetImgFile = '../targets/curl_50.png';
@@ -40,7 +39,7 @@
 
 			function showCurrentParticle() {
 				var particle = particleHistory[guistate.generationIndex][guistate.particleIndex];
-				
+
 				var canvas = $('#canvas')[0];
 				var ctx = canvas.getContext('2d');
 				var canvas_small = $('#canvas-small')[0];
@@ -59,8 +58,9 @@
 				}
 
 				// Update UI
-				scoreDisplay.setValue(particle.score);
-				activeDisplay.setValue(particle.active);
+				for (var propname in propDisplays) {
+					propDisplays[propname].setValue(particle[propname]);
+				}
 			}
 
 			function findBestInGen(genIndex) {
@@ -128,18 +128,18 @@
 				}
 			}
 
-			function computeScoreRange(history) {
-				var minscore = Infinity;
-				var maxscore = -Infinity;
+			function computePropRange(history, prop) {
+				var minval = Infinity;
+				var maxval = -Infinity;
 				for (var i = 0; i < history.length; i++) {
 					var ps = history[i];
 					for (var j = 0; j < ps.length; j++) {
 						var p = ps[j];
-						minscore = Math.min(minscore, p.score);
-						maxscore = Math.max(maxscore, p.score);
+						minval = Math.min(minval, p[prop]);
+						maxval = Math.max(maxval, p[prop]);
 					}
 				}
-				return {min: minscore, max: maxscore};
+				return {min: minval, max: maxval};
 			}
 
 			function generate() {
@@ -149,7 +149,6 @@
 					console.log('   Received data; processing...');
 					particleHistory = data.history;
 					numParticles = particleHistory[0].length;
-					var scoreRange = computeScoreRange(particleHistory);
 					viewport = data.viewport;
 
 					// GUI init
@@ -162,24 +161,52 @@
 					guistate = {
 						generationIndex: particleHistory.length - 1,
 						particleIndex: findBestInGen(particleHistory.length - 1),
-						score: 0,
-						active: false,
 						showBestInGen: showBestInGen,
 						showBestOverall: showBestOverall,
 					}
+
+					// Sliders for controlling which generation/particle we're looking at.
 					generationSlider = gui.add(guistate, 'generationIndex', 0, particleHistory.length-1).step(1).name('Generation');
 					generationSlider.onChange(showCurrentParticle);
 					particleSlider = gui.add(guistate, 'particleIndex', 0, particleHistory[0].length-1).step(1).name('Particle');
 					particleSlider.onChange(showCurrentParticle);
-					scoreDisplay = gui.add(guistate, 'score', scoreRange.min, scoreRange.max).name('Score');
-					activeDisplay = gui.add(guistate, 'active').name('Active?');
+					guicomponents = [generationSlider, particleSlider];
+
+					// Particle properties that we want to display.
+					var particleProps = [
+						{name: 'score'},
+						{name: 'active'}
+					];
+					propDisplays = {};
+					var currparticle = particleHistory[guistate.generationIndex][guistate.particleIndex];
+					for (var i = 0; i < particleProps.length; i++) {
+						var prop = particleProps[i];
+						var propval = currparticle[prop.name];
+						guistate[prop.name] = propval;
+						var displayName = prop.name.charAt(0).toUpperCase() + prop.name.slice(1); // capitalize
+						var displayWidget;
+						var proptype = typeof(propval);
+						if (proptype === 'boolean') {
+							displayName += '?';
+							displayWidget = gui.add(guistate, prop.name).name(displayName);
+						} else if (proptype === 'number') {
+							var range = prop.range || computePropRange(particleHistory, prop.name);
+							displayWidget = gui.add(guistate, prop.name, range.min, range.max).name(displayName);
+						} else {
+							throw 'Particle property ' + prop.name + ' has unsupported type ' + proptype +
+							'; cannot display';
+						}
+						propDisplays[prop.name] = displayWidget;
+						guicomponents.push(displayWidget);
+					}
+
+					// Buttons for jumping directly to 'best' particles.
 					var bestInGenButton = gui.add(guistate, 'showBestInGen').name('Best in gen.');
 					var bestOverallButton = gui.add(guistate, 'showBestOverall').name('Best overall');
-					guicomponents = [generationSlider, particleSlider, scoreDisplay, activeDisplay, bestInGenButton, bestOverallButton];
+					guicomponents = guicomponents.concat([bestInGenButton, bestOverallButton]);
 
-					// Display
+					// Finish up
 					showCurrentParticle();
-
 					console.log('   DONE.');
 				});
 			}
