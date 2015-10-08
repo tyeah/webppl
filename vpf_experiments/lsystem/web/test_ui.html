@@ -21,29 +21,41 @@
 			var activeDisplay;
 
 			var targetImgFile = '../targets/curl_600.png';
-			var targetImg = new Image();
-			targetImg.src = targetImgFile;
+			var smallTargetImgFile = '../targets/curl_50.png';
+			var targetImg;
+			var smallTargetImg;
+
+			function renderParticle(canvas, particle, tgtimage) {
+				var ctx = canvas.getContext('2d');
+				// Draw gray-ed out target as background
+				ctx.drawImage(tgtimage, 0, 0);
+				ctx.globalCompositeOperation = 'lighten';
+				ctx.rect(0, 0, canvas.width, canvas.height);
+				ctx.fillStyle = 'rgb(128, 128, 128)';
+				ctx.fill();
+				ctx.globalCompositeOperation = 'source-over';
+				// Draw branches
+				render(canvas, viewport, particle.branches, 0, particle.branches.length, false);
+			}
 
 			function showCurrentParticle() {
 				var particle = particleHistory[guistate.generationIndex][guistate.particleIndex];
+				
 				var canvas = $('#canvas')[0];
 				var ctx = canvas.getContext('2d');
+				var canvas_small = $('#canvas-small')[0];
+				var ctx_small = canvas_small.getContext('2d');
 
 				// Draw
 				if (particle.imageData) {
 					ctx.putImageData(particle.imageData, 0, 0);
+					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
-					// Draw gray-ed out target as background
-					ctx.drawImage(targetImg, 0, 0);
-					ctx.globalCompositeOperation = 'lighten';
-					ctx.rect(0, 0, canvas.width, canvas.height);
-					ctx.fillStyle = 'rgb(128, 128, 128)';
-					ctx.fill();
-					ctx.globalCompositeOperation = 'source-over';
-					// Draw branches
-					render(canvas, viewport, particle.branches, 0, particle.branches.length, false);
+					renderParticle(canvas, particle, targetImg);
+					renderParticle(canvas_small, particle, smallTargetImg);
 					// Save image
-					particle.imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+					particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
 				}
 
 				// Update UI
@@ -171,10 +183,21 @@
 					console.log('   DONE.');
 				});
 			}
-		</script>
 
-		<canvas id='canvas' width='600' height='600'></canvas>
-		<button style='font-size: 18pt' onclick='generate()'>Generate</button>
+			// Body elements
+			targetImg = new Image();
+			targetImg.addEventListener('load', function() {
+				$('<canvas/>', {id: 'canvas'}).prop({width: targetImg.width, height: targetImg.height}).appendTo('body');
+				smallTargetImg = new Image();
+				smallTargetImg.addEventListener('load', function() {
+					$('<canvas/>', {id: 'canvas-small'}).prop({width: smallTargetImg.width, height: smallTargetImg.height}).appendTo('body');
+					$('<button>Generate</button>').css('font-size', '18pt').click(generate).appendTo('body');
+				}, false);
+				smallTargetImg.src = smallTargetImgFile;
+			}, false);
+			targetImg.src = targetImgFile;
+
+		</script>
 	</body>
 </html>
 

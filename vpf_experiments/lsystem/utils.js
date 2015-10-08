@@ -88,7 +88,9 @@ ImageData2D.prototype = {
 			'percentSameBinary: image dimensions do not match!');
 		var sim = 0;
 		for (var i = 0; i < this.data.length; i += 4) {  // stride of 4 for RGBA pixels
-			sim += (this.data[i] === other.data[i]);
+			// sim += (this.data[i] === other.data[i]);
+			var eq = (this.data[i] === 255) === (other.data[i] === 255);
+			sim += eq;
 		}
 		return sim / (this.height*this.width);
 	},
