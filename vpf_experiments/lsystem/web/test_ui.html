@@ -6,8 +6,9 @@
 		<script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r72/three.min.js'></script>
 		<script src='../render.js'></script>
 	</head>
-	<body>
+	<body onkeydown='keyEvent(event)'>
 		<script>
+			var numParticles;
 			var particleHistory;
 			var viewport;
 
@@ -19,15 +20,33 @@
 			var scoreDisplay;
 			var activeDisplay;
 
+			var targetImgFile = '../targets/curl_600.png';
+			var targetImg = new Image();
+			targetImg.src = targetImgFile;
+
 			function showCurrentParticle() {
 				var particle = particleHistory[guistate.generationIndex][guistate.particleIndex];
 				var canvas = $('#canvas')[0];
+				var ctx = canvas.getContext('2d');
+
+				// Draw
 				if (particle.imageData) {
-					canvas.getContext('2d').putImageData(particle.imageData, 0, 0);
+					ctx.putImageData(particle.imageData, 0, 0);
 				} else {
-					render(canvas, viewport, particle.branches);
+					// Draw gray-ed out target as background
+					ctx.drawImage(targetImg, 0, 0);
+					ctx.globalCompositeOperation = 'lighten';
+					ctx.rect(0, 0, canvas.width, canvas.height);
+					ctx.fillStyle = 'rgb(128, 128, 128)';
+					ctx.fill();
+					ctx.globalCompositeOperation = 'source-over';
+					// Draw branches
+					render(canvas, viewport, particle.branches, 0, particle.branches.length, false);
+					// Save image
 					particle.imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
 				}
+
+				// Update UI
 				scoreDisplay.setValue(particle.score);
 				activeDisplay.setValue(particle.active);
 			}
@@ -73,6 +92,30 @@
 				particleSlider.setValue(best.particleIndex);
 			}
 
+			// Arrow keys also allow navigation
+			var LEFT_ARROW = 37;
+			var UP_ARROW = 38;
+			var RIGHT_ARROW = 39;
+			var DOWN_ARROW = 40;
+			function keyEvent(event) {
+				var key = event.keyCode || event.which;
+				if (particleHistory) {
+					if (key === LEFT_ARROW) {
+						var pindex = Math.max(guistate.particleIndex - 1, 0);
+						particleSlider.setValue(pindex);
+					} else if (key === RIGHT_ARROW) {
+						var pindex = Math.min(guistate.particleIndex + 1, numParticles - 1);
+						particleSlider.setValue(pindex);
+					} else if (key === DOWN_ARROW) {
+						var gindex = Math.max(guistate.generationIndex - 1, 0);
+						generationSlider.setValue(gindex);
+					} else if (key === UP_ARROW) {
+						var gindex = Math.min(guistate.generationIndex + 1, particleHistory.length - 1);
+						generationSlider.setValue(gindex);
+					}
+				}
+			}
+
 			function computeScoreRange(history) {
 				var minscore = Infinity;
 				var maxscore = -Infinity;
@@ -93,6 +136,7 @@
 					// Process data
 					console.log('   Received data; processing...');
 					particleHistory = data.history;
+					numParticles = particleHistory[0].length;
 					var scoreRange = computeScoreRange(particleHistory);
 					viewport = data.viewport;
 
@@ -129,7 +173,6 @@
 			}
 		</script>
 
-		<img src='../targets/curl_600.png'></img>
 		<canvas id='canvas' width='600' height='600'></canvas>
 		<button style='font-size: 18pt' onclick='generate()'>Generate</button>
 	</body>

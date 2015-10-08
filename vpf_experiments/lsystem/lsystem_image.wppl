@@ -171,8 +171,8 @@ var makeProgram = function(variational, heuristicFactors) {
 
 		// Terminate?
 		future(function() {
-			if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
-			// if (currState.depth < 15 && _flip(0.5)) {
+			// if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
+			if (currState.depth < 15 && _flip(0.5)) {
 				future(function() {
 					// Continue or fork?
 					if (_flip(0.5)) {

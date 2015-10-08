@@ -2,12 +2,14 @@ if (typeof(window) === 'undefined')  {
 	var THREE = require('three');
 }
 
-function render(canvas, viewport, branches, starti, endi) {
+function render(canvas, viewport, branches, starti, endi, fillBackground) {
 	if (viewport === undefined)
 		viewport = {xmin: 0, ymin: 0, xmax: canvas.width, ymax: canvas.height};
 
 	starti = starti || 0;
 	endi = endi || branches.length;
+
+	fillBackground = fillBackground === undefined ? true : fillBackground;
 
 	function world2img(p) {
 		return new THREE.Vector2(
@@ -18,10 +20,11 @@ function render(canvas, viewport, branches, starti, endi) {
 
 	var ctx = canvas.getContext('2d');
 
-	// Fill background
-	ctx.rect(0, 0, canvas.width, canvas.height);
-	ctx.fillStyle = 'white';
-	ctx.fill();
+	if (fillBackground) {
+		ctx.rect(0, 0, canvas.width, canvas.height);
+		ctx.fillStyle = 'white';
+		ctx.fill();
+	}
 
 	// Draw
 	ctx.strokeStyle = 'black';
