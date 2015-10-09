@@ -23,9 +23,9 @@ var polar2rect = function(r, theta) {
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-// var targetName = 'curl';
+var targetName = 'curl';
 // var targetName = 'bifurcate';
-var targetName = 'a';
+// var targetName = 'a';
 
 var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/' + targetName + '_50.png')
 var canvas = lsysUtils.newCanvas(50, 50);
@@ -81,7 +81,7 @@ var vparams = Variational.newParams();
 
 
 
-var makeProgram = function(variational, heuristicFactors) {
+var makeProgram = function(variational, doFactors) {
 
 	// var _gaussian = gaussian;
 	var _gaussian = !variational ? gaussian :
@@ -163,10 +163,8 @@ var makeProgram = function(variational, heuristicFactors) {
 
 		globalStore.branches = globalStore.branches.concat([newbranch]);
 
-		if (heuristicFactors) {
-			// Add new heuristic factor
-			targetFactor();
-		}
+		// Add new heuristic factor
+		if (doFactors) targetFactor();
 
 		var newState = {
 			depth: currState.depth + 1,
@@ -179,6 +177,7 @@ var makeProgram = function(variational, heuristicFactors) {
 		future(function() {
 			// if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
 			if (currState.depth < 15 && _flip(0.5)) {
+			// if (_flip(0.5)) {
 				future(function() {
 					// Continue or fork?
 					if (_flip(0.5)) {
@@ -218,48 +217,53 @@ var makeProgram = function(variational, heuristicFactors) {
 		future(function() { branch(startState); });
 		finishAllFutures();
 
-		if (!heuristicFactors) {
-			// Target factor only once, at very end
-			targetFactor();
-		}
-
 		return globalStore.branches;
 	};
 
 	return generate;
 }
 
-var variational = false;
-var heuristicFactors = true;
-// var futurePolicy = 'deterministic';
-var futurePolicy = 'stochastic';
-setFuturePolicy(futurePolicy);
-var generate = makeProgram(variational, heuristicFactors);
-
-
-if (variational) {
-	Variational(generate, vparams, {
-		numParticles: 100,
-		maxNumFlights: 300,
-		// convergeEps: 0.1,
-		convergeEps: 0.01,
-		adagradInitLearnRate: 0.25,
-		// adagradInitLearnRate: 0.1,
-		// adagradInitLearnRate: 0.05,
-
-		gradientEstimator: 'ELBO',
-		// gradientEstimator: 'VPF',
-
-		verbosity: {
-			flightNum: true,
-			scoreDiff: true,
-			endStatus: true
-		}
-	});
-	// console.log(vparams);
-}
 
 var testRun = function() {
+
+	var variational = false;
+	var doFactors = true;
+	var generate = makeProgram(variational, doFactors);
+
+	var useSavedParams = true;
+	var saveParams = false;
+	// var paramFile = 'vpf_experiments/lsystem/saved_params/' + targetName + '.txt';
+	var paramFile = 'vpf_experiments/lsystem/saved_params/' + targetName + '_eubo.txt';
+
+	if (variational) {
+		if (!useSavedParams) {
+			Variational(generate, vparams, {
+				numParticles: 100,
+				maxNumFlights: 1000,
+				// convergeEps: 0.1,
+				convergeEps: 0.01,
+				adagradInitLearnRate: 0.25,
+				// adagradInitLearnRate: 0.1,
+				// adagradInitLearnRate: 0.05,
+
+				// gradientEstimator: 'ELBO',
+				gradientEstimator: 'EUBO',
+				exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/' + targetName + '.txt'),
+
+				verbosity: {
+					flightNum: true,
+					scoreDiff: true,
+					endStatus: true
+				}
+			});
+			if (saveParams) {
+				Variational.saveParams(vparams, paramFile);
+			}
+		} else {
+			Variational.loadParams(vparams, paramFile);
+		}
+	}
+
 	var res = {width: 600, height: 600};
 	var n = 10;
 	var skip = 1;
@@ -270,9 +274,8 @@ var testRun = function() {
 		fs.mkdirSync(resultsDir);
 	}
 	var sims = repeat(n, function(i) {
-		// var nParticles = 1;
-		// var nParticles = 100;
-		var nParticles = 300;
+		var nParticles = 1;
+		// var nParticles = 10;
 		var ret = sample(ParticleFilter(generate, nParticles));
 		// var ret = sample(MH(generate, 1000));
 		var sim = computeSim(ret);
@@ -285,13 +288,65 @@ var testRun = function() {
 	console.log('sim -  min: ' + listMin(sims) + ', max: ' + listMax(sims) +
 		               ', avg: ' + listMean(sims) + ', stddev: ' + listStdev(sims));
 }
-// testRun();
+
+
+var generateTrainingData = function(name) {
+	var dataDir = 'vpf_experiments/lsystem/data';
+	var fs = require.call(null, 'fs');
+	if (!fs.existsSync(dataDir)) {
+		fs.mkdirSync(dataDir);
+	}
+	var filename = dataDir + '/' + name + '.txt';
+	var genFn = makeProgram(false, true);
+	var genData = function(counter) {
+		var trace = ParticleFilter(genFn, 300).trace;
+		fs.appendFileSync(filename, JSON.stringify(trace) + '\n');
+		console.log('Generated trace ' + counter);
+		genData(counter + 1);
+	}
+	genData(0);
+};
+
+
+var compareVariationalToPrior = function(paramFile) {
+	var present = { present: require.call(null, 'present') };	// For timing
+	var numeric = require.call(null, 'numeric');
+	var util = require.call(null, 'util');
+	var outfilename = targetName + '_comparison.csv';
+	var outfile = fs.openSync('vpf_experiments/lsystem/experiment_results/image/'+outfilename, 'w');
+	fs.writeSync(outfile, 'isVariational,numParticles,avgSim,avgTime\n');
+	var nReps = 100;
+	map(function(isVariational) {
+		console.log('isVariational = ' + isVariational);
+		var genFn = makeProgram(isVariational, true);
+		if (isVariational) Variational.loadParams(vparams, paramFile);
+		repeat(10, function(np) {
+			var nParticles = np + 1;
+			console.log('  nParticles = ' + nParticles);
+			var simsAndTimes = repeat(nReps, function(i) {
+				console.log('    repetition ' + i);
+				var t0 = present.present();
+				var ret = sample(ParticleFilter(genFn, nParticles));
+				var t1 = present.present();
+				var time = t1 - t0;
+				var sim = computeSim(ret);
+				return [sim, time];
+			});
+			var sums = reduce(function(a, b) { return numeric.add(a, b); }, [0, 0], simsAndTimes);
+			var avgs = numeric.div(sums, simsAndTimes.length);
+			fs.writeSync(outfile, util.format('%s,%d,%d,%d\n',
+				isVariational, nParticles, avgs[0], avgs[1]));
+		});
+	}, [false, true]);
+	fs.closeSync(outfile);
+}
 
 
 var serverReponse = function() {
 	var nParticles = 300;
 	// var nParticles = 100;
-	var dist = ParticleFilter(generate, nParticles, true, true);
+	var genFn = makeProgram(false, true);
+	var dist = ParticleFilter(genFn, nParticles, true, true);
 	var history = map(function(particles) {
 		return map(function(particle) {
 			return {
@@ -308,9 +363,16 @@ var serverReponse = function() {
 		targetName: targetName,
 		viewport: viewport,
 		history: history
+		// history: [history[history.length-1]]
 	};
 }
-serverReponse();
+
+
+
+testRun();
+// generateTrainingData(targetName);
+// compareVariationalToPrior('vpf_experiments/lsystem/saved_params/curl_eubo.txt');
+// serverReponse();
 
 
 
