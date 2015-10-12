@@ -310,11 +310,10 @@ var generateTrainingData = function(name) {
 
 var compareVariationalToPrior = function(paramFile) {
 	var present = { present: require.call(null, 'present') };	// For timing
-	var numeric = require.call(null, 'numeric');
 	var util = require.call(null, 'util');
 	var outfilename = targetName + '_comparison.csv';
 	var outfile = fs.openSync('vpf_experiments/lsystem/experiment_results/image/'+outfilename, 'w');
-	fs.writeSync(outfile, 'isVariational,numParticles,avgSim,avgTime\n');
+	fs.writeSync(outfile, 'isVariational,numParticles,sim,time,avgTime\n');
 	var nReps = 100;
 	map(function(isVariational) {
 		console.log('isVariational = ' + isVariational);
@@ -332,10 +331,12 @@ var compareVariationalToPrior = function(paramFile) {
 				var sim = computeSim(ret);
 				return [sim, time];
 			});
-			var sums = reduce(function(a, b) { return numeric.add(a, b); }, [0, 0], simsAndTimes);
-			var avgs = numeric.div(sums, simsAndTimes.length);
-			fs.writeSync(outfile, util.format('%s,%d,%d,%d\n',
-				isVariational, nParticles, avgs[0], avgs[1]));
+			var times = map(function(st) { return st[1]; }, simsAndTimes);
+			var avgTime = sum(times) / times.length;
+			map(function(st) {
+				fs.writeSync(outfile, util.format('%s,%d,%d,%d,%d\n',
+					isVariational, nParticles, st[0], st[1], avgTime));
+			}, simsAndTimes);
 		});
 	}, [false, true]);
 	fs.closeSync(outfile);
@@ -344,8 +345,9 @@ var compareVariationalToPrior = function(paramFile) {
 
 var serverReponse = function() {
 	var nParticles = 300;
-	// var nParticles = 100;
 	var genFn = makeProgram(false, true);
+	// var genFn = makeProgram(true, true);
+	// Variational.loadParams(vparams, 'vpf_experiments/lsystem/saved_params/curl_eubo.txt');
 	var dist = ParticleFilter(genFn, nParticles, true, true);
 	var history = map(function(particles) {
 		return map(function(particle) {
@@ -369,10 +371,10 @@ var serverReponse = function() {
 
 
 
-testRun();
+// testRun();
 // generateTrainingData(targetName);
 // compareVariationalToPrior('vpf_experiments/lsystem/saved_params/curl_eubo.txt');
-// serverReponse();
+serverReponse();
 
 
 
