@@ -33,6 +33,13 @@ ImageData2D.prototype = {
 		this.loadFromCanvas(canvas);
 		return this;
 	},
+	fillWhite: function(w, h) {
+		var canv = new Canvas(w, h);
+		var ctx = canv.getContext('2d');
+		ctx.fillStyle = 'white';
+		ctx.fillRect(0, 0, w, h);
+		return this.loadFromCanvas(canv);
+	},
 	copyToCanvas: function(canvas) {
 		canvas.getContext('2d').putImageData(this.imgDataObj, 0, 0);
 	},
