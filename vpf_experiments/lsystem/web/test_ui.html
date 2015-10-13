@@ -132,8 +132,8 @@
 			}
 
 			function loadTargetImages(basename, callback) {
-				var targetImgFile = '../targets/' + basename + '_600.png';
-				var smallTargetImgFile = '../targets/' + basename + '_50.png';
+				var targetImgFile = '../targets/source/' + basename + '.png';
+				var smallTargetImgFile = '../targets/training/' + basename + '.png';
 				targetImg = new Image();
 				targetImg.addEventListener('load', function() {
 					$('<canvas/>', {id: 'canvas'}).prop({width: targetImg.width, height: targetImg.height}).appendTo('body');

@@ -16,3 +16,4 @@ vpf_experiments/*/experiment_results/*
 vpf_experiments/*/data/*
 vpf_experiments/*/saved_params/*
 vpf_experiments/lsystem/test/*.png
+vpf_experiments/lsystem/targets/training/*

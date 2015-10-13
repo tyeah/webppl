@@ -27,7 +27,7 @@ var targetName = 'curl';
 // var targetName = 'bifurcate';
 // var targetName = 'a';
 
-var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/' + targetName + '_50.png')
+var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/training/' + targetName + '.png')
 var canvas = lsysUtils.newCanvas(targetImg.width, targetImg.height);
 var computeSim = function(branches, inInference) {
 	// If not in inference, just render everything
