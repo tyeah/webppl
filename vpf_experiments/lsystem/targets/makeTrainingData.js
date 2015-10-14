@@ -15,5 +15,8 @@ for (var i = 0; i < imgs.length; i++) {
 	var trainingname = trainingDir + '/' + img;
 	syscall(util.format('convert %s -resize %dx%d png24:%s',
 		sourcename, SMALL_SIZE, SMALL_SIZE, trainingname));
+	var flopname = util.format('%s/%s_flop.png', trainingDir, img.slice(0, -4));
+	syscall(util.format('convert %s -flop png24:%s',
+		trainingname, flopname));
 }
 console.log('DONE.');

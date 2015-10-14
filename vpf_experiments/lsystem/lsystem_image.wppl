@@ -26,6 +26,7 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 var targetName = 'curl';
 // var targetName = 'bifurcate';
 // var targetName = 'a';
+// var targetName = 'heart';
 
 var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/training/' + targetName + '.png')
 var canvas = lsysUtils.newCanvas(targetImg.width, targetImg.height);
@@ -51,6 +52,7 @@ var makescore = function(val, target, tightness) {
 	return - (diff * diff) / (tightness * tightness);
 }
 var tightness = 0.01;
+// var tightness = 0.02;
 var targetFactor = function() {
 	var sim = computeSim(globalStore.branches, true);
 	/////
@@ -78,6 +80,14 @@ var vparams = Variational.newParams();
 
 
 var makeProgram = function(variational, doFactors) {
+
+	var initialWidth = 0.75;
+	// var widthDecay = 0.9;
+	// var maxDepth = 15;
+	// var minWidthPercent = 0;
+	var widthDecay = 0.95;
+	var maxDepth = Infinity;
+	var minWidthPercent = 0.2;
 
 	// var _gaussian = gaussian;
 	var _gaussian = !variational ? gaussian :
@@ -146,7 +156,7 @@ var makeProgram = function(variational, doFactors) {
 	var branch = function(currState) {
 		setCurrFeatures(currState);
 
-		var width = 0.9 * currState.width;
+		var width = widthDecay * currState.width;
 		var length = 2;
 		var newang = currState.angle + _gaussian(0, Math.PI/8);	
 		// var newang = currState.angle + _uniform(-Math.PI/6, Math.PI/6);
@@ -171,9 +181,7 @@ var makeProgram = function(variational, doFactors) {
 
 		// Terminate?
 		future(function() {
-			// if (currState.depth < 10 && _flip(Math.min(0.99, Math.exp(-0.5*(currState.depth-4))))) {
-			if (currState.depth < 15 && _flip(0.5)) {
-			// if (_flip(0.5)) {
+			if (currState.depth < maxDepth && newState.width/initialWidth > minWidthPercent && _flip(0.5)) {
 				future(function() {
 					// Continue or fork?
 					if (_flip(0.5)) {
@@ -208,7 +216,7 @@ var makeProgram = function(variational, doFactors) {
 			depth: 0,
 			pos: vec2(0, 0),
 			angle: -Math.PI/2,
-			width: 0.75
+			width: initialWidth
 		};
 		future(function() { branch(startState); });
 		finishAllFutures();
@@ -347,28 +355,17 @@ var compareVariationalToPrior = function(paramFile) {
 
 
 var serverReponse = function() {
+	var particleHistoryUtils = require.call(null, 'vpf_experiments/lsystem/particleHistoryUtils');
+	var saveHistory = false;
 	var nParticles = 300;
 	var genFn = makeProgram(false, true);
 	// var genFn = makeProgram(true, true);
 	// Variational.loadParams(vparams, 'vpf_experiments/lsystem/saved_params/curl_eubo.txt');
-	var dist = ParticleFilter(genFn, nParticles, true, true);
-	var history = map(function(particles) {
-		return map(function(particle) {
-			return {
-				log_prior: particle.logprior,
-				log_like: particle.loglike,
-				log_post: particle.logpost,
-				active: particle.active,
-				similarity: particle.store.sim,
-				branches: particle.store.branches
-			};
-		}, particles);
-	}, dist.particleHistory);
+	var dist = ParticleFilter(genFn, nParticles, true, saveHistory);
 	return {
 		targetName: targetName,
 		viewport: viewport,
-		history: history
-		// history: [history[history.length-1]]
+		history: particleHistoryUtils.compressAndExtract(dist.particleHistory)
 	};
 }
 

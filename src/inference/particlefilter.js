@@ -249,7 +249,11 @@ module.exports = function(env) {
     var randi = Math.floor(Math.random() * this.particles.length);
     dist.trace = this.particles[randi].trace;
     // dist.value = this.particles[randi].value;
-    dist.particleHistory = this.particleHistory;
+    if (this.particleHistory) {
+      dist.particleHistory = this.particleHistory;
+    } else {
+      dist.particleHistory = [this.particles];
+    }
     ////
 
     // Reinstate previous coroutine:
