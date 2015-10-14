@@ -137,10 +137,12 @@
 				var smallTargetImgFile = '../targets/training/' + basename + '.png';
 				targetImg = new Image();
 				targetImg.addEventListener('load', function() {
-					$('<canvas/>', {id: 'canvas'}).prop({width: targetImg.width, height: targetImg.height}).appendTo('body');
+					var bigCanvas = $('#canvas').length ? $('#canvas') : $('<canvas/>', {id: 'canvas'}).appendTo('body');
+					bigCanvas.prop({width: targetImg.width, height: targetImg.height});
 					smallTargetImg = new Image();
 					smallTargetImg.addEventListener('load', function() {
-						$('<canvas/>', {id: 'canvas-small'}).prop({width: smallTargetImg.width, height: smallTargetImg.height}).appendTo('body');
+						var smallCanvas = $('#canvas-small').length ? $('#canvas-small') : $('<canvas/>', {id: 'canvas-small'}).appendTo('body');
+						smallCanvas.prop({width: smallTargetImg.width, height: smallTargetImg.height});
 						callback();
 					}, false);
 					smallTargetImg.src = smallTargetImgFile;
