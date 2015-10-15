@@ -24,10 +24,10 @@ var polar2rect = function(r, theta) {
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
 
-// var targetName = 'curl';
+var targetName = 'curl';
 // var targetName = 'bifurcate';
 // var targetName = 'a';
-var targetName = 'spiral';
+// var targetName = 'spiral';
 
 var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/training/' + targetName + '.png')
 
@@ -380,7 +380,8 @@ var compareVariationalToPrior = function(paramFile) {
 
 var serverReponse = function() {
 	var particleHistoryUtils = require.call(null, 'vpf_experiments/lsystem/particleHistoryUtils');
-	var saveHistory = false;
+	var saveHistory = lsysUtils.deleteStoredImages;
+	// var saveHistory = false;
 	var nParticles = 300;
 	var genFn = makeProgram(false, true);
 	// var genFn = makeProgram(true, true);

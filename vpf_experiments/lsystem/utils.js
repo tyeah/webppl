@@ -132,12 +132,17 @@ function processRetVals_width(vals) {
 }
 
 
+function deleteStoredImages(particle) {
+	particle.store.genImg = undefined;
+}
+
 module.exports = {
 	render: render,
 	renderOut: renderOut,
 	newImageData2D: function() { return new ImageData2D(); },
 	newCanvas: function(w, h) { return new Canvas(w, h); },
-	processRetVals_width: processRetVals_width
+	processRetVals_width: processRetVals_width,
+	deleteStoredImages: deleteStoredImages
 };
 
 

@@ -71,6 +71,13 @@ module.exports = function(env) {
 
     if (saveHistory) {
       this.particleHistory = [];
+      // 'saveHistory' can be a function, in which case we apply this function
+      //    to all particles before they get saved to the history.
+      if (_.isFunction(saveHistory)) {
+        this.processHistoryParticle = saveHistory;
+      } else {
+        this.processHistoryParticle = function(p) { return p; };
+      }
     }
 
     // TEST: tracking which particle is best
@@ -197,16 +204,22 @@ module.exports = function(env) {
         newParticles.push(copyParticle(this.particles[j], j));
       }
 
-      // Particles after update: Retained + new particles
       if (this.particleHistory) {
+        var proc = this.processHistoryParticle;
         this.particleHistory.push(this.particles.map(function(p) {
-          return copyParticle(p);   // To properly preserve this state
+          var cp = copyParticle(p);  // To properly preserve this state
+          proc(cp);
+          return cp;
         }));
       }
+      // Particles after update: Retained + new particles
       this.particles = newParticles.concat(retainedParticles);
       if (this.particleHistory) {
+        var proc = this.processHistoryParticle;
         this.particleHistory.push(this.particles.map(function(p) {
-          return copyParticle(p);   // To properly preserve this state
+          var cp = copyParticle(p);  // To properly preserve this state
+          proc(cp);
+          return cp;
         }));
       }
     }
