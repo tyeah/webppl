@@ -97,8 +97,8 @@ module.exports = function(env) {
   ParticleFilter.prototype.sample = function(s, cc, a, erp, params) {
     var importanceERP = erp.importanceERP || erp;
     var val = importanceERP.sample(params);
-    var importanceScore = importanceERP.score(params, val);
     var choiceScore = erp.score(params, val);
+    var importanceScore = erp === importanceERP ? choiceScore : importanceERP.score(params, val);
     var p = this.currentParticle();
     p.weight += choiceScore - importanceScore;
     p.logprior += choiceScore;

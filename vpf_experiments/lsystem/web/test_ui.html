@@ -67,35 +67,37 @@
 				}
 			}
 
-			function findBestInGen(genIndex, mustBeFinished) {
+			function findBestInGen(prop, genIndex, mustBeFinished) {
 				var bestscore = -Infinity;
 				var besti = -1;
 				var particles = particleHistory[genIndex];
 				for (var i = 0; i < particles.length; i++) {
 					var p = particles[i];
-					if ((!mustBeFinished || !p.active) && p.log_post > bestscore) {
-						bestscore = p.log_post;
+					if ((!mustBeFinished || !p.active) && p[prop] > bestscore) {
+						bestscore = p[prop];
 						besti = i;
 					}
 				}
 				return besti;
 			}
 
-			function showBestInGen() {
-				var besti = findBestInGen(guistate.generationIndex);
-				particleSlider.setValue(besti);
+			function makeShowBestInGen(prop) {
+				return function() {
+					var besti = findBestInGen(prop, guistate.generationIndex);
+					particleSlider.setValue(besti);
+				}
 			}
 
-			function findBestOverall(mustBeFinished) {
+			function findBestOverall(prop, mustBeFinished) {
 				var bestscore = -Infinity;
 				var besti = -1;
 				var bestj = -1;
 				for (var i = 0; i < particleHistory.length; i++) {
-					var j = findBestInGen(i, mustBeFinished);
+					var j = findBestInGen(prop, i, mustBeFinished);
 					if (j !== -1) {  // mustBeFinished && all particles this gen are active
 						var p = particleHistory[i][j];
-						if ((!mustBeFinished || !p.active) && p.log_post > bestscore) {
-							bestscore = p.log_post;
+						if ((!mustBeFinished || !p.active) && p[prop] > bestscore) {
+							bestscore = p[prop];
 							besti = i;
 							bestj = j;
 						}
@@ -104,16 +106,20 @@
 				return {generationIndex: besti, particleIndex: bestj};
 			}
 
-			function showBestOverall() {
-				var best = findBestOverall();
-				generationSlider.setValue(best.generationIndex);
-				particleSlider.setValue(best.particleIndex);
+			function makeShowBestOverall(prop) {
+				return function() {
+					var best = findBestOverall(prop);
+					generationSlider.setValue(best.generationIndex);
+					particleSlider.setValue(best.particleIndex);
+				}
 			}
 
-			function showBestOverallFinished() {
-				var best = findBestOverall(true);
-				generationSlider.setValue(best.generationIndex);
-				particleSlider.setValue(best.particleIndex);
+			function makeShowBestOverallFinished(prop) {
+				return function() {
+					var best = findBestOverall(prop, true);
+					generationSlider.setValue(best.generationIndex);
+					particleSlider.setValue(best.particleIndex);
+				}
 			}
 
 			// Arrow keys also allow navigation
@@ -191,10 +197,13 @@
 						}
 						guistate = {
 							generationIndex: particleHistory.length - 1,
-							particleIndex: findBestInGen(particleHistory.length - 1),
-							showBestInGen: showBestInGen,
-							showBestOverall: showBestOverall,
-							showBestOverallFinished: showBestOverallFinished,
+							particleIndex: findBestInGen('log_post', particleHistory.length - 1),
+							LPshowBestInGen: makeShowBestInGen('log_post'),
+							LPshowBestOverall: makeShowBestOverall('log_post'),
+							LPshowBestOverallFinished: makeShowBestOverallFinished('log_post'),
+							LLshowBestInGen: makeShowBestInGen('log_like'),
+							LLshowBestOverall: makeShowBestOverall('log_like'),
+							LLshowBestOverallFinished: makeShowBestOverallFinished('log_like'),
 						}
 
 						// Sliders for controlling which generation/particle we're looking at.
@@ -243,10 +252,14 @@
 						}
 
 						// Buttons for jumping directly to 'best' particles.
-						var bestOverallButton = gui.add(guistate, 'showBestOverall').name('Best');
-						var bestOverallFinishedButton = gui.add(guistate, 'showBestOverallFinished').name('Best finished');
-						var bestInGenButton = gui.add(guistate, 'showBestInGen').name('Best in gen');
-						guicomponents = guicomponents.concat([bestInGenButton, bestOverallButton]);
+						var LPbestOverallButton = gui.add(guistate, 'LPshowBestOverall').name('LP Best');
+						var LPbestOverallFinishedButton = gui.add(guistate, 'LPshowBestOverallFinished').name('LP Best finished');
+						var LPbestInGenButton = gui.add(guistate, 'LPshowBestInGen').name('LP Best in gen');
+						var LLbestOverallButton = gui.add(guistate, 'LLshowBestOverall').name('LL Best');
+						var LLbestOverallFinishedButton = gui.add(guistate, 'LLshowBestOverallFinished').name('LL Best finished');
+						var LLbestInGenButton = gui.add(guistate, 'LLshowBestInGen').name('LL Best in gen');
+						guicomponents = guicomponents.concat([LPbestOverallButton, LPbestOverallFinishedButton, LPbestInGenButton,
+															  LLbestOverallButton, LLbestOverallFinishedButton, LLbestInGenButton]);
 
 						// Finish up
 						console.log('   DONE.');
