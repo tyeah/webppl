@@ -43,6 +43,10 @@ particleHistoryUtils.compressAndExtract = function(history) {
 
 particleHistoryUtils.decompress = function(compressedHistory) {
 	return compressedHistory.map(function(particleData) {
+		for (var i = 0; i < particleData.particles.length; i++) {
+			var p = particleData.particles[i];
+			p.num_branches = p.branches.length;
+		}
 		return particleData.indices.map(function(i) {
 			return particleData.particles[i];
 		})
