@@ -67,13 +67,13 @@
 				}
 			}
 
-			function findBestInGen(genIndex) {
+			function findBestInGen(genIndex, mustBeFinished) {
 				var bestscore = -Infinity;
 				var besti = -1;
 				var particles = particleHistory[genIndex];
 				for (var i = 0; i < particles.length; i++) {
 					var p = particles[i];
-					if (p.log_post > bestscore) {
+					if ((!mustBeFinished || !p.active) && p.log_post > bestscore) {
 						bestscore = p.log_post;
 						besti = i;
 					}
@@ -86,24 +86,32 @@
 				particleSlider.setValue(besti);
 			}
 
-			function findBestOverall() {
+			function findBestOverall(mustBeFinished) {
 				var bestscore = -Infinity;
 				var besti = -1;
 				var bestj = -1;
 				for (var i = 0; i < particleHistory.length; i++) {
-					var j = findBestInGen(i);
-					var p = particleHistory[i][j];
-					if (p.log_post > bestscore) {
-						bestscore = p.log_post;
-						besti = i;
-						bestj = j;
+					var j = findBestInGen(i, mustBeFinished);
+					if (j !== -1) {  // mustBeFinished && all particles this gen are active
+						var p = particleHistory[i][j];
+						if ((!mustBeFinished || !p.active) && p.log_post > bestscore) {
+							bestscore = p.log_post;
+							besti = i;
+							bestj = j;
+						}
 					}
 				}
-				return {generationIndex: i, particleIndex: j};
+				return {generationIndex: besti, particleIndex: bestj};
 			}
 
 			function showBestOverall() {
 				var best = findBestOverall();
+				generationSlider.setValue(best.generationIndex);
+				particleSlider.setValue(best.particleIndex);
+			}
+
+			function showBestOverallFinished() {
+				var best = findBestOverall(true);
 				generationSlider.setValue(best.generationIndex);
 				particleSlider.setValue(best.particleIndex);
 			}
@@ -186,6 +194,7 @@
 							particleIndex: findBestInGen(particleHistory.length - 1),
 							showBestInGen: showBestInGen,
 							showBestOverall: showBestOverall,
+							showBestOverallFinished: showBestOverallFinished,
 						}
 
 						// Sliders for controlling which generation/particle we're looking at.
@@ -234,8 +243,9 @@
 						}
 
 						// Buttons for jumping directly to 'best' particles.
-						var bestInGenButton = gui.add(guistate, 'showBestInGen').name('Best in gen.');
-						var bestOverallButton = gui.add(guistate, 'showBestOverall').name('Best overall');
+						var bestOverallButton = gui.add(guistate, 'showBestOverall').name('Best');
+						var bestOverallFinishedButton = gui.add(guistate, 'showBestOverallFinished').name('Best finished');
+						var bestInGenButton = gui.add(guistate, 'showBestInGen').name('Best in gen');
 						guicomponents = guicomponents.concat([bestInGenButton, bestOverallButton]);
 
 						// Finish up

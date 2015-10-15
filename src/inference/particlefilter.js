@@ -80,12 +80,6 @@ module.exports = function(env) {
       }
     }
 
-    // TEST: tracking which particle is best
-    this.bestLogPost = -Infinity;
-    this.bestGen = -1;
-    this.bestIndex = -1;
-    this.numGens = 0;
-
     // Move old coroutine out of the way and install this as the current
     // handler.
     this.k = k;
@@ -228,17 +222,6 @@ module.exports = function(env) {
     _.each(this.particles, function(particle) {
       particle.weight = avgW;
     });
-
-    // TEST: tracking which particle is best
-    for (var i = 0; i < this.particles.length; i++) {
-      var p = this.particles[i];
-      if (p.logpost > this.bestLogPost) {
-        this.bestLogPost = p.logpost;
-        this.bestGen = this.numGens;
-        this.bestIndex = i;
-      }
-    }
-    this.numGens++;
   };
 
   ParticleFilter.prototype.exit = function(s, retval) {
@@ -296,10 +279,6 @@ module.exports = function(env) {
 
     // Reinstate previous coroutine:
     env.coroutine = this.oldCoroutine;
-
-    // TEST: tracking which particle is best
-    console.log('Best particle is in gen ' + this.bestGen + ' (num: ' + this.numGens + ')');
-    console.log('Best logpost: ' + this.bestLogPost);
 
     // Return from particle filter by calling original continuation:
     return this.k(this.oldStore, dist);
