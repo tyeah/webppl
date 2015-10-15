@@ -3,19 +3,20 @@ var particleHistoryUtils = {};
 
 particleHistoryUtils.compress = function(history) {
 	return history.map(function(particles) {
-		var uniqueParticles = [];
+		var uniqueParticlesMap = {};
+		var uniqueParticlesList = [];
 		var indices = [];
 		for (var i = 0; i < particles.length; i++) {
 			var p = particles[i];
-			var idx = uniqueParticles.indexOf(p);
-			if (idx === -1) {
-				indices.push(uniqueParticles.length);
-				uniqueParticles.push(p);
+			if (!uniqueParticlesMap.hasOwnProperty(p.id)) {
+				uniqueParticlesMap[p.id] = uniqueParticlesList.length;
+				indices.push(uniqueParticlesList.length);
+				uniqueParticlesList.push(p);
 			} else {
-				indices.push(idx);
+				indices.push(uniqueParticlesMap[p.id]);
 			}
 		}
-		return { particles: uniqueParticles, indices: indices };
+		return { particles: uniqueParticlesList, indices: indices };
 	});
 }
 
