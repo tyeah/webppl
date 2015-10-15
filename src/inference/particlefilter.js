@@ -22,9 +22,10 @@ module.exports = function(env) {
     return k(s, newERP);
   }
 
-  function copyParticle(particle) {
+  function copyParticle(particle, newAncestor) {
     return {
       id: particle.id,
+      ancestor: newAncestor || particle.ancestor,
       continuation: particle.continuation,
       weight: particle.weight,
       value: particle.value,
@@ -51,6 +52,7 @@ module.exports = function(env) {
     for (var i = 0; i < numParticles; i++) {
       var particle = {
         id: this.nextParticleId++,
+        ancestor: undefined,
         continuation: exitK,
         weight: 0,
         score: 0,
@@ -177,28 +179,29 @@ module.exports = function(env) {
       // Compute list of retained particles
       var retainedParticles = [];
       var newExpWeights = [];
-      _.each(
-          this.particles,
-          function(particle) {
-            var w = Math.exp(particle.weight - avgW);
-            var nRetained = Math.floor(w);
-            newExpWeights.push(w - nRetained);
-            for (var i = 0; i < nRetained; i++) {
-              retainedParticles.push(copyParticle(particle));
-            }
-          });
+      for (var i = 0; i < this.particles.length; i++) {
+        var particle = this.particles[i];
+        var w = Math.exp(particle.weight - avgW);
+        var nRetained = Math.floor(w);
+        newExpWeights.push(w - nRetained);
+        for (var j = 0; j < nRetained; j++) {
+          retainedParticles.push(copyParticle(particle, i));
+        }
+      }
       // Compute new particles
       var numNewParticles = m - retainedParticles.length;
       var newParticles = [];
       var j;
       for (var i = 0; i < numNewParticles; i++) {
         j = erp.multinomialSample(newExpWeights);
-        newParticles.push(copyParticle(this.particles[j]));
+        newParticles.push(copyParticle(this.particles[j], j));
       }
 
       // Particles after update: Retained + new particles
       if (this.particleHistory) {
-        this.particleHistory.push(this.particles);
+        this.particleHistory.push(this.particles.map(function(p) {
+          return copyParticle(p);   // To properly preserve this state
+        }));
       }
       this.particles = newParticles.concat(retainedParticles);
       if (this.particleHistory) {
