@@ -117,7 +117,7 @@ ImageData2D.prototype = {
 				n++;
 			}
 		}
-		return sim / n;
+		return n > 0 ? sim / n : 0;
 	}
 };
 
