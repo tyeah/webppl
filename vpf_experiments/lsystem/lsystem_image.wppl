@@ -23,12 +23,32 @@ var polar2rect = function(r, theta) {
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-var targetName = 'curl';
+
+// var targetName = 'curl';
 // var targetName = 'bifurcate';
 // var targetName = 'a';
-// var targetName = 'heart';
+var targetName = 'spiral';
 
 var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/training/' + targetName + '.png')
+
+// Compute similarity measure, given an image
+var similarity = function(img) {
+	return img.percentSameBinary(targetImg);
+}
+
+// Baseline similarity value for a blank image
+var baselineSim = function() {
+	var img = lsysUtils.newImageData2D().fillWhite(targetImg.width, targetImg.height);
+	return similarity(img);
+}
+var baseSim = baselineSim();
+
+// Normalize a similarity value against the baseline
+var normSim = function(sim) {
+	return (sim - baseSim) / (1 - baseSim);
+}
+
+// Compute (normalized) similarity for a set of branches
 var canvas = lsysUtils.newCanvas(targetImg.width, targetImg.height);
 var computeSim = function(branches, inInference) {
 	// If not in inference, just render everything
@@ -45,20 +65,31 @@ var computeSim = function(branches, inInference) {
 		globalStore.prevBranches = branches;
 	}
 	globalStore.genImg = lsysUtils.newImageData2D().loadFromCanvas(canvas);
-	return globalStore.genImg.percentSameBinary(targetImg);
+	return normSim(similarity(globalStore.genImg));
 };
+
+// Basically Gaussian log-likelihood, without the constant factor
 var makescore = function(val, target, tightness) {
 	var diff = val - target;
 	return - (diff * diff) / (tightness * tightness);
 }
-var tightness = 0.01;
-// var tightness = 0.02;
+
+// var simTightness = 0.01;
+var simTightness = 0.05;
+var boundsTightness = 0.001;
 var targetFactor = function() {
+	// Similarity factor
 	var sim = computeSim(globalStore.branches, true);
-	/////
 	globalStore.sim = sim;
-	/////
-	var f = makescore(sim, 1, tightness);
+	var simf = makescore(sim, 1, simTightness);
+	// Bounds factors
+	var bbox = globalStore.bbox;
+	var extraX = (Math.max(viewport.xmin - bbox.min.x, 0) + Math.max(bbox.max.x - viewport.xmax, 0)) / (viewport.xmax - viewport.xmin);
+	var extraY = (Math.max(viewport.ymin - bbox.min.y, 0) + Math.max(bbox.max.y - viewport.ymax, 0)) / (viewport.ymax - viewport.ymin);
+	var boundsfx = makescore(extraX, 0, boundsTightness);
+	var boundsfy = makescore(extraY, 0, boundsTightness);
+	var f = simf + boundsfx + boundsfy;
+	// var f = simf;
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
 	} else {
@@ -66,12 +97,6 @@ var targetFactor = function() {
 	}
 	globalStore.prevFactor = f;
 };
-
-// Baseline similarity value for a blank image
-var baselineSim = function() {
-	var img = lsysUtils.newImageData2D().fillWhite(targetImg.width, targetImg.height);
-	return img.percentSameBinary(targetImg);
-}
 
 
 
@@ -85,7 +110,8 @@ var makeProgram = function(variational, doFactors) {
 	// var widthDecay = 0.9;
 	// var maxDepth = 15;
 	// var minWidthPercent = 0;
-	var widthDecay = 0.95;
+	// var widthDecay = 0.95;
+	var widthDecay = 0.975;
 	var maxDepth = Infinity;
 	var minWidthPercent = 0.2;
 
@@ -168,6 +194,9 @@ var makeProgram = function(variational, doFactors) {
 		};
 
 		globalStore.branches = globalStore.branches.concat([newbranch]);
+		globalStore.bbox = globalStore.bbox.clone();
+		globalStore.bbox.expandByPoint(newbranch.start);
+		globalStore.bbox.expandByPoint(newbranch.end);
 
 		// Add new heuristic factor
 		if (doFactors) targetFactor();
@@ -211,11 +240,13 @@ var makeProgram = function(variational, doFactors) {
 
 	var generate = function() {
 		globalStore.branches = [];
+		globalStore.bbox = box2();
 		globalStore.currFeatures = [];
 		var startState = {
 			depth: 0,
 			pos: vec2(0, 0),
-			angle: -Math.PI/2,
+			// angle: -Math.PI/2,
+			angle: _gaussian(-Math.PI/2, Math.PI/6),
 			width: initialWidth
 		};
 		future(function() { branch(startState); });
@@ -319,9 +350,6 @@ var compareVariationalToPrior = function(paramFile) {
 	var outfile = fs.openSync('vpf_experiments/lsystem/experiment_results/image/'+outfilename, 'w');
 	fs.writeSync(outfile, 'isVariational,numParticles,sim,time,avgTime\n');
 	var nReps = 100;
-	////
-	var baseSim = baselineSim();
-	////
 	map(function(isVariational) {
 		console.log('isVariational = ' + isVariational);
 		var genFn = makeProgram(isVariational, true);
@@ -335,11 +363,7 @@ var compareVariationalToPrior = function(paramFile) {
 				var ret = sample(ParticleFilter(genFn, nParticles));
 				var t1 = present.present();
 				var time = t1 - t0;
-				// var sim = computeSim(ret);
-				////
-				var s = computeSim(ret);
-				var sim = (s - baseSim) / (1 - baseSim);
-				////
+				var sim = computeSim(ret);
 				return [sim, time];
 			});
 			var times = map(function(st) { return st[1]; }, simsAndTimes);
