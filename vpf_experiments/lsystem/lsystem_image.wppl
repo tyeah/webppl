@@ -24,10 +24,10 @@ var polar2rect = function(r, theta) {
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
 
-var targetName = 'curl';
+// var targetName = 'curl';
 // var targetName = 'bifurcate';
 // var targetName = 'a';
-// var targetName = 'spiral';
+var targetName = 'spiral';
 
 var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/training/' + targetName + '.png')
 
@@ -54,15 +54,12 @@ var computeSim = function(branches, inInference) {
 	// If not in inference, just render everything
 	if (!inInference) {
 		lsysUtils.render(canvas, viewport, branches);
-	// Otherwise, do an incremental render from the last group of
-	//    branches we saw.
+	// Otherwise, do an incremental render of the last branch
 	} else {
-		if (globalStore.genImg) {
+		if (globalStore.genImg !== undefined) {
 			globalStore.genImg.copyToCanvas(canvas);
 		}
-		var starti = globalStore.prevBranches ? globalStore.prevBranches.length : 0;
-		lsysUtils.render(canvas, viewport, branches, starti, branches.length, starti === 0);
-		globalStore.prevBranches = branches;
+		lsysUtils.render(canvas, viewport, branches, true, globalStore.genImg === undefined);
 	}
 	globalStore.genImg = lsysUtils.newImageData2D().loadFromCanvas(canvas);
 	return normSim(similarity(globalStore.genImg));
@@ -193,7 +190,8 @@ var makeProgram = function(variational, doFactors) {
 			end: currState.pos.clone().add(polar2rect(length, newang))
 		};
 
-		globalStore.branches = globalStore.branches.concat([newbranch]);
+		globalStore.branches = { branch: newbranch, next: globalStore.branches };
+		globalStore.numBranches = globalStore.numBranches + 1;
 		globalStore.bbox = globalStore.bbox.clone();
 		globalStore.bbox.expandByPoint(newbranch.start);
 		globalStore.bbox.expandByPoint(newbranch.end);
@@ -239,7 +237,8 @@ var makeProgram = function(variational, doFactors) {
 	};
 
 	var generate = function() {
-		globalStore.branches = [];
+		globalStore.branches = undefined;
+		globalStore.numBranches = 0;
 		globalStore.bbox = box2();
 		globalStore.currFeatures = [];
 		var startState = {
@@ -251,7 +250,6 @@ var makeProgram = function(variational, doFactors) {
 		};
 		future(function() { branch(startState); });
 		finishAllFutures();
-
 		return globalStore.branches;
 	};
 
@@ -265,7 +263,7 @@ var testRun = function() {
 	var doFactors = true;
 	var generate = makeProgram(variational, doFactors);
 
-	var useSavedParams = true;
+	var useSavedParams = false;
 	var saveParams = false;
 	// var paramFile = 'vpf_experiments/lsystem/saved_params/' + targetName + '.txt';
 	var paramFile = 'vpf_experiments/lsystem/saved_params/' + targetName + '_eubo.txt';
@@ -309,10 +307,9 @@ var testRun = function() {
 		fs.mkdirSync(resultsDir);
 	}
 	var sims = repeat(n, function(i) {
-		var nParticles = 1;
-		// var nParticles = 10;
+		// var nParticles = 1;
+		var nParticles = 300;
 		var ret = sample(ParticleFilter(generate, nParticles));
-		// var ret = sample(MH(generate, 1000));
 		var sim = computeSim(ret);
 		console.log(i + ' | sim: ' + sim);
 		if (i % skip === 0) {
@@ -387,10 +384,11 @@ var serverReponse = function() {
 	// var genFn = makeProgram(true, true);
 	// Variational.loadParams(vparams, 'vpf_experiments/lsystem/saved_params/curl_eubo.txt');
 	var dist = ParticleFilter(genFn, nParticles, true, saveHistory);
+
 	return {
 		targetName: targetName,
 		viewport: viewport,
-		history: particleHistoryUtils.compressAndExtract(dist.particleHistory)
+		history: particleHistoryUtils.compress(dist.particleHistory)
 	};
 }
 

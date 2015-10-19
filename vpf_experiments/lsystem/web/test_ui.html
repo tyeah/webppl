@@ -35,7 +35,7 @@
 					ctx.globalCompositeOperation = 'source-over';
 				}
 				// Draw branches
-				render(canvas, viewport, particle.branches, 0, particle.branches.length, tgtimage === undefined);
+				render.render(canvas, viewport, particle.branches, false, tgtimage === undefined);
 			}
 
 			function showCurrentParticle() {
@@ -52,7 +52,7 @@
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
 					renderParticle(canvas, particle, targetImg);
-					// renderParticle(canvas_small, particle, smallTargetImg);
+					// renderParticle(canvas_small, particle, smallTargetImg)
 					renderParticle(canvas_small, particle);
 					// Save image
 					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -220,10 +220,10 @@
 							{name: 'log_like'},
 							{name: 'log_post'},
 							{name: 'similarity', range: {min: 0, max: 1}},
-							{name: 'active'},
+							{name: 'active'}
 						];
-						propDisplays = {};
 						var currparticle = particleHistory[guistate.generationIndex][guistate.particleIndex];
+						propDisplays = {};
 						function formatname(name, type) {
 							var ret = name.split('_').map(function(word) {
 								return word.charAt(0).toUpperCase() + word.slice(1); // capitalize

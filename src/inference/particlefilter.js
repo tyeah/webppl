@@ -22,10 +22,8 @@ module.exports = function(env) {
     return k(s, newERP);
   }
 
-  function copyParticle(particle, newAncestor) {
+  function copyParticle(particle) {
     return {
-      id: particle.id,
-      ancestor: newAncestor || particle.ancestor,
       continuation: particle.continuation,
       weight: particle.weight,
       value: particle.value,
@@ -34,7 +32,8 @@ module.exports = function(env) {
       trace: particle.trace.slice(),
       logprior: particle.logprior,
       loglike: particle.loglike,
-      logpost: particle.logpost
+      logpost: particle.logpost,
+      id: particle.id,
     };
   }
 
@@ -51,8 +50,6 @@ module.exports = function(env) {
     };
     for (var i = 0; i < numParticles; i++) {
       var particle = {
-        id: this.nextParticleId++,
-        ancestor: undefined,
         continuation: exitK,
         weight: 0,
         score: 0,
@@ -62,7 +59,8 @@ module.exports = function(env) {
         trace: [],
         logprior: 0,
         loglike: 0,
-        logpost: 0
+        logpost: 0,
+        id: this.nextParticleId++,
       };
       this.particles.push(particle);
     }
@@ -186,7 +184,7 @@ module.exports = function(env) {
         var nRetained = Math.floor(w);
         newExpWeights.push(w - nRetained);
         for (var j = 0; j < nRetained; j++) {
-          retainedParticles.push(copyParticle(particle, i));
+          retainedParticles.push(copyParticle(particle));
         }
       }
       // Compute new particles
@@ -195,9 +193,10 @@ module.exports = function(env) {
       var j;
       for (var i = 0; i < numNewParticles; i++) {
         j = erp.multinomialSample(newExpWeights);
-        newParticles.push(copyParticle(this.particles[j], j));
+        newParticles.push(copyParticle(this.particles[j]));
       }
 
+      // Store pre-resample particles to history
       if (this.particleHistory) {
         var proc = this.processHistoryParticle;
         this.particleHistory.push(this.particles.map(function(p) {
@@ -208,6 +207,7 @@ module.exports = function(env) {
       }
       // Particles after update: Retained + new particles
       this.particles = newParticles.concat(retainedParticles);
+      // Story post-resample particles to history
       if (this.particleHistory) {
         var proc = this.processHistoryParticle;
         this.particleHistory.push(this.particles.map(function(p) {
