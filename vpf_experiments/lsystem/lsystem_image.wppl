@@ -25,44 +25,30 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
 
 // var targetName = 'curl';
-// var targetName = 'bifurcate';
+var targetName = 'bifurcate';
 // var targetName = 'a';
-var targetName = 'heart';
+// var targetName = 'heart';
+// var targetName = 'manybranch_3';
 
-var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/training/' + targetName + '.png')
+var targetDB = lsysUtils.newTargetImageDatabase('vpf_experiments/lsystem/targets/training');
+globalStore.target = targetDB.getTargetByName(targetName);
 
-// Compute similarity measure, given an image
-var similarity = function(img) {
-	return img.percentSameBinary(targetImg);
-}
 
-// Baseline similarity value for a blank image
-var baselineSim = function() {
-	var img = lsysUtils.newImageData2D().fillWhite(targetImg.width, targetImg.height);
-	return similarity(img);
-}
-var baseSim = baselineSim();
-
-// Normalize a similarity value against the baseline
-var normSim = function(sim) {
-	return (sim - baseSim) / (1 - baseSim);
-}
-
-// Compute (normalized) similarity for a set of branches
-var canvas = lsysUtils.newCanvas(targetImg.width, targetImg.height);
+// Compute normalized similarity for a set of branches
 var computeSim = function(branches, inInference) {
+	var target = globalStore.target;
 	// If not in inference, just render everything
 	if (!inInference) {
-		lsysUtils.render(canvas, viewport, branches);
+		lsysUtils.render(target.canvas, viewport, branches);
 	// Otherwise, do an incremental render of the last branch
 	} else {
 		if (globalStore.genImg !== undefined) {
-			globalStore.genImg.copyToCanvas(canvas);
+			globalStore.genImg.copyToCanvas(target.canvas);
 		}
-		lsysUtils.render(canvas, viewport, branches, true, globalStore.genImg === undefined);
+		lsysUtils.render(target.canvas, viewport, branches, true, globalStore.genImg === undefined);
 	}
-	globalStore.genImg = lsysUtils.newImageData2D().loadFromCanvas(canvas);
-	return normSim(similarity(globalStore.genImg));
+	globalStore.genImg = lsysUtils.newImageData2D().loadFromCanvas(target.canvas);
+	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
 };
 
 // Basically Gaussian log-likelihood, without the constant factor
@@ -72,7 +58,6 @@ var makescore = function(val, target, tightness) {
 }
 
 var simTightness = 0.02;
-// var simTightness = 0.05;
 var boundsTightness = 0.001;
 var targetFactor = function() {
 	// Similarity factor
@@ -99,17 +84,13 @@ var targetFactor = function() {
 var vparams = Variational.newParams();
 
 
+// setFuturePolicy('deterministic');
+
 
 var makeProgram = function(variational, doFactors) {
 
 	var initialWidth = 0.75;
-	// var widthDecay = 0.9;
-	// var maxDepth = 15;
-	// var minWidthPercent = 0;
-	// var widthDecay = 0.95;
 	var widthDecay = 0.975;
-	var maxDepth = Infinity;
-	var minWidthPercent = 0.2;
 
 	// var _gaussian = gaussian;
 	var _gaussian = !variational ? gaussian :
@@ -216,6 +197,10 @@ var makeProgram = function(variational, doFactors) {
 	};
 
 	var generate = function() {
+		// If target is not fixed, then marginalize over targets
+		if (globalStore.target === undefined) {
+			globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
+		}
 		globalStore.branches = undefined;
 		globalStore.numBranches = 0;
 		globalStore.bbox = box2();

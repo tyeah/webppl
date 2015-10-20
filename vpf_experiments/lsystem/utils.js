@@ -122,6 +122,68 @@ ImageData2D.prototype = {
 };
 
 
+// Similarity function between target image and another image
+function similarity(img, targetImg) {
+	return img.percentSameBinary(targetImg);
+}
+
+// Baseline similarity of a blank image to a target image
+function baselineSimilarity(targetImg) {
+	var w = targetImg.width;
+	var h = targetImg.height;
+	var img = new ImageData2D().fillWhite(w, h);
+	return similarity(img, targetImg);
+}
+
+// Similarity normalized against the baseline
+// 'target' is a target object from the TargetImageDatabase
+function normalizedSimilarity(img, target) {
+	var sim = similarity(img, target.image);
+	return (sim - target.baseline) / (1 - target.baseline);
+}
+
+
+function TargetImageDatabase(directory) {
+	this.targetsByIndex = [];
+	this.targetsByName = {};
+	var filenames = fs.readdirSync(directory);
+	for (var i = 0; i < filenames.length; i++) {
+		var fullname = directory + '/' + filenames[i];
+		var target = {
+			filename: fullname,
+			image: undefined,
+			baseline: undefined,
+			canvas: undefined
+		};
+		this.targetsByIndex.push(target);
+		var shortname = filenames[i].slice(0,-4);	// strip the .png
+		this.targetsByName[shortname] = target;
+	}
+}
+function ensureTargetLoaded(target) {
+	if (target.image === undefined) {
+		target.image = new ImageData2D().loadFromFile(target.filename);
+		target.baseline = baselineSimilarity(target.image);
+		target.canvas = new Canvas(target.image.width, target.image.height);
+	}
+}
+TargetImageDatabase.prototype = {
+	numTargets: function() { return this.targetsByIndex.length; },
+	getTargetByIndex: function(i) {
+		assert(i > 0 && i < this.targetsByIndex.length);
+		var target = this.targetsByIndex[i];
+		ensureTargetLoaded(target);
+		return target;
+	},
+	getTargetByName: function(name) {
+		var target = this.targetsByName[name];
+		assert(target !== undefined);
+		ensureTargetLoaded(target);
+		return target;
+	}
+};
+
+
 function processRetVals_width(vals) {
 	var errs = vals.map(function(v) {
 		var width = v.bbox.size().x;
@@ -136,11 +198,14 @@ function deleteStoredImages(particle) {
 	particle.store.genImg = undefined;
 }
 
+
 module.exports = {
 	render: render,
 	renderOut: renderOut,
 	newImageData2D: function() { return new ImageData2D(); },
 	newCanvas: function(w, h) { return new Canvas(w, h); },
+	newTargetImageDatabase: function(dir) { return new TargetImageDatabase(dir); },
+	normalizedSimilarity: normalizedSimilarity,
 	processRetVals_width: processRetVals_width,
 	deleteStoredImages: deleteStoredImages
 };
