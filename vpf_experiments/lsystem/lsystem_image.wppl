@@ -27,7 +27,7 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 // var targetName = 'curl';
 // var targetName = 'bifurcate';
 // var targetName = 'a';
-var targetName = 'spiral';
+var targetName = 'heart';
 
 var targetImg = lsysUtils.newImageData2D().loadFromFile('vpf_experiments/lsystem/targets/training/' + targetName + '.png')
 
@@ -71,8 +71,8 @@ var makescore = function(val, target, tightness) {
 	return - (diff * diff) / (tightness * tightness);
 }
 
-// var simTightness = 0.01;
-var simTightness = 0.05;
+var simTightness = 0.02;
+// var simTightness = 0.05;
 var boundsTightness = 0.001;
 var targetFactor = function() {
 	// Similarity factor
@@ -86,7 +86,6 @@ var targetFactor = function() {
 	var boundsfx = makescore(extraX, 0, boundsTightness);
 	var boundsfy = makescore(extraY, 0, boundsTightness);
 	var f = simf + boundsfx + boundsfy;
-	// var f = simf;
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
 	} else {
@@ -123,20 +122,6 @@ var makeProgram = function(variational, doFactors) {
 		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
 		Variational.gaussianERP.importanceERP.setParams(params);
 		return sample(Variational.gaussianERP, origprms);
-	};
-
-	// var _uniform = uniform;
-	var _uniform = !variational ? uniform :
-	function(lo, hi) {
-		var addr = currentAddress();
-		var callsite = addr.slice(addr.lastIndexOf('_'));
-		var bnds = [bounds.nonNegative, bounds.nonNegative];
-		var features = globalStore.currFeatures;
-		var origprms = [1, 1];
-		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
-		Variational.betaERP.importanceERP.setParams(params);
-		var t = sample(Variational.betaERP, origprms);
-		return (1-t)*lo + t*hi;
 	};
 
 	// var _flip = flip;
@@ -179,10 +164,10 @@ var makeProgram = function(variational, doFactors) {
 	var branch = function(currState) {
 		setCurrFeatures(currState);
 
+		// Generate new branch
 		var width = widthDecay * currState.width;
 		var length = 2;
 		var newang = currState.angle + _gaussian(0, Math.PI/8);	
-		// var newang = currState.angle + _uniform(-Math.PI/6, Math.PI/6);
 		var newbranch = {
 			start: currState.pos,
 			angle: newang,
@@ -190,6 +175,7 @@ var makeProgram = function(variational, doFactors) {
 			end: currState.pos.clone().add(polar2rect(length, newang))
 		};
 
+		// Update model state
 		globalStore.branches = { branch: newbranch, next: globalStore.branches };
 		globalStore.numBranches = globalStore.numBranches + 1;
 		globalStore.bbox = globalStore.bbox.clone();
@@ -208,28 +194,21 @@ var makeProgram = function(variational, doFactors) {
 
 		// Terminate?
 		future(function() {
-			if (currState.depth < maxDepth && newState.width/initialWidth > minWidthPercent && _flip(0.5)) {
+			var terminateProb = 0.5;
+			if (_flip(terminateProb)) {
+				globalStore.terminated = true;
+			} else {
+				var branchProb = 0.5;
+				// Generate one branch?
 				future(function() {
-					// Continue or fork?
-					if (_flip(0.5)) {
+					if (!globalStore.terminated && _flip(branchProb)) {
 						branch(newState);
-					} else {
-						var branchState1 = {
-							depth: currState.depth + 1,
-							pos: newbranch.end,
-							angle: newbranch.angle - Math.abs(_gaussian(0, Math.PI/6)),
-							// angle: newbranch.angle - _uniform(0, Math.PI/4),
-							width: newbranch.width
-						};
-						branch(branchState1);
-						var branchState2 = {
-							depth: currState.depth + 1,
-							pos: newbranch.end,
-							angle: newbranch.angle + Math.abs(_gaussian(0, Math.PI/6)),
-							// angle: newbranch.angle + _uniform(0, Math.PI/4),
-							width: newbranch.width
-						};
-						branch(branchState2);
+						// Generate another branch?
+						future(function() {
+							if (!globalStore.terminated && _flip(branchProb)) {
+								branch(newState);
+							}
+						});
 					}
 				});
 			}
@@ -244,7 +223,6 @@ var makeProgram = function(variational, doFactors) {
 		var startState = {
 			depth: 0,
 			pos: vec2(0, 0),
-			// angle: -Math.PI/2,
 			angle: _gaussian(-Math.PI/2, Math.PI/6),
 			width: initialWidth
 		};
