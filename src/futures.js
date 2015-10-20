@@ -22,18 +22,20 @@ module.exports = function(env) {
 		return fn(s, k, a);
 	}
 
-	// We default to using stochastic futures
-	var _future = sfuture;
 	function future(s, k, a, fn) {
-		return _future(s, k, a, fn);
+		// We default to using stochastic futures
+		if (s.__futureFn === undefined) {
+			s.__futureFn = sfuture;
+		}
+		return s.__futureFn(s, k, a, fn);
 	}
 
 	// Switch what type of future is being used
 	function setFuturePolicy(s, k, a, policyname) {
 		if (policyname == 'stochastic') {
-			_future = sfuture;
+			s.__futureFn = sfuture;
 		} else if (policyname == 'deterministic') {
-			_future = dfuture;
+			s.__futureFn = dfuture;
 		} else
 			throw 'Unknown future policy ' + policyname;
 		return k(s);
