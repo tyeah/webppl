@@ -29,6 +29,7 @@ var targetName = 'bifurcate';
 // var targetName = 'a';
 // var targetName = 'heart';
 // var targetName = 'manybranch_3';
+// var targetName = 'spiral';
 
 var targetDB = lsysUtils.newTargetImageDatabase('vpf_experiments/lsystem/targets/training');
 globalStore.target = targetDB.getTargetByName(targetName);
@@ -58,6 +59,7 @@ var makescore = function(val, target, tightness) {
 }
 
 var simTightness = 0.02;
+// var simTightness = 0.05;
 var boundsTightness = 0.001;
 var targetFactor = function() {
 	// Similarity factor
@@ -84,7 +86,7 @@ var targetFactor = function() {
 var vparams = Variational.newParams();
 
 
-// setFuturePolicy('deterministic');
+// setFuturePolicy('depthfirst');
 // setFuturePolicy('stochastic');
 
 
@@ -92,6 +94,7 @@ var makeProgram = function(variational, doFactors) {
 
 	var initialWidth = 0.75;
 	var widthDecay = 0.975;
+	var minWidthPercent = 0.2;
 
 	// var _gaussian = gaussian;
 	var _gaussian = !variational ? gaussian :
@@ -180,14 +183,14 @@ var makeProgram = function(variational, doFactors) {
 			if (_flip(terminateProb)) {
 				globalStore.terminated = true;
 			} else {
-				var branchProb = 0.5;
-				// Generate one branch?
+				// Generate no further branches w/ prob 1/3
+				// Generate one further branch w/ prob 1/3
+				// Generate two further branches w/ prob 1/3
 				future(function() {
-					if (!globalStore.terminated && _flip(branchProb)) {
+					if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && _flip(0.66)) {
 						branch(newState);
-						// Generate another branch?
 						future(function() {
-							if (!globalStore.terminated && _flip(branchProb)) {
+							if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && _flip(0.5)) {
 								branch(newState);
 							}
 						});
@@ -344,6 +347,7 @@ var serverReponse = function() {
 	var saveHistory = lsysUtils.deleteStoredImages;
 	// var saveHistory = false;
 	var nParticles = 300;
+	// var nParticles = 3000;
 	var genFn = makeProgram(false, true);
 	// var genFn = makeProgram(true, true);
 	// Variational.loadParams(vparams, 'vpf_experiments/lsystem/saved_params/curl_eubo.txt');

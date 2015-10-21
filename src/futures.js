@@ -22,25 +22,26 @@ module.exports = function(env) {
 			future: function(s, k, a, fn) {
 				return fn(s, k, a);
 			},
-			finishAllFutures: function(s, k, a) {
+			finishAllFutures: function(s, k) {
 				return k(s);
 			}
 		},
-		// Deterministic policy: Store futures in a stack, and pull
-		//    futures off of that stack in a deterministic LIFO order.
-		// (This should be semantically equivalent to the immediate policy)
-		deterministic: {
+		// Depth-first policy: Store futures in a stack, and pull
+		//    futures off of that stack in LIFO order.
+		// (This is similar to the immediate policy, except that it
+		//    traverses children last-to-first instead of first-to-last)
+		depthfirst: {
 			future: makeFuture,
-			finishAllFutures: function(s, k, a) {
+			finishAllFutures: function(s, k) {
 				if (s.__futures !== undefined && s.__futures.length > 0) {
 					// Pop off the top
-					var fut = s.__futures[s.__futures.length - 1];
-					s.__futures = s.__futures.slice(0, s.__futures.length - 1);
+					var i = s.__futures.length - 1;
+					var fut = s.__futures[i];
+					s.__futures = s.__futures.slice(0, i);
 					return fut(s, function(s) {
-						return policies.deterministic.finishAllFutures(s, k, a);
+						return policies.depthfirst.finishAllFutures(s, k);
 					});
-				}
-				else return k(s);
+				} else return k(s);
 			}
 		},
 		// Stochastic policy: Store futures in a list, and pull
@@ -55,11 +56,10 @@ module.exports = function(env) {
 						s.__futures = s.__futures.slice();
 						s.__futures.splice(i, 1);
 						return fut(s, function(s) {
-							return policies.stochastic.finishAllFutures(s, k, a);
+							return policies.stochastic.finishAllFutures(s, k, a.concat('_ff'));
 						});
 					}, a, randomIntegerERP, [s.__futures.length]);
-				}
-				else return k(s);
+				} else return k(s);
 			}
 		}
 	}
