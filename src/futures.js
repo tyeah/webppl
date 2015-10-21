@@ -26,8 +26,8 @@ module.exports = function(env) {
 				return k(s);
 			}
 		},
-		// Depth-first policy: Store futures in a stack, and pull
-		//    futures off of that stack in LIFO order.
+		// Depth-first policy: Store futures in a list, and pull
+		//    futures off of that list in LIFO order.
 		// (This is similar to the immediate policy, except that it
 		//    traverses children last-to-first instead of first-to-last)
 		depthfirst: {
@@ -38,6 +38,22 @@ module.exports = function(env) {
 					var i = s.__futures.length - 1;
 					var fut = s.__futures[i];
 					s.__futures = s.__futures.slice(0, i);
+					return fut(s, function(s) {
+						return policies.depthfirst.finishAllFutures(s, k);
+					});
+				} else return k(s);
+			}
+		},
+		// Breadth-first policy: Store futures in a list, and pull
+		//    futures off of that list in FIFO order.
+		breadthfirst: {
+			future: makeFuture,
+			finishAllFutures: function(s, k) {
+				if (s.__futures !== undefined && s.__futures.length > 0) {
+					// Pop off the front
+					var fut = s.__futures[0];
+					s.__futures = s.__futures.slice();
+					s.__futures.splice(0, 1);
 					return fut(s, function(s) {
 						return policies.depthfirst.finishAllFutures(s, k);
 					});
