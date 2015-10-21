@@ -11,7 +11,7 @@ module.exports = function(env) {
 		var future = function(s, k) {
 			return fn(s, k, a);
 		}
-		// future.address = a;
+		future.depth = a.split('_').length;
 		// Append this future to the global list
 		s.__futures = s.__futures.concat([future]);
 		return k(s);
@@ -20,8 +20,8 @@ module.exports = function(env) {
 	function makeFinishAllFutures(selectionFn) {
 		function finishAllFutures(s, k, a) {
 			if (s.__futures !== undefined && s.__futures.length > 0) {
-				return selectionFn(s, function(s, i) {
-					var fut = s.__futures[i];
+				return selectionFn(s, function(s, fut) {
+					var i = s.__futures.indexOf(fut);
 					s.__futures = s.__futures.slice();
 					s.__futures.splice(i, 1);
 					return fut(s, function(s) {
@@ -50,7 +50,7 @@ module.exports = function(env) {
 		lifo: {
 			future: makeFuture,
 			finishAllFutures: makeFinishAllFutures(function(s, k, a) {
-				return k(s, s.__futures.length - 1);
+				return k(s, s.__futures[s.__futures.length - 1]);
 			})
 		},
 		// FIFO policy: Store futures in a list, and pull
@@ -58,7 +58,7 @@ module.exports = function(env) {
 		fifo: {
 			future: makeFuture,
 			finishAllFutures: makeFinishAllFutures(function(s, k, a) {
-				return k(s, 0);
+				return k(s, s.__futures[0]);
 			})
 		},
 		// Uniform-from-all policy: Store futures in a list, and pull
@@ -66,7 +66,48 @@ module.exports = function(env) {
 		uniformFromAll: {
 			future: makeFuture,
 			finishAllFutures: makeFinishAllFutures(function(s, k, a) {
-				return sample(s, k, a.concat('_f2'), randomIntegerERP, [s.__futures.length]);
+				return sample(s, function(s, i) {
+					return k(s, s.__futures[i]);
+				}, a.concat('_f2'), randomIntegerERP, [s.__futures.length]);
+			})
+		},
+		// Uniform-from-deepest policy: Select futures in random order, but only
+		//    choose from those futures with the longest address.
+		// (This is somewhat sensitive to how the program is written, i.e. `superfluous'
+		//    mutual recursion might make something look longer than it really should be)
+		uniformFromDeepest: {
+			future: makeFuture,
+			finishAllFutures: makeFinishAllFutures(function(s, k, a) {
+				var maxDepth = 0;
+				for (var i = 0; i < s.__futures.length; i++) {
+					maxDepth = Math.max(s.__futures[i].depth, maxDepth);
+				}
+				var deepest = s.__futures.filter(function(f) { return f.depth === maxDepth; });
+				return sample(s, function(s, i) {
+					return k(s, deepest[i]);
+				}, a.concat('_f3'), randomIntegerERP, [deepest.length]);
+			})
+		},
+		// Depth-weighted policy: select randomly from all futures with probability
+		//    proportional to address length
+		depthWeighted: {
+			future: makeFuture,
+			finishAllFutures: makeFinishAllFutures(function(s, k, a) {
+				var minDepth = Infinity;
+				for (var i = 0; i < s.__futures.length; i++) {
+					minDepth = Math.min(minDepth, s.__futures[i].depth);
+				}
+				var unnormProbs = s.__futures.map(function(f) {
+					var normDepth = f.depth - minDepth + 1;
+					// return normDepth;
+					// return normDepth*normDepth;
+					// return Math.pow(2, normDepth);
+					return Math.exp(normDepth);
+				});
+				// console.log(unnormProbs);
+				return sample(s, function(s, i) {
+					return k(s, s.__futures[i]);
+				}, a.concat('_f4'), discreteERP, unnormProbs);
 			})
 		}
 	}

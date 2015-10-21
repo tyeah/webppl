@@ -25,10 +25,12 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
 
 // var targetName = 'curl';
-var targetName = 'bifurcate';
+// var targetName = 'bifurcate';
 // var targetName = 'a';
 // var targetName = 'heart';
 // var targetName = 'manybranch_3';
+// var targetName = 'manybranch_4';
+var targetName = 'manybranch_7';
 // var targetName = 'spiral';
 
 var targetDB = lsysUtils.newTargetImageDatabase('vpf_experiments/lsystem/targets/training');
@@ -89,6 +91,8 @@ var vparams = Variational.newParams();
 // setFuturePolicy('lifo');
 // setFuturePolicy('fifo');
 // setFuturePolicy('uniformFromAll');
+setFuturePolicy('uniformFromDeepest');
+// setFuturePolicy('depthWeighted');
 
 
 var makeProgram = function(variational, doFactors) {
