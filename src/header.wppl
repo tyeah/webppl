@@ -9,7 +9,7 @@ var randomInteger = function(n) {
 };
 
 var discrete = function(ps) {
-  return sample(discreteERP, [ps]);
+  return sample(discreteERP, ps);
 };
 
 var categorical = function(ps, vs) {
