@@ -85,6 +85,7 @@ var vparams = Variational.newParams();
 
 
 // setFuturePolicy('deterministic');
+// setFuturePolicy('stochastic');
 
 
 var makeProgram = function(variational, doFactors) {
