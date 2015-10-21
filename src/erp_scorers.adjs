@@ -14,12 +14,6 @@ function flipScore(params, val) {
   return val ? Math.log(weight) : Math.log(1 - weight);
 }
 
-function flipEntropy(params) {
-  var p = params[0];
-  var q = 1 - p;
-  return -q*Math.log(q) - p*Math.log(p);
-}
-
 function randomIntegerScore(params, val) {
   var stop = params[0];
   var inSupport = (val == Math.floor(val)) && (0 <= val) && (val < stop);
@@ -39,7 +33,7 @@ function sum(xs) {
   } else {
     var total = 0;
     var n = xs.length;
-    while (n--) total = total + xs[n];
+    for (var i = 0; i < n; i++) total = total + xs[i];
     return total;
   }
 }
@@ -129,17 +123,11 @@ function digamma(x) {
   }
 }
 
-function betaEntropy(params) {
-  var a = params[0];
-  var b = params[1];
-  return logBeta(a, b) - (a - 1)*digamma(a) - (b - 1)*digamma(b) +
-    (a + b - 2)*digamma(a + b);
-}
-
 function fact(x) {
   var t = 1;
   while (x > 1) {
-    t = t * (x--);
+    t = t * x;
+    x = x - 1;
   }
   return t;
 }
@@ -230,14 +218,12 @@ function dirichletScore(params, val) {
 module.exports = {
 	uniform: uniformScore,
 	flip: flipScore,
-  flipEntropy: flipEntropy,
 	randomInteger: randomIntegerScore,
 	gaussian: gaussianScore,
 	discrete: discreteScore,
 	gamma: gammaScore,
 	exponential: exponentialScore,
 	beta: betaScore,
-  betaEntropy: betaEntropy,
 	binomial: binomialScore,
 	poisson: poissonScore,
 	dirichlet: dirichletScore		

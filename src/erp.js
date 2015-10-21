@@ -217,12 +217,12 @@ var multivariateGaussianERP = new ERP({
 
 var discreteERP = new ERP({
   sample: function(params) {
-    return multinomialSample(params[0]);
+    return multinomialSample(params);
   },
   score: scorers.discrete,
   adscore: adscorers.discrete,
   support: function(params) {
-    return _.range(params[0].length);
+    return _.range(params.length);
   }
 });
 
