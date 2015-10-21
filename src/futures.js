@@ -11,9 +11,26 @@ module.exports = function(env) {
 		var future = function(s, k) {
 			return fn(s, k, a);
 		}
+		// future.address = a;
 		// Append this future to the global list
 		s.__futures = s.__futures.concat([future]);
 		return k(s);
+	}
+
+	function makeFinishAllFutures(selectionFn) {
+		function finishAllFutures(s, k, a) {
+			if (s.__futures !== undefined && s.__futures.length > 0) {
+				return selectionFn(s, function(s, i) {
+					var fut = s.__futures[i];
+					s.__futures = s.__futures.slice();
+					s.__futures.splice(i, 1);
+					return fut(s, function(s) {
+						return finishAllFutures(s, k, a.concat('_f0'));
+					});
+				}, a.concat('_f1'));
+			} else return k(s);
+		}
+		return finishAllFutures;
 	}
 
 	var policies = {
@@ -26,57 +43,31 @@ module.exports = function(env) {
 				return k(s);
 			}
 		},
-		// Depth-first policy: Store futures in a list, and pull
+		// LIFO policy: Store futures in a list, and pull
 		//    futures off of that list in LIFO order.
 		// (This is similar to the immediate policy, except that it
 		//    traverses children last-to-first instead of first-to-last)
-		depthfirst: {
+		lifo: {
 			future: makeFuture,
-			finishAllFutures: function(s, k) {
-				if (s.__futures !== undefined && s.__futures.length > 0) {
-					// Pop off the top
-					var i = s.__futures.length - 1;
-					var fut = s.__futures[i];
-					s.__futures = s.__futures.slice(0, i);
-					return fut(s, function(s) {
-						return policies.depthfirst.finishAllFutures(s, k);
-					});
-				} else return k(s);
-			}
+			finishAllFutures: makeFinishAllFutures(function(s, k, a) {
+				return k(s, s.__futures.length - 1);
+			})
 		},
-		// Breadth-first policy: Store futures in a list, and pull
+		// FIFO policy: Store futures in a list, and pull
 		//    futures off of that list in FIFO order.
-		breadthfirst: {
+		fifo: {
 			future: makeFuture,
-			finishAllFutures: function(s, k) {
-				if (s.__futures !== undefined && s.__futures.length > 0) {
-					// Pop off the front
-					var fut = s.__futures[0];
-					s.__futures = s.__futures.slice();
-					s.__futures.splice(0, 1);
-					return fut(s, function(s) {
-						return policies.depthfirst.finishAllFutures(s, k);
-					});
-				} else return k(s);
-			}
+			finishAllFutures: makeFinishAllFutures(function(s, k, a) {
+				return k(s, 0);
+			})
 		},
-		// Stochastic policy: Store futures in a list, and pull
+		// Uniform-from-all policy: Store futures in a list, and pull
 		//    futures out of that list in random order.
-		stochastic: {
+		uniformFromAll: {
 			future: makeFuture,
-			finishAllFutures: function(s, k, a) {
-				if (s.__futures !== undefined && s.__futures.length > 0) {
-					// Pick a random future
-					return sample(s, function(s, i) {
-						var fut = s.__futures[i];
-						s.__futures = s.__futures.slice();
-						s.__futures.splice(i, 1);
-						return fut(s, function(s) {
-							return policies.stochastic.finishAllFutures(s, k, a.concat('_ff'));
-						});
-					}, a, randomIntegerERP, [s.__futures.length]);
-				} else return k(s);
-			}
+			finishAllFutures: makeFinishAllFutures(function(s, k, a) {
+				return sample(s, k, a.concat('_f2'), randomIntegerERP, [s.__futures.length]);
+			})
 		}
 	}
 
