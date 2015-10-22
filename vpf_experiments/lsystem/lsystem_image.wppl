@@ -25,7 +25,7 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
 
 // var targetName = 'curl';
-// var targetName = 'bifurcate';
+var targetName = 'bifurcate';
 // var targetName = 'a';
 // var targetName = 'heart';
 // var targetName = 'manybranch_3';
@@ -33,7 +33,7 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 // var targetName = 'manybranch_7';
 // var targetName = 'snake_3';
 // var targetName = 'spiral';
-var targetName = 't';
+// var targetName = 't';
 
 var targetDB = lsysUtils.newTargetImageDatabase('vpf_experiments/lsystem/targets/training');
 globalStore.target = targetDB.getTargetByName(targetName);
@@ -63,7 +63,6 @@ var makescore = function(val, target, tightness) {
 }
 
 var simTightness = 0.02;
-// var simTightness = 0.05;
 var boundsTightness = 0.001;
 var availableFuturesWeight = 25;
 var targetFactor = function() {
@@ -77,12 +76,12 @@ var targetFactor = function() {
 	var extraY = (Math.max(viewport.ymin - bbox.min.y, 0) + Math.max(bbox.max.y - viewport.ymax, 0)) / (viewport.ymax - viewport.ymin);
 	var boundsfx = makescore(extraX, 0, boundsTightness);
 	var boundsfy = makescore(extraY, 0, boundsTightness);
-	// var f = simf + boundsfx + boundsfy;
-	////
-	// More available futures factor
-	var fprime = simf + boundsfx + boundsfy;
-	var f = fprime + availableFuturesWeight*availableFuturesScore();
-	////
+	var f = simf + boundsfx + boundsfy;
+	// ////
+	// // More available futures factor
+	// var fprime = simf + boundsfx + boundsfy;
+	// var f = fprime + availableFuturesWeight*availableFuturesScore();
+	// ////
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
 	} else {
@@ -98,8 +97,8 @@ var vparams = Variational.newParams();
 
 // setFuturePolicy('lifo');
 // setFuturePolicy('fifo');
-setFuturePolicy('uniformFromAll');
-// setFuturePolicy('uniformFromDeepest');
+// setFuturePolicy('uniformFromAll');
+setFuturePolicy('uniformFromDeepest');
 // setFuturePolicy('depthWeighted');
 
 
@@ -109,7 +108,6 @@ var makeProgram = function(variational, doFactors) {
 	var widthDecay = 0.975;
 	var minWidthPercent = 0.2;
 
-	// var _gaussian = gaussian;
 	var _gaussian = !variational ? gaussian :
 	function(mu, sigma) {
 		var addr = currentAddress();
@@ -122,7 +120,6 @@ var makeProgram = function(variational, doFactors) {
 		return sample(Variational.gaussianERP, origprms);
 	};
 
-	// var _flip = flip;
 	var _flip = !variational ? flip :
 	function(p) {
 		var addr = currentAddress();
@@ -160,7 +157,7 @@ var makeProgram = function(variational, doFactors) {
 	};
 
 	var branch = function(currState) {
-		setCurrFeatures(currState);
+		if (variational) setCurrFeatures(currState);
 
 		// Generate new branch
 		var width = widthDecay * currState.width;
@@ -209,16 +206,6 @@ var makeProgram = function(variational, doFactors) {
 						});
 					}
 				});
-				// future(function() {
-				// 	if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && _flip(0.5)) {
-				// 		branch(newState);
-				// 	}
-				// });
-				// future(function() {
-				// 	if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && _flip(0.5)) {
-				// 		branch(newState);
-				// 	}
-				// });
 			}
 		});
 	};
@@ -321,8 +308,13 @@ var generateTrainingData = function(name) {
 	var filename = dataDir + '/' + name + '.txt';
 	var genFn = makeProgram(false, true);
 	var genData = function(counter) {
-		var trace = ParticleFilter(genFn, 300).trace;
-		fs.appendFileSync(filename, JSON.stringify(trace) + '\n');
+		// Generate for a random target, recording the target index as the first
+		//    random choice in the trace so that playback can work correctly.
+		var targetIdx = randomInteger(targetDB.numTargets()); 
+		globalStore.target = targetDB.getTargetByIndex(targetIdx);
+		var MAPtrace = ParticleFilter(genFn, 300).MAPparticle.trace;
+		var outTrace = [targetIdx].concat(MAPtrace);
+		fs.appendFileSync(filename, JSON.stringify(outTrace) + '\n');
 		console.log('Generated trace ' + counter);
 		genData(counter + 1);
 	}
@@ -386,9 +378,9 @@ var serverReponse = function() {
 
 
 // testRun();
-// generateTrainingData(targetName);
+generateTrainingData('allTargets_uniformFromDeepest');
 // compareVariationalToPrior('vpf_experiments/lsystem/saved_params/curl_eubo.txt');
-serverReponse();
+// serverReponse();
 
 
 

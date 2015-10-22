@@ -267,9 +267,18 @@ module.exports = function(env) {
     dist.normalizationConstant = this.particles[0].weight;
 
     ////
-    var randi = Math.floor(Math.random() * this.particles.length);
-    dist.trace = this.particles[randi].trace;
-    // dist.value = this.particles[randi].value;
+    // Save the MAP particle
+    var bestLP = -Infinity;
+    var besti = -1;
+    for (var i = 0; i < this.particles.length; i++) {
+      var p = this.particles[i];
+      if (p.logpost > bestLP) {
+        bestLP = p.logpost;
+        besti = i;
+      }
+    }
+    dist.MAPparticle = this.particles[besti];
+    // Save the particle history
     if (this.particleHistory) {
       dist.particleHistory = this.particleHistory;
     } else {
