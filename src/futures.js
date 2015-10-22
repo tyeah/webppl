@@ -156,16 +156,10 @@ module.exports = function(env) {
 			var maxscore = 0;
 			for (var i = 0; i < s.__futures.length; i++) {
 				var normDepth = s.__futures[i].depth - s.__minFutureDepth;
-				// var score = 1 + 1 / (1 + normDepth);
 				var score = 1 / (1 + normDepth);
 				sumscore += score;
-				maxscore = Math.max(maxscore, score);
 			}
-			var avgscore = s.__futures.length > 0 ? sumscore / s.__futures.length : 0;
-			finalscore = sumscore;	// Sum
-			// finalscore = s.__futures.length > 0 ? sumscore / s.__futures.length : sumscore;		// Average
-			// finalscore = maxscore;		// Max
-			// finalscore = s.__futures.length * maxscore; 		// Number weighted by max
+			finalscore = sumscore;
 		}
 		return k(s, finalscore);
 	}
