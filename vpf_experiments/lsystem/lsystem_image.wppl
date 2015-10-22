@@ -32,7 +32,8 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 // var targetName = 'manybranch_4';
 // var targetName = 'manybranch_7';
 // var targetName = 'snake_3';
-var targetName = 'spiral';
+// var targetName = 'spiral';
+var targetName = 't';
 
 var targetDB = lsysUtils.newTargetImageDatabase('vpf_experiments/lsystem/targets/training');
 globalStore.target = targetDB.getTargetByName(targetName);
@@ -64,6 +65,7 @@ var makescore = function(val, target, tightness) {
 var simTightness = 0.02;
 // var simTightness = 0.05;
 var boundsTightness = 0.001;
+var availableFuturesWeight = 25;
 var targetFactor = function() {
 	// Similarity factor
 	var sim = computeSim(globalStore.branches, true);
@@ -77,9 +79,9 @@ var targetFactor = function() {
 	var boundsfy = makescore(extraY, 0, boundsTightness);
 	// var f = simf + boundsfx + boundsfy;
 	////
-	// TEST: More available futures factor
+	// More available futures factor
 	var fprime = simf + boundsfx + boundsfy;
-	var f = fprime + 20*availableFuturesScore();
+	var f = fprime + availableFuturesWeight*availableFuturesScore();
 	////
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
