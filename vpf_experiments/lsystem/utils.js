@@ -170,7 +170,7 @@ function ensureTargetLoaded(target) {
 TargetImageDatabase.prototype = {
 	numTargets: function() { return this.targetsByIndex.length; },
 	getTargetByIndex: function(i) {
-		assert(i > 0 && i < this.targetsByIndex.length);
+		assert(i >= 0 && i < this.targetsByIndex.length);
 		var target = this.targetsByIndex[i];
 		ensureTargetLoaded(target);
 		return target;
