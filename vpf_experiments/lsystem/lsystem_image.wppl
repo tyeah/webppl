@@ -300,6 +300,7 @@ var testRun = function() {
 
 
 var generateTrainingData = function(name) {
+	var present = { present: require.call(null, 'present') };	// For timing
 	var dataDir = 'vpf_experiments/lsystem/data';
 	var fs = require.call(null, 'fs');
 	if (!fs.existsSync(dataDir)) {
@@ -307,6 +308,7 @@ var generateTrainingData = function(name) {
 	}
 	var filename = dataDir + '/' + name + '.txt';
 	var genFn = makeProgram(false, true);
+	var t0 = present.present();
 	var genData = function(counter) {
 		// Generate for a random target, recording the target index as the first
 		//    random choice in the trace so that playback can work correctly.
@@ -315,10 +317,12 @@ var generateTrainingData = function(name) {
 		var MAPtrace = ParticleFilter(genFn, 300).MAPparticle.trace;
 		var outTrace = [targetIdx].concat(MAPtrace);
 		fs.appendFileSync(filename, JSON.stringify(outTrace) + '\n');
-		console.log('Generated trace ' + counter);
+		var t = present.present();
+		var rate = counter / ((t - t0)/60000);
+		console.log('Generated trace ' + counter + ' (curr avg rate: ' + rate + ' per min)');
 		genData(counter + 1);
 	}
-	genData(0);
+	genData(1);
 };
 
 
