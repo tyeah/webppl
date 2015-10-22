@@ -136,10 +136,45 @@ module.exports = function(env) {
 		return s.__futurePolicy.finishAllFutures(s, k, a);
 	}
 
+	// Compute a score based on how many active futures are available
+	//    and how deep they are (a proxy for how many delayed random
+	//    choices are available to us).
+	function availableFuturesScore(s, k, a) {
+		// return k(s, s.__futures ? s.__futures.length : 0);
+		// return k(s, s.__futures && s.__futures.length > 0 ? Math.log(s.__futures.length) : 0);
+
+		var finalscore;
+		if (s.__futures) {
+			// Track the minimum depth ever seen)
+			if (s.__minFutureDepth === undefined) {
+				s.__minFutureDepth = Infinity;
+			}
+			for (var i = 0; i < s.__futures.length; i++) {
+				s.__minFutureDepth = Math.min(s.__minFutureDepth, s.__futures[i].depth);
+			}
+			var sumscore = 0;
+			var maxscore = 0;
+			for (var i = 0; i < s.__futures.length; i++) {
+				var normDepth = s.__futures[i].depth - s.__minFutureDepth;
+				// var score = 1 + 1 / (1 + normDepth);
+				var score = 1 / (1 + normDepth);
+				sumscore += score;
+				maxscore = Math.max(maxscore, score);
+			}
+			var avgscore = s.__futures.length > 0 ? sumscore / s.__futures.length : 0;
+			finalscore = sumscore;	// Sum
+			// finalscore = s.__futures.length > 0 ? sumscore / s.__futures.length : sumscore;		// Average
+			// finalscore = maxscore;		// Max
+			// finalscore = s.__futures.length * maxscore; 		// Number weighted by max
+		}
+		return k(s, finalscore);
+	}
+
 	return {
 		setFuturePolicy: setFuturePolicy,
 		future: future,
-		finishAllFutures: finishAllFutures
+		finishAllFutures: finishAllFutures,
+		availableFuturesScore: availableFuturesScore
 	}
 }
 

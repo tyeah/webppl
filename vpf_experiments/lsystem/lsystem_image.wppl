@@ -30,8 +30,9 @@ var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 // var targetName = 'heart';
 // var targetName = 'manybranch_3';
 // var targetName = 'manybranch_4';
-var targetName = 'manybranch_7';
-// var targetName = 'spiral';
+// var targetName = 'manybranch_7';
+// var targetName = 'snake_3';
+var targetName = 'spiral';
 
 var targetDB = lsysUtils.newTargetImageDatabase('vpf_experiments/lsystem/targets/training');
 globalStore.target = targetDB.getTargetByName(targetName);
@@ -74,7 +75,12 @@ var targetFactor = function() {
 	var extraY = (Math.max(viewport.ymin - bbox.min.y, 0) + Math.max(bbox.max.y - viewport.ymax, 0)) / (viewport.ymax - viewport.ymin);
 	var boundsfx = makescore(extraX, 0, boundsTightness);
 	var boundsfy = makescore(extraY, 0, boundsTightness);
-	var f = simf + boundsfx + boundsfy;
+	// var f = simf + boundsfx + boundsfy;
+	////
+	// TEST: More available futures factor
+	var fprime = simf + boundsfx + boundsfy;
+	var f = fprime + 20*availableFuturesScore();
+	////
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
 	} else {
@@ -90,8 +96,8 @@ var vparams = Variational.newParams();
 
 // setFuturePolicy('lifo');
 // setFuturePolicy('fifo');
-// setFuturePolicy('uniformFromAll');
-setFuturePolicy('uniformFromDeepest');
+setFuturePolicy('uniformFromAll');
+// setFuturePolicy('uniformFromDeepest');
 // setFuturePolicy('depthWeighted');
 
 
