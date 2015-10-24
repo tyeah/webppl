@@ -227,6 +227,7 @@ module.exports = function(env) {
   ParticleFilter.prototype.exit = function(s, retval) {
     this.currentParticle().value = retval;
     this.currentParticle().active = false;
+    this.currentParticle().id = this.nextParticleId++;
     // Wait for all particles to reach exit before computing
     // marginal distribution from particles
     var i = this.nextActiveParticleIndex();
@@ -281,6 +282,7 @@ module.exports = function(env) {
     // Save the particle history
     if (this.particleHistory) {
       dist.particleHistory = this.particleHistory;
+      dist.particleHistory.push(this.particles);
     } else {
       dist.particleHistory = [this.particles];
     }
