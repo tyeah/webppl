@@ -4,6 +4,10 @@ var lsysUtils = require.call(null, 'vpf_experiments/lsystem/utils.js');
 var bounds = require.call(null, 'src/bounds');
 var utils = require.call(null, 'vpf_experiments/utils.js');
 
+
+// ----------------------------------------------------------------------------
+
+
 var vec2 = function(x, y) {
 	var v = Object.create(THREE.Vector2.prototype);
 	THREE.Vector2.call(v, x, y);
@@ -21,22 +25,23 @@ var polar2rect = function(r, theta) {
 }
 
 
+// ----------------------------------------------------------------------------
+
+
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-
-// var targetName = 'curl';
-var targetName = 'bifurcate';
-// var targetName = 'a';
-// var targetName = 'heart';
-// var targetName = 'manybranch_3';
-// var targetName = 'manybranch_4';
-// var targetName = 'manybranch_7';
-// var targetName = 'snake_3';
-// var targetName = 'spiral';
-// var targetName = 't';
-
 var targetDB = lsysUtils.newTargetImageDatabase('vpf_experiments/lsystem/targets/training');
-globalStore.target = targetDB.getTargetByName(targetName);
+
+// var futurePolicy = 'immediate';
+// var futurePolicy = 'lifo';
+// var futurePolicy = 'fifo';
+// var futurePolicy = 'uniformFromAll';
+var futurePolicy = 'uniformFromDeepest';
+// var futurePolicy = 'depthWeighted';
+setFuturePolicy(futurePolicy);
+
+
+// ----------------------------------------------------------------------------
 
 
 // Compute normalized similarity for a set of branches
@@ -91,15 +96,10 @@ var targetFactor = function() {
 };
 
 
+// ----------------------------------------------------------------------------
+
 
 var vparams = Variational.newParams();
-
-
-// setFuturePolicy('lifo');
-// setFuturePolicy('fifo');
-// setFuturePolicy('uniformFromAll');
-setFuturePolicy('uniformFromDeepest');
-// setFuturePolicy('depthWeighted');
 
 
 var makeProgram = function(variational, doFactors) {
@@ -138,7 +138,6 @@ var makeProgram = function(variational, doFactors) {
 		// Fuzz prevents values from normalizing to zero and causing zero derivatives.
 		// Also might make learning a bit more robust(?)
 		return (2 * (x - lo) / (hi - lo)) - 1 + gaussianERP.sample(fuzz);
-		// return (x - lo) / (hi - lo) + gaussianERP.sample(fuzz);
 	};
 	var TWOPI = 2*Math.PI;
 	var normang = function(theta) {
@@ -153,6 +152,8 @@ var makeProgram = function(variational, doFactors) {
 		var y = normalize(currState.pos.y, viewport.ymin, viewport.ymax);
 		var depth = normalize(currState.depth, 0, 5);
 		var ang = normalize(normang(currState.angle), 0, TWOPI);
+		// var numBranches = normalize(globalStore.numBranches, 0, 200);
+		// var currSim = globalStore.sim;
 		globalStore.currFeatures = [x, y, depth, ang];
 	};
 
@@ -203,8 +204,10 @@ var makeProgram = function(variational, doFactors) {
 							if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && _flip(0.5)) {
 								branch(newState);
 							}
+							// else factor(0);
 						});
 					}
+					// else factor(0);
 				});
 			}
 		});
@@ -234,68 +237,30 @@ var makeProgram = function(variational, doFactors) {
 }
 
 
-var testRun = function() {
+// ----------------------------------------------------------------------------
 
-	var variational = false;
-	var doFactors = true;
-	var generate = makeProgram(variational, doFactors);
 
-	var useSavedParams = false;
-	var saveParams = false;
-	// var paramFile = 'vpf_experiments/lsystem/saved_params/' + targetName + '.txt';
-	var paramFile = 'vpf_experiments/lsystem/saved_params/' + targetName + '_eubo.txt';
-
-	if (variational) {
-		if (!useSavedParams) {
-			Variational(generate, vparams, {
-				numParticles: 100,
-				maxNumFlights: 1000,
-				// convergeEps: 0.1,
-				convergeEps: 0.01,
-				adagradInitLearnRate: 0.25,
-				// adagradInitLearnRate: 0.1,
-				// adagradInitLearnRate: 0.05,
-
-				// gradientEstimator: 'ELBO',
-				gradientEstimator: 'EUBO',
-				exampleTraces: utils.loadTraces('vpf_experiments/lsystem/data/' + targetName + '.txt'),
-
-				verbosity: {
-					flightNum: true,
-					scoreDiff: true,
-					endStatus: true
-				}
-			});
-			if (saveParams) {
-				Variational.saveParams(vparams, paramFile);
-			}
-		} else {
-			Variational.loadParams(vparams, paramFile);
+var train = function(opts) {
+	var genFn = makeProgram(true, opts.method !== 'EUBO');	// Don't need factors at all for EUBO
+	Variational(genFn, vparams, {
+		numParticles: 100,
+		maxNumFlights: 1000,
+		// convergeEps: 0.1,
+		convergeEps: 0.01,
+		adagradInitLearnRate: 0.25,
+		// adagradInitLearnRate: 0.1,
+		// adagradInitLearnRate: 0.05,
+		gradientEstimator: opts.method,
+		exampleTraces: opts.dataFile ? utils.loadTraces(opts.dataFile) : undefined,
+		verbosity: {
+			flightNum: true,
+			scoreDiff: true,
+			endStatus: true
 		}
+	})
+	if (opts.saveParams) {
+		Variational.saveParams(vparams, opts.paramSaveFile);
 	}
-
-	var res = {width: 600, height: 600};
-	var n = 10;
-	var skip = 1;
-	var name = 'test';
-	var resultsDir = 'vpf_experiments/lsystem/results/image/' + name;
-	var fs = require.call(null, 'fs');
-	if (!fs.existsSync(resultsDir)) {
-		fs.mkdirSync(resultsDir);
-	}
-	var sims = repeat(n, function(i) {
-		// var nParticles = 1;
-		var nParticles = 300;
-		var ret = sample(ParticleFilter(generate, nParticles));
-		var sim = computeSim(ret);
-		console.log(i + ' | sim: ' + sim);
-		if (i % skip === 0) {
-			lsysUtils.renderOut(resultsDir + '/' + (i/skip) + '.png', res, viewport, ret);
-		}
-		return sim;
-	});
-	console.log('sim -  min: ' + listMin(sims) + ', max: ' + listMax(sims) +
-		               ', avg: ' + listMean(sims) + ', stddev: ' + listStdev(sims));
 }
 
 
@@ -342,8 +307,10 @@ var compareVariationalToPrior = function(paramFile) {
 			console.log('  nParticles = ' + nParticles);
 			var simsAndTimes = repeat(nReps, function(i) {
 				console.log('    repetition ' + i);
+				globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
 				var t0 = present.present();
-				var ret = sample(ParticleFilter(genFn, nParticles));
+				// var ret = sample(ParticleFilter(genFn, nParticles));
+				var ret = ParticleFilter(genFn, nParticles).MAPparticle.value;
 				var t1 = present.present();
 				var time = t1 - t0;
 				var sim = computeSim(ret);
@@ -361,30 +328,52 @@ var compareVariationalToPrior = function(paramFile) {
 }
 
 
-var serverReponse = function() {
+var serverReponse = function(paramFileName) {
+	// var targetName = 'curl';
+	// var targetName = 'bifurcate';
+	// var targetName = 'a';
+	// var targetName = 'heart';
+	// var targetName = 'manybranch_3';
+	// var targetName = 'manybranch_4';
+	// var targetName = 'manybranch_7';
+	// var targetName = 'snake_3';
+	var targetName = 'spiral';
+	// var targetName = 't';
+	globalStore.target = targetDB.getTargetByName(targetName);
+
 	var particleHistoryUtils = require.call(null, 'vpf_experiments/lsystem/particleHistoryUtils');
 	var saveHistory = lsysUtils.deleteStoredImages;
-	// var saveHistory = false;
 	var nParticles = 300;
-	// var nParticles = 3000;
-	var genFn = makeProgram(false, true);
-	// var genFn = makeProgram(true, true);
-	// Variational.loadParams(vparams, 'vpf_experiments/lsystem/saved_params/curl_eubo.txt');
-	var dist = ParticleFilter(genFn, nParticles, true, saveHistory);
-
+	if (paramFileName) {
+		Variational.loadParams(vparams, paramFileName);
+	}
+	var genFn = makeProgram(paramFileName !== undefined, true);
+	var particleHistory = ParticleFilter(genFn, nParticles, true, saveHistory).particleHistory;
 	return {
 		targetName: targetName,
 		viewport: viewport,
-		history: particleHistoryUtils.compress(dist.particleHistory)
+		history: particleHistoryUtils.compress(particleHistory)
 	};
 }
 
 
+// ----------------------------------------------------------------------------
 
-// testRun();
-generateTrainingData('allTargets_uniformFromDeepest');
-// compareVariationalToPrior('vpf_experiments/lsystem/saved_params/curl_eubo.txt');
-// serverReponse();
+
+var experimentName = 'allTargets_' + futurePolicy;
+var paramFileName = 'vpf_experiments/lsystem/saved_params/' + experimentName + '.txt';
+var dataFileName = 'vpf_experiments/lsystem/data/' + experimentName + '.txt'
+
+serverReponse();
+// generateTrainingData(experimentName);
+// train({
+// 	method: 'ELBO',
+// 	// method: 'EUBO',
+// 	dataFile: dataFileName
+// 	saveParams: true,
+// 	paramSaveFile: paramFileName
+// });
+// compareVariationalToPrior(paramFileName);
 
 
 
