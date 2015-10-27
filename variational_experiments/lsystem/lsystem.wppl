@@ -52,10 +52,8 @@ var computeSim = function(branches, inInference) {
 		lsysUtils.render(target.canvas, viewport, branches);
 	// Otherwise, do an incremental render of the last branch
 	} else {
-		if (globalStore.genImg !== undefined) {
-			globalStore.genImg.copyToCanvas(target.canvas);
-		}
-		lsysUtils.render(target.canvas, viewport, branches, true, globalStore.genImg === undefined);
+		globalStore.genImg.copyToCanvas(target.canvas);
+		lsysUtils.render(target.canvas, viewport, branches, true, false);
 	}
 	globalStore.genImg = lsysUtils.newImageData2D().loadFromCanvas(target.canvas);
 	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
@@ -210,6 +208,9 @@ var makeProgram = function(inOpts) {
 		if (globalStore.target === undefined) {
 			globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
 		}
+		var w = globalStore.target.image.width;
+		var h = globalStore.target.image.height;
+		globalStore.genImg = lsysUtils.newImageData2D().fillWhite(w, h);
 		globalStore.branches = undefined;
 		globalStore.numBranches = 0;
 		globalStore.bbox = box2();
@@ -296,10 +297,10 @@ var generateTrainingData = function(name) {
 
 
 var serverReponse = function() {
-	// var targetName = 'curl';
+	var targetName = 'curl';
 	// var targetName = 'bifurcate';
 	// var targetName = 'a';
-	var targetName = 'heart';
+	// var targetName = 'heart';
 	// var targetName = 'manybranch_3';
 	// var targetName = 'manybranch_4';
 	// var targetName = 'manybranch_7';
