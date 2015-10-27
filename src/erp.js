@@ -25,8 +25,7 @@ var numeric = require('numeric');
 var _ = require('underscore');
 var util = require('./util.js');
 var assert = require('assert');
-var scorers = require('./erp_scorers.adjs');
-var adscorers = require('./erp_scorers.js');
+var scorers = require('./erp_scorers.js');
 
 var LOG_2PI = 1.8378770664093453;
 
@@ -133,8 +132,7 @@ var uniformERP = new ERP({
     var u = Math.random();
     return (1 - u) * params[0] + u * params[1];
   },
-  score: scorers.uniform,
-  adscore: adscorers.uniform
+  score: scorers.uniform
 });
 
 var bernoulliERP = new ERP({
@@ -144,7 +142,6 @@ var bernoulliERP = new ERP({
     return val;
   },
   score: scorers.flip,
-  adscore: adscorers.flip,
   support: function(params) {
     return [true, false];
   },
@@ -162,7 +159,6 @@ var randomIntegerERP = new ERP({
     return Math.floor(Math.random() * params[0]);
   },
   score: scorers.randomInteger,
-  adscore: adscorers.randomInteger,
   support: function(params) {
     return _.range(params[0]);
   }
@@ -184,8 +180,7 @@ function gaussianSample(params) {
 
 var gaussianERP = new ERP({
   sample: gaussianSample,
-  score: scorers.gaussian,
-  adscore: adscorers.gaussian
+  score: scorers.gaussian
 });
 
 function multivariateGaussianSample(params) {
@@ -220,7 +215,6 @@ var discreteERP = new ERP({
     return multinomialSample(params);
   },
   score: scorers.discrete,
-  adscore: adscorers.discrete,
   support: function(params) {
     return _.range(params.length);
   }
@@ -251,8 +245,7 @@ function gammaSample(params) {
 // params are shape and scale
 var gammaERP = new ERP({
   sample: gammaSample,
-  score: scorers.gamma,
-  adscore: adscorers.gamma
+  score: scorers.gamma
 });
 
 var exponentialERP = new ERP({
@@ -261,8 +254,7 @@ var exponentialERP = new ERP({
     var u = Math.random();
     return Math.log(u) / (-1 * a);
   },
-  score: scorers.exponential,
-  adscore: adscorers.exponential
+  score: scorers.exponential
 });
 
 function __betaSample(params) {
@@ -283,8 +275,7 @@ function betaSample(params) {
 
 var betaERP = new ERP({
   sample: betaSample,
-  score: scorers.beta,
-  adscore: adscorers.beta
+  score: scorers.beta
 });
 
 function binomialG(x) {
@@ -331,7 +322,6 @@ function binomialSample(params) {
 var binomialERP = new ERP({
   sample: binomialSample,
   score: scorers.binomial,
-  adscore: adscorers.binomial,
   support: function(params) {
     return _.range(params[1]).concat([params[1]]);
   }
@@ -359,8 +349,7 @@ var poissonERP = new ERP({
     } while (p > emu);
     return (k - 1) || 0;
   },
-  score: scorers.poisson,
-  adscore: adscorers.poisson
+  score: scorers.poisson
 });
 
 function dirichletSample(params) {
@@ -381,8 +370,7 @@ function dirichletSample(params) {
 
 var dirichletERP = new ERP({
   sample: dirichletSample,
-  score: scorers.dirichlet,
-  adscore: adscorers.dirichlet
+  score: scorers.dirichlet
 });
 
 function multinomialSample(theta) {

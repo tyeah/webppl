@@ -1,8 +1,8 @@
+var fs = require.call(null, 'fs');
 var THREE = require.call(null, 'three');
-var lsysParams = require.call(null, 'vpf_experiments/lsystem/params.js');
-var lsysUtils = require.call(null, 'vpf_experiments/lsystem/utils.js');
-var bounds = require.call(null, 'src/bounds');
-var utils = require.call(null, 'vpf_experiments/utils.js');
+var lsysUtils = require.call(null, 'variational_experiments/lsystem/utils.js');
+var utils = require.call(null, 'variational_experiments/utils.js');
+var verp = require.call(null, 'variational_experiments/erp.js');
 
 
 // ----------------------------------------------------------------------------
@@ -30,7 +30,7 @@ var polar2rect = function(r, theta) {
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-var targetDB = lsysUtils.newTargetImageDatabase('vpf_experiments/lsystem/targets/training');
+var targetDB = lsysUtils.newTargetImageDatabase('variational_experiments/lsystem/targets/training');
 
 // var futurePolicy = 'immediate';
 // var futurePolicy = 'lifo';
@@ -99,66 +99,58 @@ var targetFactor = function() {
 // ----------------------------------------------------------------------------
 
 
-var vparams = Variational.newParams();
+var makeProgram = function(inOpts) {
 
+	var opts = inOpts || {};
+	var mode = opts.mode || 'normal';
 
-var makeProgram = function(variational, doFactors) {
+	var makeSampler = function(erp, name) {
+		if (mode === 'normal') {
+			return function(params) {
+				return sample(erp, params);
+			};
+		} else if (mode === 'processData') {
+			return function(params) {
+				// Do stuff to save data
+				return sample(erp, params);
+			};
+		} else if (mode === 'variational') {
+			return function(params) {
+				var addr = currentAddress();
+				var callsite = addr.slice(addr.lastIndexOf('_'));
+				// Retrieve appropriate neural network given this
+				//    callsite, use that to predict params
+				var nnparams = []; 	// TODO
+				var variationalErp = verp[name];
+				variationalErp.importanceERP.setParams(nnparams);
+				return sample(variationalErp, params);
+			};
+		}
+	}
+
+	var _gaussianSampler = makeSampler(gaussianERP, 'gaussianERP');
+	var _gaussian = function(mu, sigma) { return _gaussianSampler([mu, sigma]); };
+	var _flipSampler = makeSampler(bernoulliERP, 'bernoulliERP');
+	var _flip = function(p) { return _flipSampler([p]); };
+
+	var setCurrFeatures = function(currState) {
+		globalStore.currFeatures = [
+			currState.pos.x,
+			currState.pos.y,
+			currState.depth,
+			currState.ang
+		];
+	};
+
 
 	var initialWidth = 0.75;
 	var widthDecay = 0.975;
 	var minWidthPercent = 0.2;
 
-	var _gaussian = !variational ? gaussian :
-	function(mu, sigma) {
-		var addr = currentAddress();
-		var callsite = addr.slice(addr.lastIndexOf('_'));
-		var bnds = [bounds.none, bounds.nonNegative];
-		var features = globalStore.currFeatures;
-		var origprms = [mu, sigma];
-		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
-		Variational.gaussianERP.importanceERP.setParams(params);
-		return sample(Variational.gaussianERP, origprms);
-	};
-
-	var _flip = !variational ? flip :
-	function(p) {
-		var addr = currentAddress();
-		var callsite = addr.slice(addr.lastIndexOf('_'));
-		var bnds = [bounds.unitInterval];
-		var features = globalStore.currFeatures;
-		var origprms = [p];
-		var params = lsysParams.get(vparams, callsite, origprms, bnds, features);
-		Variational.bernoulliERP.importanceERP.setParams(params);
-		return sample(Variational.bernoulliERP, origprms);
-	};
-
-
-	var fuzz = [0, 1e-8];
-	var normalize = function(x, lo, hi) {
-		// Fuzz prevents values from normalizing to zero and causing zero derivatives.
-		// Also might make learning a bit more robust(?)
-		return (2 * (x - lo) / (hi - lo)) - 1 + gaussianERP.sample(fuzz);
-	};
-	var TWOPI = 2*Math.PI;
-	var normang = function(theta) {
-		if (theta >= 0) {
-			return theta - (TWOPI*Math.floor(theta / TWOPI));
-		} else {
-			return theta - (TWOPI*Math.ceil(theta / TWOPI)) + TWOPI;
-		}
-	};
-	var setCurrFeatures = function(currState) {
-		var x = normalize(currState.pos.x, viewport.xmin, viewport.xmax);
-		var y = normalize(currState.pos.y, viewport.ymin, viewport.ymax);
-		var depth = normalize(currState.depth, 0, 5);
-		var ang = normalize(normang(currState.angle), 0, TWOPI);
-		// var numBranches = normalize(globalStore.numBranches, 0, 200);
-		// var currSim = globalStore.sim;
-		globalStore.currFeatures = [x, y, depth, ang];
-	};
-
 	var branch = function(currState) {
-		if (variational) setCurrFeatures(currState);
+		if (mode === 'processData') {
+			setCurrFeatures(currState);
+		}
 
 		// Generate new branch
 		var width = widthDecay * currState.width;
@@ -179,7 +171,7 @@ var makeProgram = function(variational, doFactors) {
 		globalStore.bbox.expandByPoint(newbranch.end);
 
 		// Add new heuristic factor
-		if (doFactors) targetFactor();
+		targetFactor();
 
 		var newState = {
 			depth: currState.depth + 1,
@@ -221,7 +213,6 @@ var makeProgram = function(variational, doFactors) {
 		globalStore.branches = undefined;
 		globalStore.numBranches = 0;
 		globalStore.bbox = box2();
-		globalStore.currFeatures = [];
 		var startState = {
 			depth: 0,
 			pos: vec2(0, 0),
@@ -240,39 +231,14 @@ var makeProgram = function(variational, doFactors) {
 // ----------------------------------------------------------------------------
 
 
-var train = function(opts) {
-	var genFn = makeProgram(true, opts.method !== 'EUBO');	// Don't need factors at all for EUBO
-	Variational(genFn, vparams, {
-		numParticles: 100,
-		maxNumFlights: 1000,
-		// convergeEps: 0.1,
-		convergeEps: 0.01,
-		adagradInitLearnRate: 0.25,
-		// adagradInitLearnRate: 0.1,
-		// adagradInitLearnRate: 0.05,
-		gradientEstimator: opts.method,
-		exampleTraces: opts.dataFile ? utils.loadTraces(opts.dataFile) : undefined,
-		verbosity: {
-			flightNum: true,
-			scoreDiff: true,
-			endStatus: true
-		}
-	})
-	if (opts.saveParams) {
-		Variational.saveParams(vparams, opts.paramSaveFile);
-	}
-}
-
-
 var generateTrainingData = function(name) {
 	var present = { present: require.call(null, 'present') };	// For timing
-	var dataDir = 'vpf_experiments/lsystem/data';
-	var fs = require.call(null, 'fs');
+	var dataDir = 'variational_experiments/lsystem/synth_data';
 	if (!fs.existsSync(dataDir)) {
 		fs.mkdirSync(dataDir);
 	}
 	var filename = dataDir + '/' + name + '.txt';
-	var genFn = makeProgram(false, true);
+	var genFn = makeProgram();
 	var t0 = present.present();
 	var genData = function(counter) {
 		// Generate for a random target, recording the target index as the first
@@ -291,63 +257,61 @@ var generateTrainingData = function(name) {
 };
 
 
-var compareVariationalToPrior = function(paramFile) {
-	var present = { present: require.call(null, 'present') };	// For timing
-	var util = require.call(null, 'util');
-	var outfilename = targetName + '_comparison.csv';
-	var outfile = fs.openSync('vpf_experiments/lsystem/experiment_results/image/'+outfilename, 'w');
-	fs.writeSync(outfile, 'isVariational,numParticles,sim,time,avgTime\n');
-	var nReps = 100;
-	map(function(isVariational) {
-		console.log('isVariational = ' + isVariational);
-		var genFn = makeProgram(isVariational, true);
-		if (isVariational) Variational.loadParams(vparams, paramFile);
-		repeat(10, function(np) {
-			var nParticles = np + 1;
-			console.log('  nParticles = ' + nParticles);
-			var simsAndTimes = repeat(nReps, function(i) {
-				console.log('    repetition ' + i);
-				globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
-				var t0 = present.present();
-				// var ret = sample(ParticleFilter(genFn, nParticles));
-				var ret = ParticleFilter(genFn, nParticles).MAPparticle.value;
-				var t1 = present.present();
-				var time = t1 - t0;
-				var sim = computeSim(ret);
-				return [sim, time];
-			});
-			var times = map(function(st) { return st[1]; }, simsAndTimes);
-			var avgTime = sum(times) / times.length;
-			map(function(st) {
-				fs.writeSync(outfile, util.format('%s,%d,%d,%d,%d\n',
-					isVariational, nParticles, st[0], st[1], avgTime));
-			}, simsAndTimes);
-		});
-	}, [false, true]);
-	fs.closeSync(outfile);
-}
+// TODO: Update this to work with externally-trained networks
+///////////////////////////////////////////////////////////////////////////////
+// var compareVariationalToPrior = function(paramFile) {
+// 	var present = { present: require.call(null, 'present') };	// For timing
+// 	var util = require.call(null, 'util');
+// 	var outfilename = targetName + '_comparison.csv';
+// 	var outfile = fs.openSync('variational_experiments/lsystem/analysis/'+outfilename, 'w');
+// 	fs.writeSync(outfile, 'isVariational,numParticles,sim,time,avgTime\n');
+// 	var nReps = 100;
+// 	map(function(isVariational) {
+// 		console.log('isVariational = ' + isVariational);
+// 		var genFn = makeProgram(isVariational);
+// 		if (isVariational) Variational.loadParams(vparams, paramFile);
+// 		repeat(10, function(np) {
+// 			var nParticles = np + 1;
+// 			console.log('  nParticles = ' + nParticles);
+// 			var simsAndTimes = repeat(nReps, function(i) {
+// 				console.log('    repetition ' + i);
+// 				globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
+// 				var t0 = present.present();
+// 				var ret = ParticleFilter(genFn, nParticles).MAPparticle.value;
+// 				var t1 = present.present();
+// 				var time = t1 - t0;
+// 				var sim = computeSim(ret);
+// 				return [sim, time];
+// 			});
+// 			var times = map(function(st) { return st[1]; }, simsAndTimes);
+// 			var avgTime = sum(times) / times.length;
+// 			map(function(st) {
+// 				fs.writeSync(outfile, util.format('%s,%d,%d,%d,%d\n',
+// 					isVariational, nParticles, st[0], st[1], avgTime));
+// 			}, simsAndTimes);
+// 		});
+// 	}, [false, true]);
+// 	fs.closeSync(outfile);
+// }
 
 
-var serverReponse = function(paramFileName) {
+var serverReponse = function() {
 	// var targetName = 'curl';
 	// var targetName = 'bifurcate';
 	// var targetName = 'a';
-	// var targetName = 'heart';
+	var targetName = 'heart';
 	// var targetName = 'manybranch_3';
 	// var targetName = 'manybranch_4';
 	// var targetName = 'manybranch_7';
 	// var targetName = 'snake_3';
-	var targetName = 'spiral';
+	// var targetName = 'spiral';
 	// var targetName = 't';
 	globalStore.target = targetDB.getTargetByName(targetName);
 
-	var particleHistoryUtils = require.call(null, 'vpf_experiments/lsystem/particleHistoryUtils');
+	var particleHistoryUtils = require.call(null, 'variational_experiments/lsystem/particleHistoryUtils');
 	var saveHistory = lsysUtils.deleteStoredImages;
 	var nParticles = 300;
-	if (paramFileName) {
-		Variational.loadParams(vparams, paramFileName);
-	}
-	var genFn = makeProgram(paramFileName !== undefined, true);
+	var genFn = makeProgram();
 	var particleHistory = ParticleFilter(genFn, nParticles, true, saveHistory).particleHistory;
 	return {
 		targetName: targetName,
@@ -361,19 +325,10 @@ var serverReponse = function(paramFileName) {
 
 
 var experimentName = 'allTargets_' + futurePolicy;
-var paramFileName = 'vpf_experiments/lsystem/saved_params/' + experimentName + '.txt';
-var dataFileName = 'vpf_experiments/lsystem/data/' + experimentName + '.txt'
+var dataFileName = 'variational_experiments/lsystem/synth_data/' + experimentName + '.txt'
 
 serverReponse();
 // generateTrainingData(experimentName);
-// train({
-// 	method: 'ELBO',
-// 	// method: 'EUBO',
-// 	dataFile: dataFileName
-// 	saveParams: true,
-// 	paramSaveFile: paramFileName
-// });
-// compareVariationalToPrior(paramFileName);
 
 
 
