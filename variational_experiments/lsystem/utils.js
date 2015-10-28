@@ -4,12 +4,6 @@ var assert = require('assert');
 var numeric = require('numeric');
 var render = require('./render').render;
 
-function renderOut(filename, res, viewport, branches) {
-	var canvas = new Canvas(res.width, res.height);
-	render(canvas, viewport, branches);
-	fs.writeFileSync(filename, canvas.toBuffer());
-}
-
 
 function ImageData2D() {}
 ImageData2D.prototype = {
@@ -149,14 +143,15 @@ function TargetImageDatabase(directory) {
 	var filenames = fs.readdirSync(directory);
 	for (var i = 0; i < filenames.length; i++) {
 		var fullname = directory + '/' + filenames[i];
+		var shortname = filenames[i].slice(0,-4);	// strip the .png
 		var target = {
+			shortname: shortname,
 			filename: fullname,
 			image: undefined,
 			baseline: undefined,
 			canvas: undefined
 		};
 		this.targetsByIndex.push(target);
-		var shortname = filenames[i].slice(0,-4);	// strip the .png
 		this.targetsByName[shortname] = target;
 	}
 }
@@ -184,15 +179,8 @@ TargetImageDatabase.prototype = {
 };
 
 
-function processRetVals_width(vals) {
-	var errs = vals.map(function(v) {
-		var width = v.bbox.size().x;
-		var targetWidth = v.targetWidth;
-		return Math.abs(targetWidth - width) / targetWidth;
-	});
-	console.log('  avg relative error: ' + numeric.sum(errs)/vals.length);
-}
 
+// Misc
 
 function deleteStoredImages(particle) {
 	particle.store.genImg = undefined;
@@ -201,12 +189,9 @@ function deleteStoredImages(particle) {
 
 module.exports = {
 	render: render,
-	renderOut: renderOut,
 	newImageData2D: function() { return new ImageData2D(); },
-	newCanvas: function(w, h) { return new Canvas(w, h); },
 	newTargetImageDatabase: function(dir) { return new TargetImageDatabase(dir); },
 	normalizedSimilarity: normalizedSimilarity,
-	processRetVals_width: processRetVals_width,
 	deleteStoredImages: deleteStoredImages
 };
 

@@ -1,8 +1,8 @@
 var fs = require.call(null, 'fs');
+var cp = require.call(null, 'child_process');
 var THREE = require.call(null, 'three');
 var lsysUtils = require.call(null, 'variational_experiments/lsystem/utils.js');
 var utils = require.call(null, 'variational_experiments/utils.js');
-var verp = require.call(null, 'variational_experiments/erp.js');
 
 
 // ----------------------------------------------------------------------------
@@ -96,137 +96,97 @@ var targetFactor = function() {
 
 // ----------------------------------------------------------------------------
 
+var setCurrFeatures = function(currState) {
+	globalStore.currFeatures = [
+		currState.pos.x,
+		currState.pos.y,
+		currState.depth,
+		currState.angle
+	];
+};
 
-var makeProgram = function(inOpts) {
+var initialWidth = 0.75;
+var widthDecay = 0.975;
+var minWidthPercent = 0.2;
 
-	var opts = inOpts || {};
-	var mode = opts.mode || 'normal';
+var branch = function(currState) {
+	setCurrFeatures(currState);
 
-	var makeSampler = function(erp, name) {
-		if (mode === 'normal') {
-			return function(params) {
-				return sample(erp, params);
-			};
-		} else if (mode === 'processData') {
-			return function(params) {
-				// Do stuff to save data
-				return sample(erp, params);
-			};
-		} else if (mode === 'variational') {
-			return function(params) {
-				var addr = currentAddress();
-				var callsite = addr.slice(addr.lastIndexOf('_'));
-				// Retrieve appropriate neural network given this
-				//    callsite, use that to predict params
-				var nnparams = []; 	// TODO
-				var variationalErp = verp[name];
-				variationalErp.importanceERP.setParams(nnparams);
-				return sample(variationalErp, params);
-			};
+	// Generate new branch
+	var width = widthDecay * currState.width;
+	var length = 2;
+	var newang = currState.angle + gaussian(0, Math.PI/8);	
+	var newbranch = {
+		start: currState.pos,
+		angle: newang,
+		width: width,
+		end: currState.pos.clone().add(polar2rect(length, newang))
+	};
+
+	// Update model state
+	globalStore.branches = { branch: newbranch, next: globalStore.branches };
+	globalStore.numBranches = globalStore.numBranches + 1;
+	globalStore.bbox = globalStore.bbox.clone();
+	globalStore.bbox.expandByPoint(newbranch.start);
+	globalStore.bbox.expandByPoint(newbranch.end);
+
+	// Add new heuristic factor
+	targetFactor();
+
+	var newState = {
+		depth: currState.depth + 1,
+		pos: newbranch.end,
+		angle: newbranch.angle,
+		width: newbranch.width
+	};
+
+	// Terminate?
+	future(function() {
+		var terminateProb = 0.5;
+		if (flip(terminateProb)) {
+			globalStore.terminated = true;
+		} else {
+			// Generate no further branches w/ prob 1/3
+			// Generate one further branch w/ prob 1/3
+			// Generate two further branches w/ prob 1/3
+			future(function() {
+				if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && flip(0.66)) {
+					branch(newState);
+					future(function() {
+						if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && flip(0.5)) {
+							branch(newState);
+						}
+						// else factor(0);
+					});
+				}
+				// else factor(0);
+			});
 		}
+	});
+};
+
+var generate = function() {
+	// If target is not fixed, then marginalize over targets
+	if (globalStore.target === undefined) {
+		globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
 	}
-
-	var _gaussianSampler = makeSampler(gaussianERP, 'gaussianERP');
-	var _gaussian = function(mu, sigma) { return _gaussianSampler([mu, sigma]); };
-	var _flipSampler = makeSampler(bernoulliERP, 'bernoulliERP');
-	var _flip = function(p) { return _flipSampler([p]); };
-
-	var setCurrFeatures = function(currState) {
-		globalStore.currFeatures = [
-			currState.pos.x,
-			currState.pos.y,
-			currState.depth,
-			currState.ang
-		];
+	var w = globalStore.target.image.width;
+	var h = globalStore.target.image.height;
+	globalStore.genImg = lsysUtils.newImageData2D().fillWhite(w, h);
+	globalStore.branches = undefined;
+	globalStore.numBranches = 0;
+	globalStore.bbox = box2();
+	globalStore.currFeatures = [];
+	var startState = {
+		depth: 0,
+		pos: vec2(0, 0),
+		angle: gaussian(-Math.PI/2, Math.PI/6),
+		width: initialWidth
 	};
-
-
-	var initialWidth = 0.75;
-	var widthDecay = 0.975;
-	var minWidthPercent = 0.2;
-
-	var branch = function(currState) {
-		if (mode === 'processData') {
-			setCurrFeatures(currState);
-		}
-
-		// Generate new branch
-		var width = widthDecay * currState.width;
-		var length = 2;
-		var newang = currState.angle + _gaussian(0, Math.PI/8);	
-		var newbranch = {
-			start: currState.pos,
-			angle: newang,
-			width: width,
-			end: currState.pos.clone().add(polar2rect(length, newang))
-		};
-
-		// Update model state
-		globalStore.branches = { branch: newbranch, next: globalStore.branches };
-		globalStore.numBranches = globalStore.numBranches + 1;
-		globalStore.bbox = globalStore.bbox.clone();
-		globalStore.bbox.expandByPoint(newbranch.start);
-		globalStore.bbox.expandByPoint(newbranch.end);
-
-		// Add new heuristic factor
-		targetFactor();
-
-		var newState = {
-			depth: currState.depth + 1,
-			pos: newbranch.end,
-			angle: newbranch.angle,
-			width: newbranch.width
-		};
-
-		// Terminate?
-		future(function() {
-			var terminateProb = 0.5;
-			if (_flip(terminateProb)) {
-				globalStore.terminated = true;
-			} else {
-				// Generate no further branches w/ prob 1/3
-				// Generate one further branch w/ prob 1/3
-				// Generate two further branches w/ prob 1/3
-				future(function() {
-					if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && _flip(0.66)) {
-						branch(newState);
-						future(function() {
-							if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && _flip(0.5)) {
-								branch(newState);
-							}
-							// else factor(0);
-						});
-					}
-					// else factor(0);
-				});
-			}
-		});
-	};
-
-	var generate = function() {
-		// If target is not fixed, then marginalize over targets
-		if (globalStore.target === undefined) {
-			globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
-		}
-		var w = globalStore.target.image.width;
-		var h = globalStore.target.image.height;
-		globalStore.genImg = lsysUtils.newImageData2D().fillWhite(w, h);
-		globalStore.branches = undefined;
-		globalStore.numBranches = 0;
-		globalStore.bbox = box2();
-		var startState = {
-			depth: 0,
-			pos: vec2(0, 0),
-			angle: _gaussian(-Math.PI/2, Math.PI/6),
-			width: initialWidth
-		};
-		future(function() { branch(startState); });
-		finishAllFutures();
-		return globalStore.branches;
-	};
-
-	return generate;
-}
+	future(function() { branch(startState); });
+	finishAllFutures();
+	return globalStore.branches;
+};
 
 
 // ----------------------------------------------------------------------------
@@ -234,19 +194,18 @@ var makeProgram = function(inOpts) {
 
 var generateTrainingData = function(name) {
 	var present = { present: require.call(null, 'present') };	// For timing
-	var dataDir = 'variational_experiments/lsystem/synth_data';
+	var dataDir = 'variational_experiments/lsystem/gen_traces';
 	if (!fs.existsSync(dataDir)) {
 		fs.mkdirSync(dataDir);
 	}
 	var filename = dataDir + '/' + name + '.txt';
-	var genFn = makeProgram();
 	var t0 = present.present();
 	var genData = function(counter) {
 		// Generate for a random target, recording the target index as the first
 		//    random choice in the trace so that playback can work correctly.
 		var targetIdx = randomInteger(targetDB.numTargets()); 
 		globalStore.target = targetDB.getTargetByIndex(targetIdx);
-		var MAPtrace = ParticleFilter(genFn, 300).MAPparticle.trace;
+		var MAPtrace = ParticleFilter(generate, 300).MAPparticle.trace;
 		var outTrace = [targetIdx].concat(MAPtrace);
 		fs.appendFileSync(filename, JSON.stringify(outTrace) + '\n');
 		var t = present.present();
@@ -257,6 +216,30 @@ var generateTrainingData = function(name) {
 	genData(1);
 };
 
+var processTrainingData = function(name, startIndex) {
+	var starti = startIndex === undefined ? 0 : startIndex;
+	var dataFileName = 'variational_experiments/lsystem/gen_traces/' + name + '.txt';
+	var traces = utils.loadTraces(dataFileName);
+	var processedDataDir = 'variational_experiments/lsystem/processed_data';
+	if (!fs.existsSync(processedDataDir)) {
+		fs.mkdirSync(processedDataDir);
+	}
+	var dataSubdir = processedDataDir + '/' + name;
+	if (starti === 0 && fs.existsSync(dataSubdir)) {
+		cp.execSync('rm -rf ' + dataSubdir);
+	}
+	fs.mkdirSync(dataSubdir);
+	var ProcessTrainingTrace = require.call(null, 'variational_experiments/lsystem/ProcessTrainingTrace.js').call(null, env);
+	var processFn = function(i) {
+		if (i < traces.length) {
+			var trace = traces[i];
+			ProcessTrainingTrace(generate, trace, dataSubdir);
+			console.log('Processed trace ' + (i+1) + '/' + traces.length);
+			processFn(i + 1);
+		}
+	}
+	processFn(starti);
+}
 
 // TODO: Update this to work with externally-trained networks
 ///////////////////////////////////////////////////////////////////////////////
@@ -312,8 +295,7 @@ var serverReponse = function() {
 	var particleHistoryUtils = require.call(null, 'variational_experiments/lsystem/particleHistoryUtils');
 	var saveHistory = lsysUtils.deleteStoredImages;
 	var nParticles = 300;
-	var genFn = makeProgram();
-	var particleHistory = ParticleFilter(genFn, nParticles, true, saveHistory).particleHistory;
+	var particleHistory = ParticleFilter(generate, nParticles, true, saveHistory).particleHistory;
 	return {
 		targetName: targetName,
 		viewport: viewport,
@@ -326,10 +308,11 @@ var serverReponse = function() {
 
 
 var experimentName = 'allTargets_' + futurePolicy;
-var dataFileName = 'variational_experiments/lsystem/synth_data/' + experimentName + '.txt'
+var dataFileName = 'variational_experiments/lsystem/gen_traces/' + experimentName + '.txt'
 
-serverReponse();
+// serverReponse();
 // generateTrainingData(experimentName);
+processTrainingData(experimentName);
 
 
 
