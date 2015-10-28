@@ -27,6 +27,11 @@ ImageData2D.prototype = {
 		this.loadFromCanvas(canvas);
 		return this;
 	},
+	saveToFile: function(filename) {
+		var canv = new Canvas(this.width, this.height);
+		this.copyToCanvas(canv);
+		fs.writeFileSync(filename, canv.toBuffer());
+	},
 	fillWhite: function(w, h) {
 		var canv = new Canvas(w, h);
 		var ctx = canv.getContext('2d');
@@ -36,55 +41,6 @@ ImageData2D.prototype = {
 	},
 	copyToCanvas: function(canvas) {
 		canvas.getContext('2d').putImageData(this.imgDataObj, 0, 0);
-	},
-	getPixel: function(x, y) {
-		var i = y*this.width + x;
-		return [this.data[4*i], this.data[4*i+1], this.data[4*i+2], this.data[4*i+3]];
-	},
-	getLuminance: function(x, y) {
-		var i = y*this.width + x;
-		return 0.2126*this.data[4*i] + 0.7152*this.data[4*i+1] + 0.0722*this.data[4*i+2];
-	},
-	isFilled: function(x, y) {
-		var i = y*this.width + x;
-		return this.data[4*i] !== 255 || this.data[4*i+1] !== 255 || this.data[4*i+2] !== 255; 
-	},
-	percentFilled: function() {
-		var filled = 0;
-		for (var y = 0; y < this.height; y++) {
-			for (var x = 0; x < this.width; x++) {
-				filled += this.isFilled(x, y);
-			}
-		}
-		return filled / (this.width * this.height);
-	},
-	bilateralSymmetryHoriz: function() {
-		// Horizonal bilateral symmetry
-		var sim = 0;
-		for (var y = 0; y < this.height; y++) {
-			for (var x = 0; x < this.width / 2; x++) {
-				var f1 = this.isFilled(x, y);
-				var f2 = this.isFilled(this.width - x - 1, y);
-				sim += (f1 === f2);
-			}
-		}
-		return sim / (0.5 * this.width * this.height);
-	},
-	filledBilateralSymmetryHoriz: function() {
-		// Horizonal bilateral symmetry
-		var sim = 0;
-		var n = 0;
-		for (var y = 0; y < this.height; y++) {
-			for (var x = 0; x < this.width / 2; x++) {
-				var f1 = this.isFilled(x, y);
-				var f2 = this.isFilled(this.width - x - 1, y);
-				if (f1 || f2) {
-					sim += (f1 === f2);
-					n++;
-				}
-			}
-		}
-		return sim / n;
 	},
 	numSameBinary: function(other) {
 		assert(this.width === other.width && this.height === other.height,
@@ -112,9 +68,41 @@ ImageData2D.prototype = {
 			}
 		}
 		return n > 0 ? sim / n : 0;
+	},
+	toBinaryByteArray: function() {
+		var numPixels = this.width*this.height;
+		var numBytes = Math.ceil(numPixels/8);
+		var arr = [];
+		for (var i = 0; i < numBytes; i++) {
+			arr.push(0);
+		}
+		for (var i = 0; i < numPixels; i++) {
+			var r = this.data[4*i];
+			var g = this.data[4*i+1];
+			var b = this.data[4*i+2];
+			var bit = (r < 128 && g < 128 && b < 128);
+			var byteIndex = Math.floor(i / 8);
+			var byteRem = i % 8;
+			arr[byteIndex] |= (bit << byteRem);
+		}
+		return new Uint8Array(arr);
+	},
+	fromBinaryByteArray: function(arr, w, h) {
+		this.fillWhite(w, h);
+		var numPixels = w*h;
+		for (var i = 0; i < numPixels; i++) {
+			var byteIndex = Math.floor(i / 8);
+			var byteRem = i % 8;
+			var bit = (arr[byteIndex] >> byteRem) & 1;
+			var pixel = bit === 1 ? 0 : 255;
+			this.data[4*i] = pixel;
+			this.data[4*i+1] = pixel;
+			this.data[4*i+2] = pixel;
+			this.data[4*i+3] = 255;	// full alpha
+		}
+		return this;
 	}
 };
-
 
 // Similarity function between target image and another image
 function similarity(img, targetImg) {

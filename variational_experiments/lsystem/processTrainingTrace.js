@@ -3,21 +3,20 @@
 
 var _ = require('underscore');
 var fs = require('fs');
-var Canvas = require('canvas');
 var md5 = require('md5');
-var syscall = require('child_process').execSync;
-var util = require('util');
 
 module.exports = function(env) {
 
-	function ProcessTrainingTrace(s, k, a, wpplFn, trace, dataDir) {
+	function ProcessTrainingTrace(s, k, a, wpplFn, trace, imgData, traceData) {
 		this.s = s;
 		this.k = k;
 		this.a = a;
 		this.wpplFn = wpplFn;
 		this.trace = trace;
 		this.traceIndex = 0;
-		this.dataDir = dataDir;
+		this.imgData = imgData;
+		this.traceData = traceData;
+
 		this.callsiteData = [];
 
 		this.oldCoroutine = env.coroutine;
@@ -61,62 +60,72 @@ module.exports = function(env) {
 	}
 
 	ProcessTrainingTrace.prototype.exit = function(s, retval) {
-		var imgDir = this.dataDir + '/img';
-		if (!fs.existsSync(imgDir)) {
-			fs.mkdirSync(imgDir);
-		}
+		// NOTE: I originally had this writing to disk (by file append) after every
+		//    trace, but that started to really slow down about half-way through.
 
-		// Save the images to the img directory
-		// Files are named with MD5 checksums, so if two images happen to be identical, they will
-		//    end up in the same file.
-		var tmpCanvas = null;
+		// Save one-bit-per-pixel images to a binary blob
+		// We MD5 hash the images and only store the unique ones
 		for (var i = 0; i < this.callsiteData.length; i++) {
 			var data = this.callsiteData[i];
 			// If the img hasn't changed from the last callsite, we just grab
 			//    that callsite's image hash (see else branch)
 			if (i === 0 || data.img !== this.callsiteData[i-1].img) {
 				var img = data.img;
-				if (tmpCanvas === null) {
-					tmpCanvas = new Canvas(img.width, img.height);
-				}
-				img.copyToCanvas(tmpCanvas);
-				var contents = tmpCanvas.toBuffer()
-				var hash = md5(contents);
-				var fullname = imgDir + '/' + hash + '.png';
-				fs.writeFileSync(fullname, contents);
-				// Convert to grayscale
-				syscall(util.format('convert %s -colorspace Gray %s', fullname, fullname));
+				var buf = new Buffer(img.toBinaryByteArray());
+				var hash = md5(buf);
 				data.imgHash = hash;
+				// Only save this image if we haven't already saved one
+				//    with the same hash (from a previous run)
+				if (!this.imgData.hasOwnProperty(hash)) {
+					this.imgData[hash] = buf;
+				}
 			} else {
 				data.imgHash = this.callsiteData[i-1].imgHash;
 			}
 		}
 
-		// Now actually prepare the JSON object that we'll serialize
-		var traceData = {
-			target: s.target.shortname,
-			calls: this.callsiteData.map(function(data) {
-				return {
-					callsite: data.callsite,
-					erp: data.erp.score.name.slice(0, -5),	// e.g. 'gaussianScore' -> 'gaussian'
-					params: data.params,
-					val: data.val,
-					features: data.features,
-					img: data.imgHash
-				};
+		// Save the trace data itself (as nested arrays instead of objects,
+		//    since we're going to JSON serialize this and it'll take less space this way)
+		var traceDatum = [
+			s.target.shortname,
+			this.callsiteData.map(function(data) {
+				return [
+					data.callsite,
+					data.erp.score.name.slice(0, -5),	// e.g. 'gaussianScore' -> 'gaussian'
+					data.params,
+					data.val,
+					data.features,
+					data.imgHash
+				];
 			})
-		};
-
-		// Save to file
-		var traceFile = this.dataDir + '/traceData.txt';
-		fs.appendFileSync(traceFile, JSON.stringify(traceData) + '\n');
+		];
+		this.traceData.push(traceDatum);
 
 		return this.k(this.s);
 	}
 
-	return function(s, k, a, wpplFn, trace, dataDir) {
-		return new ProcessTrainingTrace(s, k, a, wpplFn, trace, dataDir).run();
+	function PTT(s, k, a, wpplFn, trace, imgData, traceData) {
+		return new ProcessTrainingTrace(s, k, a, wpplFn, trace, imgData, traceData).run();
 	};
+
+	PTT.saveToDisk = function(dataDir, imgData, traceData) {
+		var traceFileName = dataDir + '/trace.txt';
+		var imgHashFileName = dataDir + '/img.txt';
+		var imgDataFileName = dataDir + '/img.dat';
+		var traceFile = fs.openSync(traceFileName, 'w');
+		var imgHashFile = fs.openSync(imgHashFileName, 'w');
+		var imgDataFile = fs.openSync(imgDataFileName, 'w');
+
+		for (var hash in imgData) {
+			fs.writeSync(imgHashFile, hash + '\n');
+			fs.writeSync(imgDataFile, imgData[hash]);
+		}
+		for (var i = 0; i < this.traceData.length; i++) {
+			fs.writeSync(traceFile, JSON.stringify(this.traceData[i]) + '\n');
+		}
+	};
+
+	return PTT;
 
 }
 
