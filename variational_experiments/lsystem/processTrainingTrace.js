@@ -7,15 +7,15 @@ var md5 = require('md5');
 
 module.exports = function(env) {
 
-	function ProcessTrainingTrace(s, k, a, wpplFn, trace, imgData, traceData) {
+	function ProcessTrainingTrace(s, k, a, wpplFn, trace, imgHashes, dataDir) {
 		this.s = s;
 		this.k = k;
 		this.a = a;
 		this.wpplFn = wpplFn;
 		this.trace = trace;
 		this.traceIndex = 0;
-		this.imgData = imgData;
-		this.traceData = traceData;
+		this.imgHashes = imgHashes;
+		this.dataDir = dataDir;
 
 		this.callsiteData = [];
 
@@ -60,11 +60,14 @@ module.exports = function(env) {
 	}
 
 	ProcessTrainingTrace.prototype.exit = function(s, retval) {
-		// NOTE: I originally had this writing to disk (by file append) after every
-		//    trace, but that started to really slow down about half-way through.
+		var traceFileName = this.dataDir + '/trace.txt';
+		var imgHashFileName = this.dataDir + '/img.txt';
+		var imgDataFileName = this.dataDir + '/img.dat';
 
 		// Save one-bit-per-pixel images to a binary blob
 		// We MD5 hash the images and only store the unique ones
+		var newImgHashes = [];
+		var newImgData = [];
 		for (var i = 0; i < this.callsiteData.length; i++) {
 			var data = this.callsiteData[i];
 			// If the img hasn't changed from the last callsite, we just grab
@@ -76,12 +79,24 @@ module.exports = function(env) {
 				data.imgHash = hash;
 				// Only save this image if we haven't already saved one
 				//    with the same hash (from a previous run)
-				if (!this.imgData.hasOwnProperty(hash)) {
-					this.imgData[hash] = buf;
+				if (!this.imgHashes.hasOwnProperty(hash)) {
+					this.imgHashes[hash] = true;
+					newImgHashes.push(hash);
+					newImgData.push(buf);
 				}
 			} else {
 				data.imgHash = this.callsiteData[i-1].imgHash;
 			}
+		}
+		var hashConcat = '';
+		for (var i = 0; i < newImgHashes.length; i++) {
+			hashConcat += newImgHashes[i] + '\n';
+		}
+		var buflen = newImgData[0].length;
+		var numDataBytes = buflen * newImgData.length;
+		var dataBuf = new Buffer(numDataBytes);
+		for (var i = 0; i < newImgData.length; i++) {
+			newImgData[i].copy(dataBuf, i*buflen);
 		}
 
 		// Save the trace data itself (as nested arrays instead of objects,
@@ -99,30 +114,16 @@ module.exports = function(env) {
 				];
 			})
 		];
-		this.traceData.push(traceDatum);
+
+		fs.appendFileSync(imgHashFileName, hashConcat);
+		fs.appendFileSync(imgDataFileName, dataBuf);
+		fs.appendFileSync(traceFileName, JSON.stringify(traceDatum) + '\n');
 
 		return this.k(this.s);
 	}
 
-	function PTT(s, k, a, wpplFn, trace, imgData, traceData) {
-		return new ProcessTrainingTrace(s, k, a, wpplFn, trace, imgData, traceData).run();
-	};
-
-	PTT.saveToDisk = function(dataDir, imgData, traceData) {
-		var traceFileName = dataDir + '/trace.txt';
-		var imgHashFileName = dataDir + '/img.txt';
-		var imgDataFileName = dataDir + '/img.dat';
-		var traceFile = fs.openSync(traceFileName, 'w');
-		var imgHashFile = fs.openSync(imgHashFileName, 'w');
-		var imgDataFile = fs.openSync(imgDataFileName, 'w');
-
-		for (var hash in imgData) {
-			fs.writeSync(imgHashFile, hash + '\n');
-			fs.writeSync(imgDataFile, imgData[hash]);
-		}
-		for (var i = 0; i < this.traceData.length; i++) {
-			fs.writeSync(traceFile, JSON.stringify(this.traceData[i]) + '\n');
-		}
+	function PTT(s, k, a, wpplFn, trace, imgHashes, dataDir) {
+		return new ProcessTrainingTrace(s, k, a, wpplFn, trace, imgHashes, dataDir).run();
 	};
 
 	return PTT;

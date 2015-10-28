@@ -220,19 +220,6 @@ var processTrainingData = function(name, startIndex) {
 	var starti = startIndex === undefined ? 0 : startIndex;
 	var dataFileName = 'variational_experiments/lsystem/gen_traces/' + name + '.txt';
 	var traces = utils.loadTraces(dataFileName);
-	var ProcessTrainingTrace = require.call(null, 'variational_experiments/lsystem/ProcessTrainingTrace.js').call(null, env);
-	var imgData = {};
-	var traceData = [];
-	var processFn = function(i) {
-		if (i < traces.length) {
-			var trace = traces[i];
-			ProcessTrainingTrace(generate, trace, imgData, traceData);
-			console.log('Processed trace ' + (i+1) + '/' + traces.length);
-			processFn(i + 1);
-		}
-	}
-	processFn(starti);
-	console.log('Saving to disk...');
 	var processedDataDir = 'variational_experiments/lsystem/processed_data';
 	if (!fs.existsSync(processedDataDir)) {
 		fs.mkdirSync(processedDataDir);
@@ -241,8 +228,17 @@ var processTrainingData = function(name, startIndex) {
 	if (!fs.existsSync(dataSubdir)) {
 		fs.mkdirSync(dataSubdir);
 	}
-	ProcessTrainingTrace.saveToDisk(dataSubdir, imgData, traceData);
-	console.log('DONE.');
+	var imgHashes = {};
+	var ProcessTrainingTrace = require.call(null, 'variational_experiments/lsystem/ProcessTrainingTrace.js').call(null, env);
+	var processFn = function(i) {
+		if (i < traces.length) {
+			var trace = traces[i];
+			ProcessTrainingTrace(generate, trace, imgHashes, dataSubdir);
+			console.log('Processed trace ' + (i+1) + '/' + traces.length);
+			processFn(i + 1);
+		}
+	}
+	processFn(starti);
 }
 
 // TODO: Update this to work with externally-trained networks
