@@ -10,6 +10,20 @@ function loadTraces(filename) {
 	});
 }
 
+// Call a webppl function from js code by setting up our own trampoline
+var runwebppl = function(fn, args, store, address, continuation) {
+	continuation = continuation || function() {};
+	address = address || '';
+	store = store || {};
+	args = args || [];
+	var allargs = [store, continuation, address].concat(args);
+	var trampoline = fn.apply(null, allargs);
+	while(trampoline) {
+		trampoline = trampoline();
+	}
+}
+
 module.exports = {
-	loadTraces: loadTraces
+	loadTraces: loadTraces,
+	runwebppl: runwebppl
 };

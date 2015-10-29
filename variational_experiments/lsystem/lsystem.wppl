@@ -1,8 +1,5 @@
-var fs = require.call(null, 'fs');
-var cp = require.call(null, 'child_process');
 var THREE = require.call(null, 'three');
 var lsysUtils = require.call(null, 'variational_experiments/lsystem/utils.js');
-var utils = require.call(null, 'variational_experiments/utils.js');
 
 
 // ----------------------------------------------------------------------------
@@ -191,129 +188,26 @@ var generate = function() {
 
 // ----------------------------------------------------------------------------
 
-
-var generateTrainingData = function(name) {
-	var present = { present: require.call(null, 'present') };	// For timing
-	var dataDir = 'variational_experiments/lsystem/gen_traces';
-	if (!fs.existsSync(dataDir)) {
-		fs.mkdirSync(dataDir);
-	}
-	var filename = dataDir + '/' + name + '.txt';
-	var t0 = present.present();
-	var genData = function(counter) {
-		// Generate for a random target, recording the target index as the first
-		//    random choice in the trace so that playback can work correctly.
-		var targetIdx = randomInteger(targetDB.numTargets()); 
-		globalStore.target = targetDB.getTargetByIndex(targetIdx);
-		var MAPtrace = ParticleFilter(generate, 300).MAPparticle.trace;
-		var outTrace = [targetIdx].concat(MAPtrace);
-		fs.appendFileSync(filename, JSON.stringify(outTrace) + '\n');
-		var t = present.present();
-		var rate = counter / ((t - t0)/60000);
-		console.log('Generated trace ' + counter + ' (curr avg rate: ' + rate + ' per min)');
-		genData(counter + 1);
-	}
-	genData(1);
-};
-
-var processTrainingData = function(name, startIndex) {
-	var starti = startIndex === undefined ? 0 : startIndex;
-	var dataFileName = 'variational_experiments/lsystem/gen_traces/' + name + '.txt';
-	var traces = utils.loadTraces(dataFileName);
-	var processedDataDir = 'variational_experiments/lsystem/processed_data';
-	if (!fs.existsSync(processedDataDir)) {
-		fs.mkdirSync(processedDataDir);
-	}
-	var dataSubdir = processedDataDir + '/' + name;
-	if (!fs.existsSync(dataSubdir)) {
-		fs.mkdirSync(dataSubdir);
-	}
-	var imgHashes = {};
-	var ProcessTrainingTrace = require.call(null, 'variational_experiments/lsystem/ProcessTrainingTrace.js').call(null, env);
-	var processFn = function(i) {
-		if (i < traces.length) {
-			var trace = traces[i];
-			ProcessTrainingTrace(generate, trace, imgHashes, dataSubdir);
-			console.log('Processed trace ' + (i+1) + '/' + traces.length);
-			processFn(i + 1);
-		}
-	}
-	processFn(starti);
-}
-
-// TODO: Update this to work with externally-trained networks
-///////////////////////////////////////////////////////////////////////////////
-// var compareVariationalToPrior = function(paramFile) {
-// 	var present = { present: require.call(null, 'present') };	// For timing
-// 	var util = require.call(null, 'util');
-// 	var outfilename = targetName + '_comparison.csv';
-// 	var outfile = fs.openSync('variational_experiments/lsystem/analysis/'+outfilename, 'w');
-// 	fs.writeSync(outfile, 'isVariational,numParticles,sim,time,avgTime\n');
-// 	var nReps = 100;
-// 	map(function(isVariational) {
-// 		console.log('isVariational = ' + isVariational);
-// 		var genFn = makeProgram(isVariational);
-// 		if (isVariational) Variational.loadParams(vparams, paramFile);
-// 		repeat(10, function(np) {
-// 			var nParticles = np + 1;
-// 			console.log('  nParticles = ' + nParticles);
-// 			var simsAndTimes = repeat(nReps, function(i) {
-// 				console.log('    repetition ' + i);
-// 				globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
-// 				var t0 = present.present();
-// 				var ret = ParticleFilter(genFn, nParticles).MAPparticle.value;
-// 				var t1 = present.present();
-// 				var time = t1 - t0;
-// 				var sim = computeSim(ret);
-// 				return [sim, time];
-// 			});
-// 			var times = map(function(st) { return st[1]; }, simsAndTimes);
-// 			var avgTime = sum(times) / times.length;
-// 			map(function(st) {
-// 				fs.writeSync(outfile, util.format('%s,%d,%d,%d,%d\n',
-// 					isVariational, nParticles, st[0], st[1], avgTime));
-// 			}, simsAndTimes);
-// 		});
-// 	}, [false, true]);
-// 	fs.closeSync(outfile);
-// }
+var tasks = require.call(null, 'variational_experiments/lsystem/tasks.js');
 
 
-var serverReponse = function() {
-	var targetName = 'curl';
-	// var targetName = 'bifurcate';
-	// var targetName = 'a';
-	// var targetName = 'heart';
-	// var targetName = 'manybranch_3';
-	// var targetName = 'manybranch_4';
-	// var targetName = 'manybranch_7';
-	// var targetName = 'snake_3';
-	// var targetName = 'spiral';
-	// var targetName = 't';
-	globalStore.target = targetDB.getTargetByName(targetName);
-
-	var particleHistoryUtils = require.call(null, 'variational_experiments/lsystem/particleHistoryUtils');
-	var saveHistory = lsysUtils.deleteStoredImages;
-	var nParticles = 300;
-	var particleHistory = ParticleFilter(generate, nParticles, true, saveHistory).particleHistory;
-	return {
-		targetName: targetName,
-		viewport: viewport,
-		history: particleHistoryUtils.compress(particleHistory)
-	};
-}
-
-
-// ----------------------------------------------------------------------------
+// var targetName = 'curl';
+// // var targetName = 'bifurcate';
+// // var targetName = 'a';
+// // var targetName = 'heart';
+// // var targetName = 'manybranch_3';
+// // var targetName = 'manybranch_4';
+// // var targetName = 'manybranch_7';
+// // var targetName = 'snake_3';
+// // var targetName = 'spiral';
+// // var targetName = 't';
+// var target = targetDB.getTargetByName(targetName);
+// tasks.serverReponse(globalStore, generate, target, viewport);
 
 
 var experimentName = 'allTargets_' + futurePolicy;
-var dataFileName = 'variational_experiments/lsystem/gen_traces/' + experimentName + '.txt'
-
-// serverReponse();
-
-// generateTrainingData(experimentName);
-processTrainingData(experimentName);
+// tasks.generateTrainingData(globalStore, generate, experimentName, targetDB);
+tasks.processTrainingData(globalStore, generate, experimentName, env);
 
 
 

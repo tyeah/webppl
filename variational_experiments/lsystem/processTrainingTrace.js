@@ -42,15 +42,14 @@ module.exports = function(env) {
 			// NOTE: This assumes the program doesn't call 'sample' directly...
 			// (i.e. we assume the last address chunk is the call to 'sample' inside e.g. 'gaussian')
 			var callsite = addrparts[addrparts.length-2];
-			var dataEntry = {
+			this.callsiteData.push({
 				callsite: callsite,
 				erp: erp,
 				params: params,
 				val: val,
 				features: s.currFeatures,
 				img: s.genImg
-			};
-			this.callsiteData.push(dataEntry);
+			});
 		}
 		return k(s, val);
 	}
@@ -119,6 +118,11 @@ module.exports = function(env) {
 		fs.appendFileSync(imgDataFileName, dataBuf);
 		fs.appendFileSync(traceFileName, JSON.stringify(traceDatum) + '\n');
 
+		// When replaying lots of traces, I was getting explosive memory use, which didn't make sense.
+		// This fixes the problem, though I don't know why (I mean, shouldn't this array be GC'ed anyway?)
+		this.callsiteData = undefined;
+
+		env.coroutine = this.oldCoroutine;
 		return this.k(this.s);
 	}
 
