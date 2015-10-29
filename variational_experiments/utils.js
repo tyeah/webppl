@@ -1,4 +1,5 @@
 var fs = require('fs');
+var webppl = require('../src/main.js');
 
 function loadTraces(filename) {
 	var lines = fs.readFileSync(filename).toString().split('\n');
@@ -11,7 +12,7 @@ function loadTraces(filename) {
 }
 
 // Call a webppl function from js code by setting up our own trampoline
-var runwebppl = function(fn, args, store, address, continuation) {
+function runwebppl(fn, args, store, address, continuation) {
 	continuation = continuation || function() {};
 	address = address || '';
 	store = store || {};
@@ -23,7 +24,21 @@ var runwebppl = function(fn, args, store, address, continuation) {
 	}
 }
 
+// Compile and run a webppl file, making a variable called __ROOT
+//    available which refers to some root directory (to make
+//    it easier to call require)
+// Returns whatever the webbpl script returns
+function execWebpplFileWithRoot(filename, rootdir) {
+	var code = "var __ROOT = '" + rootdir + "';\n" + fs.readFileSync(filename);
+	var retval;
+	webppl.run(code, function(s, rets) {
+		retval = rets;
+	});
+	return retval;
+}
+
 module.exports = {
 	loadTraces: loadTraces,
-	runwebppl: runwebppl
+	runwebppl: runwebppl,
+	execWebpplFileWithRoot: execWebpplFileWithRoot
 };

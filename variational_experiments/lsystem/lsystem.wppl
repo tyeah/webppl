@@ -1,5 +1,5 @@
 var THREE = require.call(null, 'three');
-var lsysUtils = require.call(null, 'variational_experiments/lsystem/utils.js');
+var lsysUtils = require.call(null, __ROOT + '/utils.js');
 
 
 // ----------------------------------------------------------------------------
@@ -27,7 +27,7 @@ var polar2rect = function(r, theta) {
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-var targetDB = lsysUtils.newTargetImageDatabase('variational_experiments/lsystem/targets/training');
+var targetDB = lsysUtils.newTargetImageDatabase('targets/training');
 
 // var futurePolicy = 'immediate';
 // var futurePolicy = 'lifo';
@@ -185,29 +185,17 @@ var generate = function() {
 	return globalStore.branches;
 };
 
-
-// ----------------------------------------------------------------------------
-
-var tasks = require.call(null, 'variational_experiments/lsystem/tasks.js');
-
-
-// var targetName = 'curl';
-// // var targetName = 'bifurcate';
-// // var targetName = 'a';
-// // var targetName = 'heart';
-// // var targetName = 'manybranch_3';
-// // var targetName = 'manybranch_4';
-// // var targetName = 'manybranch_7';
-// // var targetName = 'snake_3';
-// // var targetName = 'spiral';
-// // var targetName = 't';
-// var target = targetDB.getTargetByName(targetName);
-// tasks.serverReponse(globalStore, generate, target, viewport);
-
-
-var experimentName = 'allTargets_' + futurePolicy;
-// tasks.generateTrainingData(globalStore, generate, experimentName, targetDB);
-tasks.processTrainingData(globalStore, generate, experimentName, env);
+// Return stuff that external tasks will need
+var returner = function() {
+	return {
+		generate: generate,
+		targetDB: targetDB,
+		viewport: viewport,
+		globalStore: globalStore,
+		environment: env
+	}
+};
+returner();
 
 
 
