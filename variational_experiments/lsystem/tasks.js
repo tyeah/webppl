@@ -57,9 +57,15 @@ var processTrainingData = function(globalStore, generate, name, env) {
 	if (!fs.existsSync(dataSubdir)) {
 		fs.mkdirSync(dataSubdir);
 	}
-	var imgHashes = {};
 	var ProcessTrainingTrace = require('./ProcessTrainingTrace.js')(env);
-	for (var i = 0; i < traces.length; i++) {
+	var imgHashes = {};
+	var starti = 0;
+	// var starti = 11495;
+	// var hashes = fs.readFileSync(processed_data + '/' + name + '/img.txt').toString().split('\n');
+	// for (var i = 0; i < hashes.length; i++) {
+	// 	imgHashes[hashes[i]] = true;
+	// }
+	for (var i = starti; i < traces.length; i++) {
 		var trace = traces[i];
 		utils.runwebppl(ProcessTrainingTrace, [generate, trace, imgHashes, dataSubdir], globalStore);
 		console.log('Processed trace ' + (i+1) + '/' + traces.length);

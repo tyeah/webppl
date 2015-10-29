@@ -87,15 +87,19 @@ module.exports = function(env) {
 				data.imgHash = this.callsiteData[i-1].imgHash;
 			}
 		}
-		var hashConcat = '';
-		for (var i = 0; i < newImgHashes.length; i++) {
-			hashConcat += newImgHashes[i] + '\n';
-		}
-		var buflen = newImgData[0].length;
-		var numDataBytes = buflen * newImgData.length;
-		var dataBuf = new Buffer(numDataBytes);
-		for (var i = 0; i < newImgData.length; i++) {
-			newImgData[i].copy(dataBuf, i*buflen);
+		if (newImgData.length > 0) {
+			var hashConcat = '';
+			for (var i = 0; i < newImgHashes.length; i++) {
+				hashConcat += newImgHashes[i] + '\n';
+			}
+			var buflen = newImgData[0].length;
+			var numDataBytes = buflen * newImgData.length;
+			var dataBuf = new Buffer(numDataBytes);
+			for (var i = 0; i < newImgData.length; i++) {
+				newImgData[i].copy(dataBuf, i*buflen);
+			}
+			fs.appendFileSync(imgHashFileName, hashConcat);
+			fs.appendFileSync(imgDataFileName, dataBuf);
 		}
 
 		// Save the trace data itself (as nested arrays instead of objects,
@@ -114,8 +118,6 @@ module.exports = function(env) {
 			})
 		];
 
-		fs.appendFileSync(imgHashFileName, hashConcat);
-		fs.appendFileSync(imgDataFileName, dataBuf);
 		fs.appendFileSync(traceFileName, JSON.stringify(traceDatum) + '\n');
 
 		// When replaying lots of traces, I was getting explosive memory use, which didn't make sense.
