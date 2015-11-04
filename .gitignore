@@ -7,6 +7,7 @@ compiled/webppl.js
 compiled/webppl.min.js
 
 # Variational stuff
+*.ad
 variational_experiments/*/analysis/*
 variational_experiments/*/gen_traces/*
 variational_experiments/*/processed_data/*
