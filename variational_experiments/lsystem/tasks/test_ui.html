@@ -52,7 +52,6 @@
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
 					renderParticle(canvas, particle, targetImg);
-					// renderParticle(canvas_small, particle, smallTargetImg)
 					renderParticle(canvas_small, particle);
 					// Save image
 					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);

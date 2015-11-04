@@ -7,9 +7,9 @@ var particleHistoryUtils = require('../particleHistoryUtils.js');
 
 
 // TODO: Read from command line?
-var targetName = 'curl';
+// var targetName = 'curl';
 // var targetName = 'bifurcate';
-// var targetName = 'a';
+var targetName = 'a';
 // var targetName = 'heart';
 // var targetName = 'manybranch_3';
 // var targetName = 'manybranch_4';
