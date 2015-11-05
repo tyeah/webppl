@@ -36,6 +36,7 @@ module.exports = function(env) {
         return f.apply(this, [s, newk, a].concat(args));
       }
     };
+    cf.cache = c;
     return k(s, cf);
   }
 
