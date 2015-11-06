@@ -1,8 +1,7 @@
 var fs = require('fs');
 var Canvas = require('canvas');
 var assert = require('assert');
-var numeric = require('numeric');
-var render = require('./render').render;
+var Tensor = require('adnn/tensor');
 
 
 function ImageData2D() {}
@@ -101,6 +100,18 @@ ImageData2D.prototype = {
 			this.data[4*i+3] = 255;	// full alpha
 		}
 		return this;
+	},
+	toTensor: function() {
+		var x = new Tensor([1, this.height, this.width]);
+		var numPixels = this.width*this.height;
+		for (var i = 0; i < numPixels; i++) {
+			var r = this.data[4*i];
+			var g = this.data[4*i+1];
+			var b = this.data[4*i+2];
+			var bit = (r < 128 && g < 128 && b < 128);
+			x.data[i] = bit;
+		}
+		return x;
 	}
 };
 
@@ -137,7 +148,8 @@ function TargetImageDatabase(directory) {
 			filename: fullname,
 			image: undefined,
 			baseline: undefined,
-			canvas: undefined
+			canvas: undefined,
+			tensor: undefined
 		};
 		this.targetsByIndex.push(target);
 		this.targetsByName[shortname] = target;
@@ -148,6 +160,7 @@ function ensureTargetLoaded(target) {
 		target.image = new ImageData2D().loadFromFile(target.filename);
 		target.baseline = baselineSimilarity(target.image);
 		target.canvas = new Canvas(target.image.width, target.image.height);
+		target.tensor = target.image.toTensor();
 	}
 }
 TargetImageDatabase.prototype = {
@@ -176,7 +189,6 @@ function deleteStoredImages(particle) {
 
 
 module.exports = {
-	render: render,
 	newImageData2D: function() { return new ImageData2D(); },
 	newTargetImageDatabase: function(dir) { return new TargetImageDatabase(dir); },
 	normalizedSimilarity: normalizedSimilarity,

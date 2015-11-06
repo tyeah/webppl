@@ -349,27 +349,15 @@ module.exports = function(env) {
     }
   };
 
-  // How the program notifies the inference coroutine of a set of params that should be
-  //    optimized.
-  // 'params' should be a list of Tensors
-  Variational.prototype.registerParams = function(store, name, params) {
-    // Record in global store the params actually used by this particle
-    if (store.__NVusedParams === undefined) {
-      store.__NVusedParams = {};
-    }
-    store.__NVusedParams = _.extend(_.clone(store.__NVusedParams), {
-      name: params
-    });
-    // Record all params in the coroutine
-    this.params[name] = params;
-  }
-
   // Given a list of tensors, return a list of zero tensors of the same dimensions
   function zeros(tensors) {
     return tensors.map(function(x) { return new Tensor(x.dims); });
   }
 
   Variational.prototype.doGradientUpdate = function() {
+    if (this.verbosity.params) {
+      console.log('  params before update: ' + JSON.stringify(this.params));
+    }
     var gradient = this.estimateGradient();
     var maxDelta = 0;
     // Update parameters using AdaGrad
@@ -399,6 +387,9 @@ module.exports = function(env) {
       }
     }
     this.maxDeltaAvg = this.maxDeltaAvg * 0.9 + maxDelta;
+    if (this.verbosity.params) {
+      console.log('  params after update: ' + JSON.stringify(this.params));
+    }
   };
 
   Variational.prototype.estimateGradient = function() {
@@ -555,9 +546,8 @@ module.exports = function(env) {
   Variational.prototype.getParticleGradient = function(particle, zeroAllDerivs) {
     // Backpropagate gradients
     particle.guideScore.backprop();
-    // Extract gradient from used params
-    var usedParams = particle.store.__NVusedParams;
-    var gradient = _.mapObject(usedParams, function(name, paramslist) {
+    // Extract gradient from params
+    var gradient = _.mapObject(params, function(name, paramslist) {
       return paramslist.map(function(params) {
         var grad = ad.derivative(params).clone();
         if (!zeroAllDerivs) {
@@ -588,12 +578,12 @@ module.exports = function(env) {
 
 
   // Globally-available routine for registering optimizable parameters
-  env.variationalParams = function(s, k, a, name, params) {
+  env.registerVariationalParams = function(s, k, a, params) {
     if (env.coroutine instanceof Variational) {
-      env.coroutine.registerParams(s, name, params);
+      env.coroutine.params[a] = params;
     }
     return k(s);
-  }
+  };
 
 
   // For each ERP, define a version that has an importance ERP that uses its own stored parameters

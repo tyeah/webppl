@@ -1,8 +1,12 @@
-var THREE = require.call(null, 'three');
 var lsysUtils = require.call(null, __ROOT + '/utils.js');
+var render = require.call(null, __ROOT + '/render.js');
+var THREE = require.call(null, 'three');
+var ad = require.call(null, 'adnn/ad');
+var nn = require.call(null, 'adnn/nn');
 
 
 // ----------------------------------------------------------------------------
+// Utilities
 
 
 var vec2 = function(x, y) {
@@ -23,6 +27,7 @@ var polar2rect = function(r, theta) {
 
 
 // ----------------------------------------------------------------------------
+// Other globals
 
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
@@ -39,6 +44,7 @@ setFuturePolicy(futurePolicy);
 
 
 // ----------------------------------------------------------------------------
+// Factor encouraging similarity to target image
 
 
 // Compute normalized similarity for a set of branches
@@ -46,11 +52,11 @@ var computeSim = function(branches, inInference) {
 	var target = globalStore.target;
 	// If not in inference, just render everything
 	if (!inInference) {
-		lsysUtils.render(target.canvas, viewport, branches);
+		render.render(target.canvas, viewport, branches);
 	// Otherwise, do an incremental render of the last branch
 	} else {
 		globalStore.genImg.copyToCanvas(target.canvas);
-		lsysUtils.render(target.canvas, viewport, branches, true, false);
+		render.render(target.canvas, viewport, branches, true, false);
 	}
 	globalStore.genImg = lsysUtils.newImageData2D().loadFromCanvas(target.canvas);
 	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
@@ -92,110 +98,167 @@ var targetFactor = function() {
 
 
 // ----------------------------------------------------------------------------
+// Neural network guide stuff
 
-var setCurrFeatures = function(currState) {
-	globalStore.currFeatures = [
-		currState.pos.x,
-		currState.pos.y,
-		currState.depth,
-		currState.angle
-	];
+
+// Convolutional network that parses the target image.
+var makeTargetCNN = function() {
+	//
 };
 
-var initialWidth = 0.75;
-var widthDecay = 0.975;
-var minWidthPercent = 0.2;
+// Recurrent network that tracks latent global state.
+var makeStateRNN = function() {
+	//
+};
 
-var branch = function(currState) {
-	setCurrFeatures(currState);
+// Per-callsite MLPs that combine target parse and latent state with
+//    with current local features.
+var makeParamPredictMLP = function(nOut) {
+	//
+};
 
-	// Generate new branch
-	var width = widthDecay * currState.width;
-	var length = 2;
-	var newang = currState.angle + gaussian(0, Math.PI/8);	
-	var newbranch = {
-		start: currState.pos,
-		angle: newang,
-		width: width,
-		end: currState.pos.clone().add(polar2rect(length, newang))
+var neuralNetwork = cache(function() {
+	var id = arguments[0];
+	if (id === 'targetCNN') {
+		return makeTargetCNN();
+	} else if (id === 'stateRNN') {
+		return makeStateRNN();
+	} else {
+		var nOut = arguments[1];
+		return makeParamPredictMLP(nOut);
+	}
+});
+
+
+// ----------------------------------------------------------------------------
+// The program itself
+
+
+var makeProgram = function(neurallyGuided) {
+
+	// // Set up ERPs (either normal or neurally-guided)
+	// var makeRandomChoice = function(fn, parambounds) {
+	// 	return !neurallyGuided ? fn :
+	// 	function() {
+	// 		//
+	// 	};
+	// };
+	// var _gaussian = makeRandomChoice(gaussian, [undefined, ad.scalar.exp]);
+	// var _flip = makeRandomChoice(flip, [ad.scalar.sigmoid]);
+
+	// var setCurrFeatures = function(currState) {
+	// 	globalStore.currFeatures = [
+	// 		currState.pos.x,
+	// 		currState.pos.y,
+	// 		currState.depth,
+	// 		currState.angle
+	// 	];
+	// };
+
+	var initialWidth = 0.75;
+	var widthDecay = 0.975;
+	var minWidthPercent = 0.2;
+
+	var branch = function(currState) {
+		if (neurallyGuided) setCurrFeatures(currState);
+
+		// Generate new branch
+		var width = widthDecay * currState.width;
+		var length = 2;
+		var newang = currState.angle + gaussian(0, Math.PI/8);	
+		var newbranch = {
+			start: currState.pos,
+			angle: newang,
+			width: width,
+			end: currState.pos.clone().add(polar2rect(length, newang))
+		};
+
+		// Update model state
+		globalStore.branches = { branch: newbranch, next: globalStore.branches };
+		globalStore.numBranches = globalStore.numBranches + 1;
+		globalStore.bbox = globalStore.bbox.clone();
+		globalStore.bbox.expandByPoint(newbranch.start);
+		globalStore.bbox.expandByPoint(newbranch.end);
+
+		// Add new heuristic factor
+		targetFactor();
+
+		var newState = {
+			depth: currState.depth + 1,
+			pos: newbranch.end,
+			angle: newbranch.angle,
+			width: newbranch.width
+		};
+
+		// Terminate?
+		future(function() {
+			var terminateProb = 0.5;
+			if (flip(terminateProb)) {
+				globalStore.terminated = true;
+			} else {
+				// Generate no further branches w/ prob 1/3
+				// Generate one further branch w/ prob 1/3
+				// Generate two further branches w/ prob 1/3
+				future(function() {
+					if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && flip(0.66)) {
+						branch(newState);
+						future(function() {
+							if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && flip(0.5)) {
+								branch(newState);
+							}
+							// else factor(0);
+						});
+					}
+					// else factor(0);
+				});
+			}
+		});
 	};
 
-	// Update model state
-	globalStore.branches = { branch: newbranch, next: globalStore.branches };
-	globalStore.numBranches = globalStore.numBranches + 1;
-	globalStore.bbox = globalStore.bbox.clone();
-	globalStore.bbox.expandByPoint(newbranch.start);
-	globalStore.bbox.expandByPoint(newbranch.end);
-
-	// Add new heuristic factor
-	targetFactor();
-
-	var newState = {
-		depth: currState.depth + 1,
-		pos: newbranch.end,
-		angle: newbranch.angle,
-		width: newbranch.width
-	};
-
-	// Terminate?
-	future(function() {
-		var terminateProb = 0.5;
-		if (flip(terminateProb)) {
-			globalStore.terminated = true;
-		} else {
-			// Generate no further branches w/ prob 1/3
-			// Generate one further branch w/ prob 1/3
-			// Generate two further branches w/ prob 1/3
-			future(function() {
-				if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && flip(0.66)) {
-					branch(newState);
-					future(function() {
-						if (!globalStore.terminated && newState.width/initialWidth > minWidthPercent && flip(0.5)) {
-							branch(newState);
-						}
-						// else factor(0);
-					});
-				}
-				// else factor(0);
-			});
+	var generate = function() {
+		// If target is not fixed, then marginalize over targets
+		if (globalStore.target === undefined) {
+			globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
 		}
-	});
-};
-
-var generate = function() {
-	// If target is not fixed, then marginalize over targets
-	if (globalStore.target === undefined) {
-		globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
-	}
-	var w = globalStore.target.image.width;
-	var h = globalStore.target.image.height;
-	globalStore.genImg = lsysUtils.newImageData2D().fillWhite(w, h);
-	globalStore.branches = undefined;
-	globalStore.numBranches = 0;
-	globalStore.bbox = box2();
-	globalStore.currFeatures = [];
-	var startState = {
-		depth: 0,
-		pos: vec2(0, 0),
-		angle: gaussian(-Math.PI/2, Math.PI/6),
-		width: initialWidth
+		// if (neurallyGuided) {
+		// 	globalStore.targetFeatures = neuralNetwork('targetCNN').eval(globalStore.target.tensor);
+		// }
+		var w = globalStore.target.image.width;
+		var h = globalStore.target.image.height;
+		globalStore.genImg = lsysUtils.newImageData2D().fillWhite(w, h);
+		globalStore.branches = undefined;
+		globalStore.numBranches = 0;
+		globalStore.bbox = box2();
+		globalStore.currFeatures = [];
+		var startState = {
+			depth: 0,
+			pos: vec2(0, 0),
+			angle: gaussian(-Math.PI/2, Math.PI/6),
+			width: initialWidth
+		};
+		future(function() { branch(startState); });
+		finishAllFutures();
+		return globalStore.branches;
 	};
-	future(function() { branch(startState); });
-	finishAllFutures();
-	return globalStore.branches;
-};
 
+	return generate;
+}
+
+
+// ----------------------------------------------------------------------------
 // Return stuff that external tasks will need
-var returner = function() {
-	return {
-		generate: generate,
-		targetDB: targetDB,
-		viewport: viewport,
-		globalStore: globalStore,
-		environment: env
-	}
+
+
+var rets = {
+	generate: makeProgram(false),
+	generatedGuided: makeProgram(true),
+	targetDB: targetDB,
+	viewport: viewport,
+	globalStore: globalStore,
+	neuralNets: neuralNetwork.cache,
+	environment: env
 };
-returner();
+rets;
 
 
 
