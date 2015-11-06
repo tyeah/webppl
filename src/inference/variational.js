@@ -366,7 +366,7 @@ module.exports = function(env) {
 
   // Given a list of tensors, return a list of zero tensors of the same dimensions
   function zeros(tensors) {
-    return tensors.map(function(x) { return new Tensor(x.dims).zero(); });
+    return tensors.map(function(x) { return new Tensor(x.dims); });
   }
 
   Variational.prototype.doGradientUpdate = function() {
