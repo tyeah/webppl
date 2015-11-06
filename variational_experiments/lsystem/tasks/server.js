@@ -1,5 +1,6 @@
 var http = require('http');
 var assert = require('assert');
+var fs = require('fs');
 var utils = require('../../utils.js');
 var webppl = require('../../../src/main.js');
 var lsysUtils = require('../utils.js');
@@ -19,9 +20,7 @@ var targetName = 'a';
 // var targetName = 't';
 
 
-function handleRequest(request, response){
-	console.log('Request received:');
-
+function generateResult() {
 	// Initialize
 	console.log('   Compiling code...');
 	var file = __dirname + '/../lsystem.wppl';
@@ -47,14 +46,38 @@ function handleRequest(request, response){
 		history: particleHistoryUtils.compress(particleHistory)
 	};
 
-	// Respond
-	console.log('   Done; sending response.');
-	response.end(JSON.stringify(result));
+	// Finish
+	return JSON.stringify(result);
 }
+
+function fetchAsset(path) {
+	var filename = __dirname + '/..' + path;
+	if (!fs.existsSync(filename)) {
+		console.log('   Requested asset does not exist; ignoring.');
+	} else {
+		return fs.readFileSync(filename);
+	}
+}
+
+function handleRequest(request, response) {
+	console.log('Request received: ' + request.url);
+	var respContents;
+	if (request.url === '/generate') {
+		console.log('   [Generating result]');
+		respContents = generateResult();
+	} else {
+		console.log('   [Fetching static asset]');
+		var path = request.url === '/' ? '/test_ui.html' : request.url;
+		respContents = fetchAsset(path);
+	}
+	console.log('   Done.');
+	response.end(respContents);
+}
+
 
 var server = http.createServer(handleRequest);
 
-var PORT = 8000;
+var PORT = process.argv[2] || 8000;
 server.listen(PORT, function(){
     console.log("Server listening on http://localhost:%s", PORT);
 });

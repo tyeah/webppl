@@ -4,8 +4,8 @@
 		<script src='http://code.jquery.com/jquery-1.11.3.min.js'> </script>
 		<script src='https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5.1/dat.gui.min.js'></script>
 		<script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r72/three.min.js'></script>
-		<script src='../render.js'></script>
-		<script src='../particleHistoryUtils.js'></script>
+		<script src='render.js'></script>
+		<script src='particleHistoryUtils.js'></script>
 	</head>
 	<body onkeydown='keyEvent(event)'>
 		<script>
@@ -180,7 +180,7 @@
 			function generate() {
 				console.log('------------------------------');
 				console.log('Generating...');
-				$.getJSON('http://localhost:8000', function(data) {
+				$.getJSON('generate', function(data) {
 					// Process data
 					console.log('   Received data; processing...');
 					particleHistory = particleHistoryUtils.decompress(data.history);
