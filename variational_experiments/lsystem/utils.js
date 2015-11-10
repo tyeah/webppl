@@ -101,17 +101,28 @@ ImageData2D.prototype = {
 		}
 		return this;
 	},
+	// Converts [0, 255] to [-1, 1]
 	toTensor: function() {
 		var x = new Tensor([1, this.height, this.width]);
 		var numPixels = this.width*this.height;
 		for (var i = 0; i < numPixels; i++) {
 			var r = this.data[4*i];
-			var g = this.data[4*i+1];
-			var b = this.data[4*i+2];
-			var bit = (r < 128 && g < 128 && b < 128);
-			x.data[i] = bit;
+			x.data[i] = 2*(r / 255) - 1;
 		}
 		return x;
+	},
+	// Converts [-1, 1] to [0, 255]
+	fromTensor: function(x, w, h) {
+		this.fillWhite(w, h);
+		var numPixels = this.width*this.height;
+		for (var i = 0; i < numPixels; i++) {
+			var p = Math.floor(255*0.5*(x.data[i] + 1));
+			this.data[4*i] = p;
+			this.data[4*i+1] = p;
+			this.data[4*i+2] = p;
+			this.data[4*i+3] = 255;	// full alpha
+		}
+		return this;
 	}
 };
 
@@ -189,8 +200,8 @@ function deleteStoredImages(particle) {
 
 
 module.exports = {
-	newImageData2D: function() { return new ImageData2D(); },
-	newTargetImageDatabase: function(dir) { return new TargetImageDatabase(dir); },
+	ImageData2D: ImageData2D,
+	TargetImageDatabase: TargetImageDatabase,
 	normalizedSimilarity: normalizedSimilarity,
 	deleteStoredImages: deleteStoredImages
 };

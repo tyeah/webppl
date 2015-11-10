@@ -1,3 +1,4 @@
+var utils = require.call(null, __ROOT + '/../utils.js');
 var lsysUtils = require.call(null, __ROOT + '/utils.js');
 var render = require.call(null, __ROOT + '/render.js');
 var THREE = require.call(null, 'three');
@@ -10,26 +11,8 @@ var nn = require.call(null, 'adnn/nn');
 // Utilities
 
 
-var vec2 = function(x, y) {
-	var v = Object.create(THREE.Vector2.prototype);
-	THREE.Vector2.call(v, x, y);
-	return v;
-};
-
-var box2 = function() {
-	var b = Object.create(THREE.Box2.prototype);
-	THREE.Box2.call(b);
-	return b;
-};
-
-var tensor = function(dims) {
-	var x = Object.create(Tensor.prototype);
-	Tensor.call(x, dims);
-	return x;
-};
-
 var polar2rect = function(r, theta) {
-	return vec2(r*Math.cos(theta), r*Math.sin(theta));
+	return utils.new(THREE.Vector2, r*Math.cos(theta), r*Math.sin(theta));
 };
 
 var fuzz = [0, 1e-8];
@@ -55,7 +38,7 @@ var normang = function(theta) {
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-var targetDB = lsysUtils.newTargetImageDatabase('targets/training');
+var targetDB = utils.new(lsysUtils.TargetImageDatabase, 'targets/training');
 
 // var futurePolicy = 'immediate';
 // var futurePolicy = 'lifo';
@@ -81,7 +64,7 @@ var computeSim = function(branches, inInference) {
 		globalStore.genImg.copyToCanvas(target.canvas);
 		render.render(target.canvas, viewport, branches, true, false);
 	}
-	globalStore.genImg = lsysUtils.newImageData2D().loadFromCanvas(target.canvas);
+	globalStore.genImg = utils.new(lsysUtils.ImageData2D).loadFromCanvas(target.canvas);
 	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
 };
 
@@ -124,66 +107,86 @@ var targetFactor = function() {
 // Neural network guide stuff
 
 
+// Whether to use RNN for latent global state, or CNN on image-thus-far.
+var useRecurrentState = false;
+
+// Register variational params and set training to true
 var netwrapper = function(fn) {
 	return function() {
-		var net = fn.apply(null, arguments);
+		var net = apply(fn, arguments);
 		registerVariationalParams(net.parameters);
 		net.setTraining(true);
 		return net;
 	};
 };
 
-var nLocalFeatures = 4;
-var nTargetFeatures = 10;
-var nStateFeatures = 10;
+var nImgFilters = 1;
+var filterSize = 5;
+var imgSize = 50;
+var imgSizeReduced1 = Math.floor(imgSize/2);
+var imgSizeReduced2 = Math.floor(imgSizeReduced1/2);
+var imgSizeReduced3 = Math.floor(imgSizeReduced2/2);
+var nTargetFeatures = imgSizeReduced3*imgSizeReduced3*nImgFilters;
 
-// Convolutional network that parses the target image.
-var makeTargetCNN = netwrapper(function() {
-	//
+var nLocalFeatures = 4;
+var nRecurrentStateFeatures = 10;
+
+var nStateFeatures = useRecurrentState ? nRecurrentStateFeatures : nTargetFeatures;
+
+// Convolutional network that parses the target image (or generated image).
+var makeCNN = netwrapper(function() {
+	return nn.sequence([
+		nn.convolution({filterSize: filterSize, outDepth: nImgFilters}),
+		nn.maxpool({filterSize: 2}),
+		nn.convolution({filterSize: filterSize, outDepth: nImgFilters}),
+		nn.maxpool({filterSize: 2}),
+		nn.convolution({filterSize: filterSize, outDepth: nImgFilters}),
+		nn.maxpool({filterSize: 2})
+	]);
 });
 
 // Recurrent network that tracks latent global state.
 var makeInitState = netwrapper(function() {
-	var net = nn.constantparams([nStateFeatures]);
-	registerVariationalParams(net.parameters);
-	net.setTraining(true);
-	return net;
+	return nn.constantparams([nStateFeatures]);
 });
 var makeStateRNN = netwrapper(function() {
-	// Currently just one linear layer + nonlinearity
 	var localInput = nn.ast.input();
 	var latentInput = nn.ast.input();
 	var concatNode = nn.concat.compose(localInput, latentInput);
 	var nIn = nLocalFeatures + nStateFeatures;
-	var linearNode = nn.linear(nIn, nStateFeatures).compose(concatNode);
-	var tanhNode = nn.tanh.compose(linearNode);
-	return nn.ast.compile([localInput, latentInput], [tanhNode]);
+	var mlpNode = nn.mlp(nIn, [
+		{nOut: nIn, activation: nn.relu},
+		{nOut: nStateFeatures}
+	]).compose(concatNode);
+	return nn.ast.compile([localInput, latentInput], [mlpNode]);
 });
 
 // Per-callsite MLPs that combine target state and latent state with
 //    current local features.
 var makeParamPredictMLP = netwrapper(function(nOut) {
-	// Currently just one linear layer + nonlinearity
 	var localInput = nn.ast.input();
 	var latentInput = nn.ast.input();
 	var targetInput = nn.ast.input();
 	var concatNode = nn.concat.compose(localInput, latentInput, targetInput);
 	var nIn = nLocalFeatures + nStateFeatures + nTargetFeatures;
-	var linearNode = nn.linear(nIn, nOut).compose(concatNode);
-	var tanhNode = nn.tanh.compose(linearNode);
-	return nn.ast.compile([localInput, latentInput, targetInput], [tanhNode]);
+	var mlpNode = nn.mlp(nIn, [
+		{nOut: Math.floor(nIn/2), activation: nn.relu},
+		{nOut: nOut}
+	]).compose(concatNode);
+	return nn.ast.compile([localInput, latentInput, targetInput], [mlpNode]);
 });
 
 var neuralNetwork = cache(function() {
-	var id = arguments[0];
-	if (id === 'targetCNN') {
-		return makeTargetCNN();
+	var args = arguments;
+	var id = args[0];
+	if (id === 'targetCNN' || id === 'genCNN') {
+		return makeCNN();
 	} else if (id === 'stateInit') {
 		return makeInitState();
 	} else if (id === 'stateRNN') {
 		return makeStateRNN();
 	} else {
-		var nOut = arguments[1];
+		var nOut = args[1];
 		return makeParamPredictMLP(nOut);
 	}
 });
@@ -214,15 +217,15 @@ var makeProgram = function(neurallyGuided) {
 				localState.features, globalStore.stateFeatures, globalStore.targetFeatures
 			);
 			var scalarizedParams = ad.tensorToScalars(vparams);
-			var finalParams = mapIndexed(function(p, i) {
-				return bounds[i] ? ad.scalar[bounds[i]](p) : p;
+			var finalParams = mapIndexed(function(i, p) {
+				return bounds[i] ? bounds[i].call(null, p) : p;
 			}, scalarizedParams);
-			verp.importanceERP.setParams(vparams);
+			verp.importanceERP.setParams(finalParams);
 			return sample(verp, params);
 		};
 	};
-	var _gaussian = makeSampler('gaussianERP', [undefined, 'exp']);
-	var _flip = makeSampler('bernoulliERP', ['sigmoid']);
+	var _gaussian = makeSampler('gaussianERP', [undefined, ad.scalar.exp]);
+	var _flip = makeSampler('bernoulliERP', [ad.scalar.sigmoid]);
 
 
 	var initialWidth = 0.75;
@@ -231,7 +234,7 @@ var makeProgram = function(neurallyGuided) {
 	var minWidth = minWidthPercent*initialWidth;
 
 	var state = function(obj) {
-		var features = tensor([4]).fromFlatArray([
+		var features = utils.new(Tensor, [4]).fromFlatArray([
 			normalize(obj.pos.x, viewport.xmin, viewport.xmax),
 			normalize(obj.pos.y, viewport.ymin, viewport.ymax),
 			normalize(obj.width, minWidth, initialWidth),
@@ -251,7 +254,8 @@ var makeProgram = function(neurallyGuided) {
 		// Generate new branch
 		var width = widthDecay * currState.width;
 		var length = 2;
-		var newang = currState.angle + gaussian(0, Math.PI/8);	
+		// var newang = currState.angle + gaussian(0, Math.PI/8);
+		var newang = currState.angle + _gaussian(0, Math.PI/8, currState, 'angle');
 		var newbranch = {
 			start: currState.pos,
 			angle: newang,
@@ -267,7 +271,7 @@ var makeProgram = function(neurallyGuided) {
 		globalStore.bbox.expandByPoint(newbranch.end);
 
 		// Add new heuristic factor
-		targetFactor();
+		if (!globalStore.noFactors) targetFactor();
 
 		var newState = state({
 			depth: currState.depth + 1,
@@ -277,24 +281,31 @@ var makeProgram = function(neurallyGuided) {
 		});
 
 		if (neurallyGuided)  {
-			globalStore.stateFeatures = neuralNetwork('stateRNN').eval(
-				newState.features, globalStore.stateFeatures);
+			if (useRecurrentState) {
+				globalStore.stateFeatures = neuralNetwork('stateRNN').eval(
+					newState.features, globalStore.stateFeatures);
+			} else {
+				globalStore.stateFeatures = neuralNetwork('genCNN').eval(globalStore.genImg.toTensor());
+			}
 		}
 
 		// Terminate?
 		future(function() {
 			var terminateProb = 0.5;
-			if (flip(terminateProb)) {
+			// if (flip(terminateProb)) {
+			if (flip(terminateProb, newState, 'terminate')) {
 				globalStore.terminated = true;
 			} else {
 				// Generate no further branches w/ prob 1/3
 				// Generate one further branch w/ prob 1/3
 				// Generate two further branches w/ prob 1/3
 				future(function() {
-					if (!globalStore.terminated && newState.width > minWidth && flip(0.66)) {
+					// if (!globalStore.terminated && newState.width > minWidth && flip(0.66)) {
+						if (!globalStore.terminated && newState.width > minWidth && flip(0.66, newState, 'branch1')) {
 						branch(newState);
 						future(function() {
-							if (!globalStore.terminated && newState.width > minWidth && flip(0.5)) {
+							// if (!globalStore.terminated && newState.width > minWidth && flip(0.5)) {
+								if (!globalStore.terminated && newState.width > minWidth && flip(0.5, newState, 'branch2')) {
 								branch(newState);
 							}
 							// else factor(0);
@@ -311,20 +322,24 @@ var makeProgram = function(neurallyGuided) {
 		if (globalStore.target === undefined) {
 			globalStore.target = targetDB.getTargetByIndex(randomInteger(targetDB.numTargets()));
 		}
-		if (neurallyGuided) {
-			globalStore.targetFeatures = neuralNetwork('targetCNN').eval(globalStore.target.tensor);
-			globalStore.stateFeatures = neuralNetwork('initState').eval();
-		}
 		var w = globalStore.target.image.width;
 		var h = globalStore.target.image.height;
-		globalStore.genImg = lsysUtils.newImageData2D().fillWhite(w, h);
+		globalStore.genImg = utils.new(lsysUtils.ImageData2D).fillWhite(w, h);
+		if (neurallyGuided) {
+			globalStore.targetFeatures = neuralNetwork('targetCNN').eval(globalStore.target.tensor);
+			if (useRecurrentState) {
+				globalStore.stateFeatures = neuralNetwork('initState').eval();
+			} else {
+				globalStore.stateFeatures = neuralNetwork('genCNN').eval(globalStore.genImg.toTensor());
+			}
+		}
 		globalStore.branches = undefined;
 		globalStore.numBranches = 0;
-		globalStore.bbox = box2();
+		globalStore.bbox = utils.new(THREE.Box2);
 		globalStore.currFeatures = [];
 		var startState = state({
 			depth: 0,
-			pos: vec2(0, 0),
+			pos: utils.new(THREE.Vector2, 0, 0),
 			angle: gaussian(-Math.PI/2, Math.PI/6),
 			width: initialWidth
 		});
@@ -343,7 +358,7 @@ var makeProgram = function(neurallyGuided) {
 
 var rets = {
 	generate: makeProgram(false),
-	generatedGuided: makeProgram(true),
+	generateGuided: makeProgram(true),
 	targetDB: targetDB,
 	viewport: viewport,
 	globalStore: globalStore,

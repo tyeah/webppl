@@ -326,6 +326,7 @@ module.exports = function(env) {
       this.verbosity.processRetVals(this.particles.map(function(p) { return p.value; }))
     }
     this.doGradientUpdate();
+    this.computeDiagnostics();
     var converged = this.maxDeltaAvg < this.convergeEps;
     if (converged || this.flightsLeft === 0) {
       if (this.verbosity.endStatus) {
@@ -346,6 +347,48 @@ module.exports = function(env) {
     } else {
       // Run another flight
       return this.runFlight();
+    }
+  };
+
+  Variational.prototype.computeDiagnostics = function() {
+    var guideScore = 0;
+    var targetScore = 0;
+    var scoreDiff = 0;
+    var time = hrtimeToSeconds(process.hrtime(this.startTime));
+    for (var i = 0; i < this.particles.length; i++) {
+      var p = this.particles[i];
+      var pgs = ad.project(p.guideScore);
+      guideScore += pgs;
+      targetScore += p.targetScore;
+      scoreDiff += (p.targetScore - pgs);
+    }
+    guideScore /= this.numParticles;
+    targetScore /= this.numParticles;
+    scoreDiff /= this.numParticles;
+    if (!this.diagnostics.hasOwnProperty('scoreDiffs')) {
+      this.diagnostics.guideScores = [];
+      this.diagnostics.targetScores = [];
+      this.diagnostics.scoreDiffs = [];
+      this.diagnostics.times = [];
+      this.diagnostics.avgTime = 0;
+    }
+    var n = this.diagnostics.times.length;
+    this.diagnostics.scoreDiffs.push(guideScore);
+    this.diagnostics.scoreDiffs.push(targetScore);
+    this.diagnostics.scoreDiffs.push(scoreDiff);
+    this.diagnostics.times.push(time);
+    this.diagnostics.avgTime = (n*this.diagnostics.avgTime + time) / (n + 1);
+    if (this.verbosity.guideScore) {
+      console.log('  guideScore: ' + guideScore);
+    }
+    if (this.verbosity.targetScore) {
+      console.log('  targetScore: ' + targetScore);
+    }
+    if (this.verbosity.scoreDiff) {
+      console.log('  scoreDiff: ' + scoreDiff);
+    }
+    if (this.verbosity.time) {
+      console.log('  time elapsed: ' + time + ' (avg per flight: ' + this.diagnostics.avgTime + ')');
     }
   };
 
@@ -376,7 +419,7 @@ module.exports = function(env) {
         var rg2 = this.runningG2[name][i];
         rg2.addeq(grad.mul(grad));
         var weight = rg2.sqrt().muleq(1/this.adagradInitLearnRate);
-        if (!weight.isFinite().all()) {
+        if (!weight.isFinite().allreduce()) {
           console.log('name: ' + name);
           console.log('grad: ' + JSON.stringify(grad));
           console.log('weight: ' + JSON.stringify(weight));
@@ -404,21 +447,6 @@ module.exports = function(env) {
       throw 'Unrecognized variational gradientEstimator ' + this.gradientEstimator;
     }
 
-    var scoreDiff = 0;
-    for (var i = 0; i < this.particles.length; i++) {
-      var p = this.particles[i];
-      scoreDiff += (p.targetScore - ad.project(p.guideScore));
-    }
-    scoreDiff /= this.numParticles;
-    if (!this.diagnostics.hasOwnProperty('scoreDiffs')) {
-      this.diagnostics.scoreDiffs = [];
-      this.diagnostics.times = [];
-    }
-    this.diagnostics.scoreDiffs.push(scoreDiff);
-    this.diagnostics.times.push(hrtimeToSeconds(process.hrtime(this.startTime)));
-    if (this.verbosity.scoreDiff) {
-      console.log('  scoreDiff: ' + scoreDiff);
-    }
     if (this.verbosity.gradientEstimate) {
       console.log('  gradientEst: ' + JSON.stringify(gradient));
     }
@@ -547,19 +575,19 @@ module.exports = function(env) {
     // Backpropagate gradients
     particle.guideScore.backprop();
     // Extract gradient from params
-    var gradient = _.mapObject(params, function(name, paramslist) {
-      return paramslist.map(function(params) {
+    var gradient = _.mapObject(this.params, function(paramslist, name) {
+      return paramslist.map(function(params, i) {
         var grad = ad.derivative(params).clone();
         if (!zeroAllDerivs) {
           // Just zero the parameter derivatives.
           params.zeroDerivatives();
         }
         if (this.warnOnZeroGradient && !grad.allreduce()) {
-          console.log('  -- WARN: Parameter ' + name + ' has zero gradient --');
+          console.log('  -- WARN: Parameter ' + name + ' , ' + i + ' has zero gradient --');
         }
         return grad;
-      });
-    });
+      }.bind(this));
+    }.bind(this));
     if (this.verbosity.gradientSamples) {
       console.log('    gradientSamp: ' + JSON.stringify(gradient));
     }
@@ -578,12 +606,12 @@ module.exports = function(env) {
 
 
   // Globally-available routine for registering optimizable parameters
-  env.registerVariationalParams = function(s, k, a, params) {
+  function registerVariationalParams(s, k, a, params) {
     if (env.coroutine instanceof Variational) {
       env.coroutine.params[a] = params;
     }
     return k(s);
-  };
+  }
 
 
   // For each ERP, define a version that has an importance ERP that uses its own stored parameters
@@ -611,7 +639,8 @@ module.exports = function(env) {
 
 
   return {
-    Variational: VI
+    Variational: VI,
+    registerVariationalParams: registerVariationalParams
   };
 
 };

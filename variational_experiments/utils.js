@@ -37,8 +37,17 @@ function execWebpplFileWithRoot(filename, rootdir) {
 	return retval;
 }
 
+// Wrapper for the 'new' operator that can be called in webppl code
+function _new(ctor) {
+	var args = Array.prototype.slice.call(arguments, 1);
+	var obj = Object.create(ctor.prototype);
+	ctor.apply(obj, args);
+	return obj;
+};
+
 module.exports = {
 	loadTraces: loadTraces,
 	runwebppl: runwebppl,
-	execWebpplFileWithRoot: execWebpplFileWithRoot
+	execWebpplFileWithRoot: execWebpplFileWithRoot,
+	new: _new
 };
