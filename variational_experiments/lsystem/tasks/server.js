@@ -1,3 +1,4 @@
+var _ = require('underscore');
 var http = require('http');
 var assert = require('assert');
 var fs = require('fs');
@@ -11,11 +12,25 @@ var particleHistoryUtils = require('../particleHistoryUtils.js');
 // Parse options
 var opts = require('minimist')(process.argv.slice(2), {
 	default: {
+		port: 8000,
+		// TODO: Make these eventually be controlled by the client UI?
 		target: 'a',
-		port: 8000
+		numParticles: 300
 	}
 });
 console.log('Target = ' + opts.target);
+console.log('Num particles = ' + opts.numParticles);
+var trainedNets;
+if (opts.trainedModel) {
+	console.log("Using trained model '" + opts.trainedModel + "'");
+	var nn = require('adnn/nn');
+	var saved_params = __dirname + '/../saved_params';
+	var paramfile = saved_params + '/' + opts.trainedModel + '.txt';
+	var jsonNets = JSON.parse(fs.readFileSync(paramfile).toString());
+	trainedNets = _.mapObject(jsonNets, function(jn) {
+		return nn.deserializeJSON(jn);
+	});
+}
 
 function generateResult() {
 	// Initialize
@@ -24,18 +39,24 @@ function generateResult() {
 	var rootdir = __dirname + '/..';
 	var rets = utils.execWebpplFileWithRoot(file, rootdir);
 	var globalStore = rets.globalStore;
-	var generate = rets.generate;
+	var generate = opts.trainedModel ? rets.generateGuided : rets.generate;
 	var targetDB = rets.targetDB;
 	var viewport = rets.viewport;
+	var neuralNets = rets.neuralNets;
+	if (opts.trainedModel) {
+		for (var name in neuralNets) {
+			neuralNets[name] = undefined;
+		}
+		_.extend(neuralNets, trainedNets);
+	}
 
 	// Run
 	console.log('   Running program...');
 	var saveHistory = lsysUtils.deleteStoredImages;
-	var nParticles = 300;
 	globalStore.target = targetDB.getTargetByName(opts.target);
 	var particleHistory;
 	var t0 = present();
-	utils.runwebppl(ParticleFilter, [generate, nParticles, true, saveHistory], globalStore, '', function(s, ret) {
+	utils.runwebppl(ParticleFilter, [generate, opts.numParticles, true, saveHistory], globalStore, '', function(s, ret) {
 		particleHistory = ret.particleHistory;
 		var t1 = present();
 		console.log('   (Time taken: ' + (t1-t0)/1000 + ')');
