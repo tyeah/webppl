@@ -79,6 +79,14 @@ module.exports = function(env) {
     return avgW;
   }
 
+  function readableParams(paramsObj) {
+    return _.mapObject(paramsObj, function(paramslist) {
+      return paramslist.map(function(x) {
+        return ad.project(x).toArray();
+      })
+    });
+  };
+
   function Variational(s, k, a, wpplFn, opts) {
 
     function opt(name, defaultval) {
@@ -172,9 +180,10 @@ module.exports = function(env) {
       console.log('name: ' + a);
       console.log('erp: ' + erp.sample.name);
       console.log('val: ' + val);
-      console.log('params: ' + params);
-      console.log('importance params: ' + importanceERP.rawparams);
-      console.log('scores:', particle.targetScore, ad.project(particle.guideScore), particle.weight);
+      console.log('prior params: ' + params);
+      console.log('guide params: ' + importanceERP.rawparams);
+      console.log('target score: ' + particle.targetScore);
+      console.log('guide score: ' + ad.project(particle.guideScore));
       assert(false, 'Found non-finite particle weight!');
     }
     return cc(s, val);
@@ -372,12 +381,13 @@ module.exports = function(env) {
       this.diagnostics.times = [];
       this.diagnostics.avgTime = 0;
     }
-    var n = this.diagnostics.times.length;
     this.diagnostics.scoreDiffs.push(guideScore);
     this.diagnostics.scoreDiffs.push(targetScore);
     this.diagnostics.scoreDiffs.push(scoreDiff);
+    var n = this.diagnostics.times.length;
+    var timeDiff = time - (n === 0 ? 0 : this.diagnostics.times[n-1]);
     this.diagnostics.times.push(time);
-    this.diagnostics.avgTime = (n*this.diagnostics.avgTime + time) / (n + 1);
+    this.diagnostics.avgTime = (n*this.diagnostics.avgTime + timeDiff) / (n + 1);
     if (this.verbosity.guideScore) {
       console.log('  guideScore: ' + guideScore);
     }
@@ -399,7 +409,7 @@ module.exports = function(env) {
 
   Variational.prototype.doGradientUpdate = function() {
     if (this.verbosity.params) {
-      console.log('  params before update: ' + JSON.stringify(this.params));
+      console.log('  params before update: ' + JSON.stringify(readableParams(this.params)));
     }
     var gradient = this.estimateGradient();
     var maxDelta = 0;
@@ -418,11 +428,11 @@ module.exports = function(env) {
         }
         var rg2 = this.runningG2[name][i];
         rg2.addeq(grad.mul(grad));
-        var weight = rg2.sqrt().muleq(1/this.adagradInitLearnRate);
+        var weight = rg2.sqrt().inverteq().muleq(this.adagradInitLearnRate);
         if (!weight.isFinite().allreduce()) {
           console.log('name: ' + name);
-          console.log('grad: ' + JSON.stringify(grad));
-          console.log('weight: ' + JSON.stringify(weight));
+          console.log('grad: ' + JSON.stringify(grad.toArray()));
+          console.log('weight: ' + JSON.stringify(weight.toArray()));
           assert(false, 'Found non-finite AdaGrad weight!');
         }
         params.addeq(grad.muleq(weight));
@@ -431,7 +441,7 @@ module.exports = function(env) {
     }
     this.maxDeltaAvg = this.maxDeltaAvg * 0.9 + maxDelta;
     if (this.verbosity.params) {
-      console.log('  params after update: ' + JSON.stringify(this.params));
+      console.log('  params after update: ' + JSON.stringify(readableParams(this.params)));
     }
   };
 
@@ -448,7 +458,7 @@ module.exports = function(env) {
     }
 
     if (this.verbosity.gradientEstimate) {
-      console.log('  gradientEst: ' + JSON.stringify(gradient));
+      console.log('  gradientEst: ' + JSON.stringify(readableParams(gradient)));
     }
 
     return gradient;
@@ -559,7 +569,7 @@ module.exports = function(env) {
     }
     for (var name in sumGrad) {
       for (var j = 0; j < gradlist.length; j++) {
-        sumGrad[name][i].diveq(this.numParticles);
+        sumGrad[name][j].diveq(this.numParticles);
       }
     }
     return sumGrad;
@@ -589,7 +599,7 @@ module.exports = function(env) {
       }.bind(this));
     }.bind(this));
     if (this.verbosity.gradientSamples) {
-      console.log('    gradientSamp: ' + JSON.stringify(gradient));
+      console.log('    gradientSamp: ' + JSON.stringify(readableParams(gradient)));
     }
     if (zeroAllDerivs) {
       // Zero all derivatives along the backprop graph.

@@ -23,25 +23,31 @@ var filename = gen_traces + '/' + name + '.txt';
 
 var trainingOpts = {
 	numParticles: 1,				// mini batch size
-	maxNumFlights: 1000,			// max number of mini-batches
+	maxNumFlights: 10000,			// max number of mini-batches
 	convergeEps: 0.01,
-	adagradInitLearnRate: 0.25,
+	adagradInitLearnRate: 0.1,
 	gradientEstimator: 'EUBO',
 	exampleTraces: utils.loadTraces(filename),
 	verbosity: {
 		flightNum: true,
 		time: true,
 		guideScore: true,
-		endStatus: true
+		endStatus: true,
+
+		// params: true,
+		// gradientEstimate: true
 	},
 	warnOnZeroGradient: true
 };
 
-var trainingStore = _.extend(_.clone(globalStore), {
-	// With EUBO training, we don't need the target score at all, so we can avoid
-	//    computing factors and speed things up.
-	noFactors: true
-});
+// var trainingStore = _.extend(_.clone(globalStore), {
+// 	// With EUBO training, we don't need the target score at all, so we can avoid
+// 	//    computing factors and speed things up.
+// 	// (This is only true if we're doing the recurrent version that doesn't
+// 	//	   need to render anything).
+// 	noFactors: true
+// });
+var trainingStore = globalStore;
 console.log('Training...');
 utils.runwebppl(Variational, [generateGuided, trainingOpts], trainingStore, '', function(s, diagnostics) {
 	console.log('FINISHED training.');

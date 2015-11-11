@@ -13,3 +13,4 @@ variational_experiments/*/gen_traces/*
 variational_experiments/*/processed_data/*
 variational_experiments/*/saved_params/*
 variational_experiments/lsystem/targets/training/*
+variational_experiments/lsystem/nnSandbox.js

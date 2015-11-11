@@ -48,6 +48,10 @@ var futurePolicy = 'uniformFromDeepest';
 // var futurePolicy = 'depthWeighted';
 setFuturePolicy(futurePolicy);
 
+// Uncomment these if you want to generate samples from the prior
+// globalStore.noFactors = true;
+// globalStore.sim = 0;
+
 
 // ----------------------------------------------------------------------------
 // Factor encouraging similarity to target image
@@ -155,7 +159,7 @@ var makeStateRNN = netwrapper(function() {
 	var concatNode = nn.concat.compose(localInput, latentInput);
 	var nIn = nLocalFeatures + nStateFeatures;
 	var mlpNode = nn.mlp(nIn, [
-		{nOut: nIn, activation: nn.relu},
+		{nOut: nIn, activation: nn.tanh},
 		{nOut: nStateFeatures}
 	]).compose(concatNode);
 	return nn.ast.compile([localInput, latentInput], [mlpNode]);
@@ -170,10 +174,15 @@ var makeParamPredictMLP = netwrapper(function(nOut) {
 	var concatNode = nn.concat.compose(localInput, latentInput, targetInput);
 	var nIn = nLocalFeatures + nStateFeatures + nTargetFeatures;
 	var mlpNode = nn.mlp(nIn, [
-		{nOut: Math.floor(nIn/2), activation: nn.relu},
+		{nOut: Math.floor(nIn/2), activation: nn.tanh},
 		{nOut: nOut}
 	]).compose(concatNode);
 	return nn.ast.compile([localInput, latentInput, targetInput], [mlpNode]);
+
+	// return nn.mlp(nLocalFeatures, [
+	// 	{nOut: 10, activation: nn.tanh},
+	// 	{nOut: nOut}
+	// ]);
 });
 
 var neuralNetwork = cache(function() {
@@ -215,6 +224,7 @@ var makeProgram = function(neurallyGuided) {
 			var name = arguments[n+1];	// TODO: replace with callsite id
 			var vparams = neuralNetwork(name, n).eval(
 				localState.features, globalStore.stateFeatures, globalStore.targetFeatures
+				// localState.features
 			);
 			var scalarizedParams = ad.tensorToScalars(vparams);
 			var finalParams = mapIndexed(function(i, p) {
