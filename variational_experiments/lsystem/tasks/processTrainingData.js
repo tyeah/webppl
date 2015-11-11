@@ -3,21 +3,6 @@ var fs = require('fs');
 var md5 = require('md5');
 var utils = require('../../utils.js');
 
-// TODO: read from commmand line?
-var name = 'allTargets_uniformFromDeepest';
-
-var gen_traces = __dirname + '/../gen_traces';
-var processed_data = __dirname + '/../processed_data';
-
-
-// Initialize
-var file = __dirname + '/../lsystem.wppl';
-var rootdir = __dirname + '/..';
-var rets = utils.execWebpplFileWithRoot(file, rootdir);
-var globalStore = rets.globalStore;
-var generate = rets.generate;
-var env = rets.environment;
-
 
 // Inference coroutine that re-runs a trace and saves training data from it
 
@@ -148,12 +133,33 @@ function processTrace(s, k, a, wpplFn, trace, imgHashes, dataDir) {
 
 // ----------------------------------------------------------------------------
 
-var dataFileName = gen_traces + '/' + name + '.txt';
+// Parse options
+var opts = require('minimist')(process.argv.slice(2));
+var traces = opts.trainingData;
+assert(traces, 'Must define --traces option');
+var outputName = opts.output || traces;
+console.log('Traces = ' + traces);
+console.log('Output name = ' + outputName);
+
+var gen_traces = __dirname + '/../gen_traces';
+var processed_data = __dirname + '/../processed_data';
+
+
+// Initialize
+var file = __dirname + '/../lsystem.wppl';
+var rootdir = __dirname + '/..';
+var rets = utils.execWebpplFileWithRoot(file, rootdir);
+var globalStore = rets.globalStore;
+var generate = rets.generate;
+var env = rets.environment;
+
+
+var dataFileName = gen_traces + '/' + traces + '.txt';
 var traces = utils.loadTraces(dataFileName);
 if (!fs.existsSync(processed_data)) {
 	fs.mkdirSync(processed_data);
 }
-var dataSubdir = processed_data + '/' + name;
+var dataSubdir = processed_data + '/' + outputName;
 if (!fs.existsSync(dataSubdir)) {
 	fs.mkdirSync(dataSubdir);
 }

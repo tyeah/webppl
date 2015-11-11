@@ -2,8 +2,11 @@ var fs = require('fs');
 var present = require('present');
 var utils = require('../../utils.js');
 
-// TODO: read from commmand line?
-var name = 'allTargets_uniformFromDeepest';
+// Parse options
+var opts = require('minimist')(process.argv.slice(2));
+var outputName = opts.output;
+assert(outputName, 'Must define --output option');
+console.log('Output name = ' + outputName);
 
 var gen_traces = __dirname + '/../gen_traces';
 
@@ -18,7 +21,7 @@ var targetDB = rets.targetDB;
 if (!fs.existsSync(gen_traces)) {
 	fs.mkdirSync(gen_traces);
 }
-var filename = gen_traces + '/' + name + '.txt';
+var filename = gen_traces + '/' + outputName + '.txt';
 var t0 = present();
 var counter = 1;
 while (true) {

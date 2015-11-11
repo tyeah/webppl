@@ -1,10 +1,16 @@
 var _ = require('underscore');
+var assert = require('assert');
 var fs = require('fs');
 var utils = require('../../utils.js');
 
-// TODO: read from commmand line?
-var name = 'allTargets_uniformFromDeepest';
 
+// Parse options
+var opts = require('minimist')(process.argv.slice(2));
+var trainingTraces = opts.trainingTraces;
+assert(trainingTraces, 'Must define --trainingTraces option');
+var outputName = opts.output || trainingTraces;
+console.log('Training data = ' + trainingTraces);
+console.log('Output name = ' + outputName);
 
 var gen_traces = __dirname + '/../gen_traces';
 var saved_params = __dirname + '/../saved_params';
@@ -19,7 +25,7 @@ var generateGuided = rets.generateGuided;
 var neuralNets = rets.neuralNets;
 
 
-var filename = gen_traces + '/' + name + '.txt';
+var filename = gen_traces + '/' + trainingTraces + '.txt';
 
 var trainingOpts = {
 	numParticles: 1,				// mini batch size
@@ -57,7 +63,7 @@ utils.runwebppl(Variational, [generateGuided, trainingOpts], trainingStore, '', 
 	if (!fs.existsSync(saved_params)) {
 		fs.mkdirSync(saved_params);
 	}
-	var paramfile = saved_params + '/' + name + '.txt';
+	var paramfile = saved_params + '/' + outputName + '.txt';
 	var nets = _.mapObject(neuralNets, function(net) {
 		return net.serializeJSON();
 	});

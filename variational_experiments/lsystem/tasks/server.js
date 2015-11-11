@@ -1,24 +1,21 @@
 var http = require('http');
 var assert = require('assert');
 var fs = require('fs');
+var present = require('present');
 var utils = require('../../utils.js');
 var webppl = require('../../../src/main.js');
 var lsysUtils = require('../utils.js');
 var particleHistoryUtils = require('../particleHistoryUtils.js');
 
 
-// TODO: Read from command line?
-// var targetName = 'curl';
-// var targetName = 'bifurcate';
-var targetName = 'a';
-// var targetName = 'heart';
-// var targetName = 'manybranch_3';
-// var targetName = 'manybranch_4';
-// var targetName = 'manybranch_7';
-// var targetName = 'snake_3';
-// var targetName = 'spiral';
-// var targetName = 't';
-
+// Parse options
+var opts = require('minimist')(process.argv.slice(2), {
+	default: {
+		target: 'a',
+		port: 8000
+	}
+});
+console.log('Target = ' + opts.target);
 
 function generateResult() {
 	// Initialize
@@ -35,13 +32,16 @@ function generateResult() {
 	console.log('   Running program...');
 	var saveHistory = lsysUtils.deleteStoredImages;
 	var nParticles = 300;
-	globalStore.target = targetDB.getTargetByName(targetName);
+	globalStore.target = targetDB.getTargetByName(opts.target);
 	var particleHistory;
+	var t0 = present();
 	utils.runwebppl(ParticleFilter, [generate, nParticles, true, saveHistory], globalStore, '', function(s, ret) {
 		particleHistory = ret.particleHistory;
+		var t1 = present();
+		console.log('   (Time taken: ' + (t1-t0)/1000 + ')');
 	});
 	var result = {
-		targetName: targetName,
+		targetName: opts.target,
 		viewport: viewport,
 		history: particleHistoryUtils.compress(particleHistory)
 	};
@@ -77,7 +77,6 @@ function handleRequest(request, response) {
 
 var server = http.createServer(handleRequest);
 
-var PORT = process.argv[2] || 8000;
-server.listen(PORT, function(){
-    console.log("Server listening on http://localhost:%s", PORT);
+server.listen(opts.port, function(){
+    console.log("Server listening on http://localhost:%s", opts.port);
 });
