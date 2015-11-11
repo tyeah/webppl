@@ -18,11 +18,8 @@ var opts = require('minimist')(process.argv.slice(2), {
 		numParticles: 300
 	}
 });
-console.log('Target = ' + opts.target);
-console.log('Num particles = ' + opts.numParticles);
 var trainedNets;
 if (opts.trainedModel) {
-	console.log("Using trained model '" + opts.trainedModel + "'");
 	var nn = require('adnn/nn');
 	var saved_params = __dirname + '/../saved_params';
 	var paramfile = saved_params + '/' + opts.trainedModel + '.txt';
@@ -31,6 +28,7 @@ if (opts.trainedModel) {
 		return nn.deserializeJSON(jn);
 	});
 }
+console.log(opts);
 
 function generateResult() {
 	// Initialize

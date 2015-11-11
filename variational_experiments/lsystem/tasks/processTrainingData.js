@@ -138,8 +138,7 @@ var opts = require('minimist')(process.argv.slice(2));
 var traces = opts.trainingData;
 assert(traces, 'Must define --traces option');
 var outputName = opts.output || traces;
-console.log('Traces = ' + traces);
-console.log('Output name = ' + outputName);
+console.log(opts);
 
 var gen_traces = __dirname + '/../gen_traces';
 var processed_data = __dirname + '/../processed_data';

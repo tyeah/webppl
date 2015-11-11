@@ -6,7 +6,7 @@ var utils = require('../../utils.js');
 var opts = require('minimist')(process.argv.slice(2));
 var outputName = opts.output;
 assert(outputName, 'Must define --output option');
-console.log('Output name = ' + outputName);
+console.log(opts);
 
 var gen_traces = __dirname + '/../gen_traces';
 
