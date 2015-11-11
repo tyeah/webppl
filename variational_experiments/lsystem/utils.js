@@ -155,6 +155,7 @@ function TargetImageDatabase(directory) {
 		var fullname = directory + '/' + filenames[i];
 		var shortname = filenames[i].slice(0,-4);	// strip the .png
 		var target = {
+			index: i,
 			shortname: shortname,
 			filename: fullname,
 			image: undefined,

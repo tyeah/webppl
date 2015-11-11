@@ -3,9 +3,13 @@ var present = require('present');
 var utils = require('../../utils.js');
 
 // Parse options
-var opts = require('minimist')(process.argv.slice(2));
-var outputName = opts.output;
-assert(outputName, 'Must define --output option');
+var opts = require('minimist')(process.argv.slice(2), {
+	default: {
+		numParticles: 300
+	}
+});
+var outputName = opts.outputName;
+assert(outputName, 'Must define --outputName option');
 console.log(opts);
 
 var gen_traces = __dirname + '/../gen_traces';
@@ -27,13 +31,18 @@ var counter = 1;
 while (true) {
 	// Generate for a random target, recording the target index as the first
 	//    random choice in the trace so that playback can work correctly.
-	var targetIdx = Math.floor(Math.random() * targetDB.numTargets());
-	globalStore.target = targetDB.getTargetByIndex(targetIdx);
+	if (opts.targetName) {
+		// Optionally, we can only generate for a single target
+		globalStore.target = targetDB.getTargetByName(opts.targetName);
+	} else {
+		var targetIdx = Math.floor(Math.random() * targetDB.numTargets());
+		globalStore.target = targetDB.getTargetByIndex(targetIdx);	
+	}
 	var MAPtrace;
-	utils.runwebppl(ParticleFilter, [generate, 300], globalStore, '', function(s, ret) {
+	utils.runwebppl(ParticleFilter, [generate, opts.numParticles], globalStore, '', function(s, ret) {
 		MAPtrace = ret.MAPparticle.trace;
 	});
-	var outTrace = [targetIdx].concat(MAPtrace);
+	var outTrace = [globalStore.target.index].concat(MAPtrace);
 	fs.appendFileSync(filename, JSON.stringify(outTrace) + '\n');
 	var t = present();
 	var rate = counter / ((t - t0)/60000);
