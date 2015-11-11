@@ -8,9 +8,10 @@ compiled/webppl.min.js
 
 # Variational stuff
 *.ad
-variational_experiments/*/analysis/*
-variational_experiments/*/gen_traces/*
-variational_experiments/*/processed_data/*
-variational_experiments/*/saved_params/*
-variational_experiments/lsystem/targets/training/*
 variational_experiments/lsystem/nnSandbox.js
+variational_experiments/lsystem/targets/training/*
+variational_experiments/lsystem/analysis/*
+variational_experiments/lsystem/gen_traces/*
+variational_experiments/lsystem/processed_data/*
+variational_experiments/lsystem/saved_params/*
+variational_experiments/lsystem/guide_prior_compare/comparison.csv
