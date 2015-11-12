@@ -168,21 +168,21 @@ var makeStateRNN = netwrapper(function() {
 // Per-callsite MLPs that combine target state and latent state with
 //    current local features.
 var makeParamPredictMLP = netwrapper(function(name, nOut) {
-	var localInput = nn.ast.input();
-	var latentInput = nn.ast.input();
-	var targetInput = nn.ast.input();
-	var concatNode = nn.concat.compose(localInput, latentInput, targetInput);
-	var nIn = nLocalFeatures + nStateFeatures + nTargetFeatures;
-	var mlpNode = nn.mlp(nIn, [
-		{nOut: Math.floor(nIn/2), activation: nn.tanh},
-		{nOut: nOut}
-	], name).compose(concatNode);
-	return nn.ast.compile([localInput, latentInput, targetInput], [mlpNode]);
-
-	// return nn.mlp(nLocalFeatures, [
-	// 	{nOut: 10, activation: nn.tanh},
+	// var localInput = nn.ast.input();
+	// var latentInput = nn.ast.input();
+	// var targetInput = nn.ast.input();
+	// var concatNode = nn.concat.compose(localInput, latentInput, targetInput);
+	// var nIn = nLocalFeatures + nStateFeatures + nTargetFeatures;
+	// var mlpNode = nn.mlp(nIn, [
+	// 	{nOut: Math.floor(nIn/2), activation: nn.tanh},
 	// 	{nOut: nOut}
-	// ], name);
+	// ], name).compose(concatNode);
+	// return nn.ast.compile([localInput, latentInput, targetInput], [mlpNode]);
+
+	return nn.mlp(nLocalFeatures, [
+		{nOut: 10, activation: nn.tanh},
+		{nOut: nOut}
+	], name);
 });
 
 var neuralNetwork = cache(function() {
@@ -223,8 +223,8 @@ var makeProgram = function(neurallyGuided) {
 			var localState = arguments[n];
 			var name = arguments[n+1];	// TODO: replace with callsite id
 			var vparams = neuralNetwork(name, n).eval(
-				localState.features, globalStore.stateFeatures, globalStore.targetFeatures
-				// localState.features
+				// localState.features, globalStore.stateFeatures, globalStore.targetFeatures
+				localState.features
 			);
 			var scalarizedParams = ad.tensorToScalars(vparams);
 			var finalParams = mapIndexed(function(i, p) {
@@ -264,7 +264,6 @@ var makeProgram = function(neurallyGuided) {
 		// Generate new branch
 		var width = widthDecay * currState.width;
 		var length = 2;
-		// var newang = currState.angle + gaussian(0, Math.PI/8);
 		var newang = currState.angle + _gaussian(0, Math.PI/8, currState, 'angle');
 		var newbranch = {
 			start: currState.pos,
@@ -290,32 +289,29 @@ var makeProgram = function(neurallyGuided) {
 			width: newbranch.width
 		});
 
-		if (neurallyGuided)  {
-			if (useRecurrentState) {
-				globalStore.stateFeatures = neuralNetwork('stateRNN').eval(
-					newState.features, globalStore.stateFeatures);
-			} else {
-				globalStore.stateFeatures = neuralNetwork('genCNN').eval(globalStore.genImg.toTensor());
-			}
-		}
+		// if (neurallyGuided)  {
+		// 	if (useRecurrentState) {
+		// 		globalStore.stateFeatures = neuralNetwork('stateRNN').eval(
+		// 			newState.features, globalStore.stateFeatures);
+		// 	} else {
+		// 		globalStore.stateFeatures = neuralNetwork('genCNN').eval(globalStore.genImg.toTensor());
+		// 	}
+		// }
 
 		// Terminate?
 		future(function() {
 			var terminateProb = 0.5;
-			// if (flip(terminateProb)) {
-			if (flip(terminateProb, newState, 'terminate')) {
+			if (_flip(terminateProb, newState, 'terminate')) {
 				globalStore.terminated = true;
 			} else {
 				// Generate no further branches w/ prob 1/3
 				// Generate one further branch w/ prob 1/3
 				// Generate two further branches w/ prob 1/3
 				future(function() {
-					// if (!globalStore.terminated && newState.width > minWidth && flip(0.66)) {
-						if (!globalStore.terminated && newState.width > minWidth && flip(0.66, newState, 'branch1')) {
+						if (!globalStore.terminated && newState.width > minWidth && _flip(0.66, newState, 'branch1')) {
 						branch(newState);
 						future(function() {
-							// if (!globalStore.terminated && newState.width > minWidth && flip(0.5)) {
-								if (!globalStore.terminated && newState.width > minWidth && flip(0.5, newState, 'branch2')) {
+								if (!globalStore.terminated && newState.width > minWidth && _flip(0.5, newState, 'branch2')) {
 								branch(newState);
 							}
 							// else factor(0);
@@ -335,14 +331,16 @@ var makeProgram = function(neurallyGuided) {
 		var w = globalStore.target.image.width;
 		var h = globalStore.target.image.height;
 		globalStore.genImg = utils.new(lsysUtils.ImageData2D).fillWhite(w, h);
-		if (neurallyGuided) {
-			globalStore.targetFeatures = neuralNetwork('targetCNN').eval(globalStore.target.tensor);
-			if (useRecurrentState) {
-				globalStore.stateFeatures = neuralNetwork('initState').eval();
-			} else {
-				globalStore.stateFeatures = neuralNetwork('genCNN').eval(globalStore.genImg.toTensor());
-			}
-		}
+
+		// if (neurallyGuided) {
+		// 	globalStore.targetFeatures = neuralNetwork('targetCNN').eval(globalStore.target.tensor);
+		// 	if (useRecurrentState) {
+		// 		globalStore.stateFeatures = neuralNetwork('initState').eval();
+		// 	} else {
+		// 		globalStore.stateFeatures = neuralNetwork('genCNN').eval(globalStore.genImg.toTensor());
+		// 	}
+		// }
+		
 		globalStore.branches = undefined;
 		globalStore.numBranches = 0;
 		globalStore.bbox = utils.new(THREE.Box2);
