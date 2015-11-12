@@ -71,15 +71,19 @@ var img = new lsysUtils.ImageData2D();
 		var avgTime = 0;
 		for (var j = 0; j < opts.numReps; j++) {
 			console.log('    repetition ' + (j+1));
-			var targetIdx = Math.floor(Math.random() * targetDB.numTargets());
-			globalStore.target = targetDB.getTargetByIndex(targetIdx);
+			if (opts.targetName) {
+				globalStore.target = targetDB.getTargetByName(opts.targetName);
+			} else {
+				var targetIdx = Math.floor(Math.random() * targetDB.numTargets());
+				globalStore.target = targetDB.getTargetByIndex(targetIdx);	
+			}
 			var t0 = present();
 			var retval;
 			utils.runwebppl(ParticleFilter, [genFn, np], globalStore, '', function(s, ret) {
 				retval = ret.MAPparticle.value;
 			});
 			var t1 = present();
-			var time = t1 - t0;
+			var time = (t1 - t0)/1000;
 			render.render(globalStore.target.canvas, viewport, retval);
 			img.loadFromCanvas(globalStore.target.canvas);
 			var sim = lsysUtils.normalizedSimilarity(img , globalStore.target);
@@ -87,6 +91,7 @@ var img = new lsysUtils.ImageData2D();
 			sims.push(sim);
 			avgTime += time;
 		}
+		avgTime /= opts.numReps;
 		for (var j = 0; j < opts.numReps; j++) {
 			var sim = sims[j];
 			var time = times[j];
