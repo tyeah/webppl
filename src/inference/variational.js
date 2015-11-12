@@ -80,12 +80,30 @@ module.exports = function(env) {
   }
 
   function readableParams(paramsObj) {
-    return _.mapObject(paramsObj, function(paramslist) {
-      return paramslist.map(function(x) {
-        return ad.project(x).toArray();
-      })
-    });
+    var out = {};
+    for (var name in paramsObj) {
+      var plist = paramsObj[name];
+      for (var i = 0; i < plist.length; i++) {
+        var p = plist[i];
+        out[p.name] = ad.project(p).toArray();
+      }
+    }
+    return out;
   };
+
+  function readableGradient(paramsObj, gradObj) {
+    var out = {};
+    for (var name in gradObj) {
+      var glist = gradObj[name];
+      var plist = paramsObj[name];
+      for (var i = 0; i < glist.length; i++) {
+        var g = glist[i];
+        var p = plist[i];
+        out[p.name] = g.toArray();
+      }
+    }
+    return out;
+  }
 
   function Variational(s, k, a, wpplFn, opts) {
 
@@ -107,6 +125,7 @@ module.exports = function(env) {
     this.gradientEstimator = opt('gradientEstimator', 'ELBO');
     this.exampleTraces = opt('exampleTraces', []);
     this.warnOnZeroGradient = opt('warnOnZeroGradient', false);
+    this.warnOnAnyZeroDerivative = opt('warnOnAnyZeroDerivative', false);
 
     assert(this.gradientEstimator !== 'EUBO' || this.exampleTraces.length > 0,
       'gradientEstimator EUBO requires exampleTraces');
@@ -428,9 +447,9 @@ module.exports = function(env) {
         }
         var rg2 = this.runningG2[name][i];
         rg2.addeq(grad.mul(grad));
-        var weight = rg2.sqrt().inverteq().muleq(this.adagradInitLearnRate);
+        var weight = rg2.sqrt().pseudoinverteq().muleq(this.adagradInitLearnRate);
         if (!weight.isFinite().allreduce()) {
-          console.log('name: ' + paramslist[i].name);
+          console.log('name: ' + paramlist[i].name);
           console.log('grad: ' + JSON.stringify(grad.toArray()));
           console.log('weight: ' + JSON.stringify(weight.toArray()));
           assert(false, 'Found non-finite AdaGrad weight!');
@@ -458,7 +477,7 @@ module.exports = function(env) {
     }
 
     if (this.verbosity.gradientEstimate) {
-      console.log('  gradientEst: ' + JSON.stringify(readableParams(gradient)));
+      console.log('  gradientEst: ' + JSON.stringify(readableGradient(this.params, gradient)));
     }
 
     return gradient;
@@ -592,14 +611,20 @@ module.exports = function(env) {
           // Just zero the parameter derivatives.
           params.zeroDerivatives();
         }
-        if (this.warnOnZeroGradient && !grad.allreduce()) {
-          console.log("  -- WARN: Parameter '" + params.name + "' has zero gradient --");
+        // (Optionally) warn about zeros in the derivatives
+        var gradIsZero = false;
+        if (this.warnOnZeroGradient && !grad.anyreduce()) {
+          gradIsZero = true;
+          console.log("  -- WARN: Parameter '" + params.name + "' has a completely zero gradient --");
+        }
+        if (this.warnOnAnyZeroDerivative && !gradIsZero && !grad.allreduce()) {
+          console.log("  -- WARN: Parameter '" + params.name + "' has some zero(s) in its gradient --");
         }
         return grad;
       }.bind(this));
     }.bind(this));
     if (this.verbosity.gradientSamples) {
-      console.log('    gradientSamp: ' + JSON.stringify(readableParams(gradient)));
+      console.log('    gradientSamp: ' + JSON.stringify(readableGradient(this.params, gradient)));
     }
     if (zeroAllDerivs) {
       // Zero all derivatives along the backprop graph.
