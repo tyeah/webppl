@@ -430,7 +430,7 @@ module.exports = function(env) {
         rg2.addeq(grad.mul(grad));
         var weight = rg2.sqrt().inverteq().muleq(this.adagradInitLearnRate);
         if (!weight.isFinite().allreduce()) {
-          console.log('name: ' + name);
+          console.log('name: ' + paramslist[i].name);
           console.log('grad: ' + JSON.stringify(grad.toArray()));
           console.log('weight: ' + JSON.stringify(weight.toArray()));
           assert(false, 'Found non-finite AdaGrad weight!');
@@ -454,7 +454,7 @@ module.exports = function(env) {
     } else if (this.gradientEstimator === 'EUBO') {
       gradient = this.estimateGradientEUBO();
     } else {
-      throw 'Unrecognized variational gradientEstimator ' + this.gradientEstimator;
+      throw 'Unrecognized gradientEstimator ' + this.gradientEstimator;
     }
 
     if (this.verbosity.gradientEstimate) {
@@ -593,7 +593,7 @@ module.exports = function(env) {
           params.zeroDerivatives();
         }
         if (this.warnOnZeroGradient && !grad.allreduce()) {
-          console.log('  -- WARN: Parameter ' + name + ' , ' + i + ' has zero gradient --');
+          console.log("  -- WARN: Parameter '" + params.name + "' has zero gradient --");
         }
         return grad;
       }.bind(this));

@@ -8,7 +8,7 @@ var utils = require('../../utils.js');
 var opts = require('minimist')(process.argv.slice(2));
 var trainingTraces = opts.trainingTraces;
 assert(trainingTraces, 'Must define --trainingTraces option');
-var outputName = opts.output || trainingTraces;
+var outputName = opts.outputName || trainingTraces;
 console.log(opts);
 
 var gen_traces = __dirname + '/../gen_traces';
