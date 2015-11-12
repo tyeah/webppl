@@ -27,10 +27,10 @@ var neuralNets = rets.neuralNets;
 var filename = gen_traces + '/' + trainingTraces + '.txt';
 
 var trainingOpts = {
-	numParticles: 1,				// mini batch size
-	maxNumFlights: 10000,			// max number of mini-batches
+	numParticles: 100,				// mini batch size
+	maxNumFlights: 10,			// max number of mini-batches
 	convergeEps: 0.01,
-	adagradInitLearnRate: 0.1,
+	adagradInitLearnRate: 0.25,
 	gradientEstimator: 'EUBO',
 	exampleTraces: utils.loadTraces(filename),
 	verbosity: {
@@ -45,14 +45,11 @@ var trainingOpts = {
 	warnOnZeroGradient: true
 };
 
-// var trainingStore = _.extend(_.clone(globalStore), {
-// 	// With EUBO training, we don't need the target score at all, so we can avoid
-// 	//    computing factors and speed things up.
-// 	// (This is only true if we're doing the recurrent version that doesn't
-// 	//	   need to render anything).
-// 	noFactors: true
-// });
-var trainingStore = globalStore;
+var trainingStore = _.extend(_.clone(globalStore), {
+	// With EUBO training, we may not need to compute factors (if our neural
+	//    nets don't need access to the rendered image)
+	noFactors: true
+});
 console.log('Training...');
 utils.runwebppl(Variational, [generateGuided, trainingOpts], trainingStore, '', function(s, diagnostics) {
 	console.log('FINISHED training.');
@@ -67,5 +64,21 @@ utils.runwebppl(Variational, [generateGuided, trainingOpts], trainingStore, '', 
 		return net.serializeJSON();
 	});
 	fs.writeFileSync(paramfile, JSON.stringify(nets));
-	console.log('FINISHED writing neural nets/params to disk');
+	console.log('Wrote neural nets/params to disk.');
+
+	// Save diagnostics to disk
+	// (Find all properties of the diagnostics which are lists, write them as columns
+	//    in a CSV file)
+	var diagfile = saved_params + '/' + outputName + '_diagnostics.csv';
+	var df = fs.openSync(diagfile, 'w');
+	var lists = _.pick(diagnostics, function(val) { return _.isArray(val); });
+	var propnames = Object.keys(lists);
+	fs.writeSync(df, ['iteration'].concat(propnames).toString() + '\n');
+	var n = lists[propnames[0]].length;
+	for (var i = 0; i < n; i++) {
+		var row = [i].concat(propnames.map(function(name) { return lists[name][i]; })).toString() + '\n';
+		fs.writeSync(df, row);
+	}
+	fs.closeSync(df);
+	console.log('Wrote diagnostics to file.');
 });

@@ -382,7 +382,7 @@ module.exports = function(env) {
     var guideScore = 0;
     var targetScore = 0;
     var scoreDiff = 0;
-    var time = hrtimeToSeconds(process.hrtime(this.startTime));
+    var totalTime = hrtimeToSeconds(process.hrtime(this.startTime));
     for (var i = 0; i < this.particles.length; i++) {
       var p = this.particles[i];
       var pgs = ad.project(p.guideScore);
@@ -393,20 +393,20 @@ module.exports = function(env) {
     guideScore /= this.numParticles;
     targetScore /= this.numParticles;
     scoreDiff /= this.numParticles;
-    if (!this.diagnostics.hasOwnProperty('scoreDiffs')) {
-      this.diagnostics.guideScores = [];
-      this.diagnostics.targetScores = [];
-      this.diagnostics.scoreDiffs = [];
-      this.diagnostics.times = [];
+    if (!this.diagnostics.hasOwnProperty('time')) {
+      this.diagnostics.guideScore = [];
+      this.diagnostics.targetScore = [];
+      this.diagnostics.time = [];
+      this.diagnostics.totalTime = [];
       this.diagnostics.avgTime = 0;
     }
-    this.diagnostics.scoreDiffs.push(guideScore);
-    this.diagnostics.scoreDiffs.push(targetScore);
-    this.diagnostics.scoreDiffs.push(scoreDiff);
-    var n = this.diagnostics.times.length;
-    var timeDiff = time - (n === 0 ? 0 : this.diagnostics.times[n-1]);
-    this.diagnostics.times.push(time);
-    this.diagnostics.avgTime = (n*this.diagnostics.avgTime + timeDiff) / (n + 1);
+    this.diagnostics.guideScore.push(guideScore);
+    this.diagnostics.targetScore.push(targetScore);
+    var n = this.diagnostics.time.length;
+    var time = totalTime - (n === 0 ? 0 : this.diagnostics.totalTime[n-1]);
+    this.diagnostics.totalTime.push(totalTime);
+    this.diagnostics.time.push(time);
+    this.diagnostics.avgTime = (n*this.diagnostics.avgTime + time) / (n + 1);
     if (this.verbosity.guideScore) {
       console.log('  guideScore: ' + guideScore);
     }
@@ -417,7 +417,7 @@ module.exports = function(env) {
       console.log('  scoreDiff: ' + scoreDiff);
     }
     if (this.verbosity.time) {
-      console.log('  time elapsed: ' + time + ' (avg per flight: ' + this.diagnostics.avgTime + ')');
+      console.log('  time elapsed: ' + totalTime + ' (avg per flight: ' + this.diagnostics.avgTime + ')');
     }
   };
 
