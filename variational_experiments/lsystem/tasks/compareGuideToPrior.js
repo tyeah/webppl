@@ -12,7 +12,7 @@ var render = require('../render.js');
 // Parse options
 var opts = require('minimist')(process.argv.slice(2), {
 	default: {
-		numReps: 100,
+		numReps: 50,
 		start: 1,
 		end: 10,
 		incr: 1
@@ -20,7 +20,7 @@ var opts = require('minimist')(process.argv.slice(2), {
 });
 var trainedModel = opts.trainedModel;
 assert(trainedModel, 'Must define --trainedModel option');
-var outputName = opts.outputName || 'comparison';
+var outputName = opts.outputName || trainedModel;
 console.log(opts);
 
 
@@ -101,6 +101,11 @@ var img = new lsysUtils.ImageData2D();
 	}
 });
 fs.closeSync(outfile);
+
+// Copy this file to 'comparison.csv' as well, so we can immediately refresh
+//   and view it in Tableau
+var cmpname = guide_prior_compare + '/comparison.csv';
+require('child_process').execSync('cp ' + outfilename + ' '+ cmpname);
 
 
 

@@ -28,9 +28,10 @@ var filename = gen_traces + '/' + trainingTraces + '.txt';
 
 var trainingOpts = {
 	numParticles: 100,				// mini batch size
-	maxNumFlights: 10,			// max number of mini-batches
-	convergeEps: 0.01,
+	maxNumFlights: 100,			// max number of mini-batches
+	convergeEps: 0.001,
 	adagradInitLearnRate: 0.25,
+	// adagradInitLearnRate: 0.05,
 	gradientEstimator: 'EUBO',
 	exampleTraces: utils.loadTraces(filename),
 	verbosity: {
@@ -46,9 +47,9 @@ var trainingOpts = {
 };
 
 var trainingStore = _.extend(_.clone(globalStore), {
-	// With EUBO training, we may not need to compute factors (if our neural
-	//    nets don't need access to the rendered image)
-	noFactors: true
+	// // With EUBO training, we may not need to compute factors (if our neural
+	// //    nets don't need access to the rendered image)
+	// noFactors: true
 });
 console.log('Training...');
 utils.runwebppl(Variational, [generateGuided, trainingOpts], trainingStore, '', function(s, diagnostics) {

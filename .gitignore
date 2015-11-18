@@ -14,4 +14,4 @@ variational_experiments/lsystem/analysis/*
 variational_experiments/lsystem/gen_traces/*
 variational_experiments/lsystem/processed_data/*
 variational_experiments/lsystem/saved_params/*
-variational_experiments/lsystem/guide_prior_compare/comparison.csv
+variational_experiments/lsystem/guide_prior_compare/*.csv
