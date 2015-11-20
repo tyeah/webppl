@@ -10,7 +10,8 @@ var ad = require.call(null, 'adnn/ad');
 // Neural guide architecture
 
 
-var nnGuide = require.call(null, __ROOT + '/nnarch/mlp.js');
+// var nnGuide = require.call(null, __ROOT + '/nnarch/mlp.js');
+var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target.js');
 
 
 // ----------------------------------------------------------------------------

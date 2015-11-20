@@ -27,11 +27,11 @@ var neuralNets = rets.neuralNets;
 var filename = gen_traces + '/' + trainingTraces + '.txt';
 
 var trainingOpts = {
-	numParticles: 100,				// mini batch size
-	maxNumFlights: 100,			// max number of mini-batches
+	numParticles: 1,				// mini batch size
+	maxNumFlights: 10000,			// max number of mini-batches
 	convergeEps: 0.001,
-	adagradInitLearnRate: 0.25,
-	// adagradInitLearnRate: 0.05,
+	// adagradInitLearnRate: 0.25,
+	adagradInitLearnRate: 0.05,
 	gradientEstimator: 'EUBO',
 	exampleTraces: utils.loadTraces(filename),
 	verbosity: {
