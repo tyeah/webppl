@@ -5,9 +5,9 @@ var NNArch = require('./nnarch.js');
 // Parse the target image using one CNN, parse the image-so-far using another
 //    CNN, feed those both (plus local features) into a MLP.
 
-var DualCNNArch = new NNArch();
+var Arch = new NNArch();
 
-DualCNNArch.nnFunction('cnn', function(name) {
+Arch.nnFunction('cnn', function(name) {
 	var nImgFilters = 1;
 	var filterSize = 5;
 	return nn.sequence([
@@ -20,7 +20,7 @@ DualCNNArch.nnFunction('cnn', function(name) {
 	], name);
 });
 
-DualCNNArch.nnFunction('paramPredictMLP', function(name, nOut) {
+Arch.nnFunction('paramPredictMLP', function(name, nOut) {
 	var localStateInput = nn.ast.input();
 	var globalStateInput = nn.ast.input();
 	var targetInput = nn.ast.input();
@@ -33,7 +33,7 @@ DualCNNArch.nnFunction('paramPredictMLP', function(name, nOut) {
 	return nn.ast.compile([localStateInput, globalStateInput, targetInput], [mlpNode]);
 });
 
-DualCNNArch.init = function(globalStore) {
+Arch.init = function(globalStore) {
 	var imgSize = globalStore.target.image.width;
 	var imgSizeReduced1 = Math.floor(imgSize/2);
 	var imgSizeReduced2 = Math.floor(imgSizeReduced1/2);
@@ -41,19 +41,19 @@ DualCNNArch.init = function(globalStore) {
 	this.nTargetFeatures = imgSizeReduced3*imgSizeReduced3*nImgFilters;
 	this.nStateFeatures = this.nTargetFeatures;
 
-	globalStore.targetFeatures = this.cnn('targetCNN').eval(globalStore.target.tensor);
-	globalStore.stateFeatures = this.cnn('genCNN').eval(globalStore.genImg.toTensor());
+	this.targetFeatures = this.cnn('targetCNN').eval(globalStore.target.tensor);
+	this.stateFeatures = this.cnn('genCNN').eval(globalStore.genImg.toTensor());
 };
 
-DualCNNArch.step = function(globalStore, localState) {
-	globalStore.stateFeatures = this.cnn('genCNN').eval(globalStore.genImg.toTensor());
+Arch.step = function(globalStore, localState) {
+	this.stateFeatures = this.cnn('genCNN').eval(globalStore.genImg.toTensor());
 };
 
-DualCNNArch.predict = function(globalStore, localState, name, paramBounds) {
+Arch.predict = function(globalStore, localState, name, paramBounds) {
 	var nOut = paramBounds.length;
 	var y = this.paramPredictMLP(name, nOut).eval(
-		localState.features, globalStore.stateFeatures, globalStore.targetFeatures);
+		localState.features, this.stateFeatures, this.targetFeatures);
 	return this.splitAndBoundParams(y, paramBounds);
 };
 
-module.exports = DualCNNArch;
+module.exports = Arch;
