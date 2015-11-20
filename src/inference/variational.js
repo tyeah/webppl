@@ -85,7 +85,7 @@ module.exports = function(env) {
       var plist = paramsObj[name];
       for (var i = 0; i < plist.length; i++) {
         var p = plist[i];
-        out[p.name] = ad.project(p).toArray();
+        out[p.name] = ad.value(p).toArray();
       }
     }
     return out;
@@ -190,7 +190,7 @@ module.exports = function(env) {
     var val = particle.trace ? particle.trace.nextVal() : importanceERP.sample(params);
     var importanceScore = importanceERP.adscore(params, val);
     var choiceScore = erp.score(params, val);
-    particle.weight += choiceScore - ad.project(importanceScore);
+    particle.weight += choiceScore - ad.value(importanceScore);
     particle.targetScore += choiceScore;
     // TODO: Store guideScores in a list, then ad.scalar.sum all of them at the end?
     // (Better for ELBO/EUBO, but not sure about VPF...)
@@ -202,7 +202,7 @@ module.exports = function(env) {
       console.log('prior params: ' + params);
       console.log('guide params: ' + importanceERP.rawparams);
       console.log('target score: ' + particle.targetScore);
-      console.log('guide score: ' + ad.project(particle.guideScore));
+      console.log('guide score: ' + ad.value(particle.guideScore));
       assert(false, 'Found non-finite particle weight!');
     }
     return cc(s, val);
@@ -385,7 +385,7 @@ module.exports = function(env) {
     var totalTime = hrtimeToSeconds(process.hrtime(this.startTime));
     for (var i = 0; i < this.particles.length; i++) {
       var p = this.particles[i];
-      var pgs = ad.project(p.guideScore);
+      var pgs = ad.value(p.guideScore);
       guideScore += pgs;
       targetScore += p.targetScore;
       scoreDiff += (p.targetScore - pgs);
@@ -441,7 +441,7 @@ module.exports = function(env) {
       }
       for (var i = 0; i < gradlist.length; i++) {
         var grad = gradlist[i];
-        var params = ad.project(paramlist[i]);
+        var params = ad.value(paramlist[i]);
         if (this.regularizationWeight > 0) {
           grad.subeq(params.mul(this.regularizationWeight));
         }
@@ -662,7 +662,7 @@ module.exports = function(env) {
         baseERP: erpObj,
         setParams: function(params) {
           this.params = params;
-          this.rawparams = params.map(ad.project);
+          this.rawparams = params.map(ad.value);
         },
         sample: function(params) { return this.baseERP.sample(this.rawparams); },
         score: function(params, val) { return this.baseERP.score(this.rawparams, val); },
