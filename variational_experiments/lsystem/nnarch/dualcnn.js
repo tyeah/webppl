@@ -41,18 +41,18 @@ Arch.init = function(globalStore) {
 	this.nTargetFeatures = imgSizeReduced3*imgSizeReduced3*nImgFilters;
 	this.nStateFeatures = this.nTargetFeatures;
 
-	this.targetFeatures = this.cnn('targetCNN').eval(globalStore.target.tensor);
-	this.stateFeatures = this.cnn('genCNN').eval(globalStore.genImg.toTensor());
+	globalStore.targetFeatures = this.cnn('targetCNN').eval(globalStore.target.tensor);
+	globalStore.stateFeatures = this.cnn('genCNN').eval(globalStore.genImg.toTensor());
 };
 
 Arch.step = function(globalStore, localState) {
-	this.stateFeatures = this.cnn('genCNN').eval(globalStore.genImg.toTensor());
+	globalStore.stateFeatures = this.cnn('genCNN').eval(globalStore.genImg.toTensor());
 };
 
 Arch.predict = function(globalStore, localState, name, paramBounds) {
 	var nOut = paramBounds.length;
 	var y = this.paramPredictMLP(name, nOut).eval(
-		localState.features, this.stateFeatures, this.targetFeatures);
+		localState.features, globalStore.stateFeatures, globalStore.targetFeatures);
 	return this.splitAndBoundParams(y, paramBounds);
 };
 
