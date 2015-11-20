@@ -640,11 +640,14 @@ module.exports = function(env) {
   }
 
 
-  // Globally-available routine for registering optimizable parameters
-  function registerVariationalParams(s, k, a, params) {
+  // Globally-available functions for registering optimizable parameters
+  VI.registerParams = function(name, params) {
     if (env.coroutine instanceof Variational) {
-      env.coroutine.params[a] = params;
+      env.coroutine.params[name] = params;
     }
+  };
+  function registerVariationalParams(s, k, a, params) {
+    VI.registerParams(a, params);
     return k(s);
   }
 

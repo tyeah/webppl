@@ -8,7 +8,6 @@ compiled/webppl.min.js
 
 # Variational stuff
 *.ad
-variational_experiments/lsystem/nnSandbox.js
 variational_experiments/lsystem/targets/training/*
 variational_experiments/lsystem/analysis/*
 variational_experiments/lsystem/gen_traces/*

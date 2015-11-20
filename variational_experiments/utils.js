@@ -43,7 +43,7 @@ function _new(ctor) {
 	var obj = Object.create(ctor.prototype);
 	ctor.apply(obj, args);
 	return obj;
-};
+}
 
 module.exports = {
 	loadTraces: loadTraces,
