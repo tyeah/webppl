@@ -1,3 +1,16 @@
+// Start up an instance of a server that allows interactive exploration of
+//    program outputs.
+// Command line arguments:
+// * --port=number: To use the UI, point your browser at localhost:number
+//   [Optional] Defaults to 8000
+// * --target=name: Uses target image named 'name'
+//   [Optional] Defaults to 'a'
+// * --numParticles=number: Control how many SMC particles are used
+//   [Optional] Defaults to 300
+// * --trainedModel=name: Load neural nets from saved_params/name.txt
+//   [Optional] If omitted, will use the prior program
+
+
 var _ = require('underscore');
 var http = require('http');
 var assert = require('assert');

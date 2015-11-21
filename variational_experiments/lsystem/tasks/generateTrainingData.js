@@ -1,3 +1,11 @@
+// Generate training data
+// You can run multiple instances of this task in parallel to generate
+//    data faster.
+// Command line arguments:
+// * --outputName=name: Writes output traces to gen_traces/name.txt
+// * --targetName=name: Only generates traces for targets/training/name.png
+//   [Optional] If omitted, will generate for all target images
+
 var fs = require('fs');
 var present = require('present');
 var utils = require('../../utils.js');

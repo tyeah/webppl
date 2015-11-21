@@ -1,3 +1,13 @@
+// Runs an experiment comparing the performance of particle filters using
+//    the prior program vs. a trained, neurally-guided program
+// Command line arguments:
+// * --trainedModel=name: Looks for saved_params/name.txt
+// * --outputName=name: Writes output .csv to guide_prior_compare/name.txt.
+//   [Optional] Defaults to the value of --trainedModel
+// * --targetName=name: Only tests on targets/training/name.png
+//   [Optional] If omitted, will test on all target images
+
+
 var _ = require('underscore');
 var assert = require('assert');
 var fs = require('fs');

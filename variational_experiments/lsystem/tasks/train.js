@@ -1,3 +1,11 @@
+// Process generated data into a form suitable for use by an external
+//    neural net library.
+// Command line arguments:
+// * --trainingTraces=name: Trains on traces in gen_traces/name.txt
+// * --outputName=name: Writes output neural nets to saved_params/name.txt
+//   [Optional] If omitted, will use value of --trainingTraces
+
+
 var _ = require('underscore');
 var assert = require('assert');
 var fs = require('fs');

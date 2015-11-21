@@ -1,3 +1,11 @@
+// Process generated data into a form suitable for use by an external
+//    neural net library.
+// Command line arguments:
+// * --traces=name: Looks for gen_traces/name.txt
+// * --outputName=name: Writes output to processed_data/name
+//   [Optional] If omitted, will use value of --traces for name
+
+
 var _ = require('underscore');
 var fs = require('fs');
 var md5 = require('md5');
