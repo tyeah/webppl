@@ -192,8 +192,6 @@ module.exports = function(env) {
     var choiceScore = erp.score(params, val);
     particle.weight += choiceScore - ad.value(importanceScore);
     particle.targetScore += choiceScore;
-    // TODO: Store guideScores in a list, then ad.scalar.sum all of them at the end?
-    // (Better for ELBO/EUBO, but not sure about VPF...)
     particle.guideScore = ad.scalar.add(particle.guideScore, importanceScore);
     if (!isFinite(particle.weight)) {
       console.log('name: ' + a);
@@ -534,7 +532,7 @@ module.exports = function(env) {
     var sumWeightedGradSq = {};
     for (var i = 0; i < this.particles.length; i++) {
       var particle = this.particles[i];
-      var weight = particle.targetScore - ad.untapify(particle.guideScore);
+      var weight = particle.targetScore - ad.value(particle.guideScore);
       var gradient = this.getParticleGradient(particle);
       for (var name in gradient) {
         var gradlist = gradient[name];
@@ -561,6 +559,8 @@ module.exports = function(env) {
     var elboGradEst = {};
     for (var name in sumGrad) {
       var n = sumGrad[name].length;
+      aStar[name] = new Array(n);
+      elboGradEst[name] = new Array(n);
       for (var i = 0; i < n; i++) {
         // Overwrite a bunch of temporaries to save space
         aStar[name][i] = sumWeightedGradSq[name][i].diveq(sumGradSq[name][i]);
