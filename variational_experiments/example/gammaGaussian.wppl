@@ -1,6 +1,5 @@
 // Run using: webppl gammaGaussian.wppl
 
-var Tensor = require.call(null, 'adnn/tensor');
 var ad = require.call(null, 'adnn/ad');
 
 // Example from https://en.wikipedia.org/wiki/Variational_Bayesian_methods
@@ -10,7 +9,7 @@ var b0 = 1;
 var mu0 = 1;
 var lambda0 = 1;
 
-
+// Needs to be outside of 'program,' so that it persists across runs
 var params = ad.params([4]);
 
 var program = function() {
