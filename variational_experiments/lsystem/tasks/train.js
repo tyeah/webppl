@@ -45,6 +45,11 @@ var trainingOpts = {
 		// initLearnRate: 0.25
 		initLearnRate: 0.05
 	},
+	// optimizer: {
+	// 	name: 'sgd',
+	// 	initLearnRate: 0.001,
+	// 	decayFactor: 1
+	// },
 	verbosity: {
 		flightNum: true,
 		time: true,

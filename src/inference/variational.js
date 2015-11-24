@@ -143,7 +143,11 @@ module.exports = function(env) {
       var initLearnRate = opt(optimizerOpts, 'initLearnRate');
       this.optimizer = adagradOptimizer(initLearnRate);
     } else if (optimizerOpts.name === 'sgd') {
-      throw 'SGD not yet implemented';
+      var initLearnRate = opt(optimizerOpts, 'initLearnRate');
+      var decayFactor = opt(optimizerOpts, 'decayFactor');
+      this.optimizer = sgdOptimizer(initLearnRate, decayFactor);
+    } else {
+      throw 'Unrecognized optimizer ' + this.optimizerOpts.name;
     }
 
     // Variational parameters
@@ -451,6 +455,18 @@ module.exports = function(env) {
   // Optimizers mutate the gradient to reflect the actual delta performed
   //    to the params
 
+  function sgdOptimizer(initLearnRate, decayFactor) {
+    var learnRate = initLearnRate;
+    return function(name, gradlist, paramlist) {
+      for (var i = 0; i < gradlist.length; i++) {
+        var grad = gradlist[i];
+        var params = ad.value(paramlist[i]);
+        params.addeq(grad.muleq(learnRate));
+      }
+      learnRate *= decayFactor;
+    };
+  }
+
   function adagradOptimizer(initLearnRate) {
     var runningG2 = {};
     return function(name, gradlist, paramlist) {
@@ -472,7 +488,7 @@ module.exports = function(env) {
         }
         params.addeq(grad.muleq(weight));
       }
-    }
+    };
   }
 
   Variational.prototype.doGradientUpdate = function() {
