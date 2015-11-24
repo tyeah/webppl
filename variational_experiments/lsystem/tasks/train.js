@@ -38,10 +38,13 @@ var trainingOpts = {
 	numParticles: 1,				// mini batch size
 	maxNumFlights: 10000,			// max number of mini-batches
 	convergeEps: 0.001,
-	// adagradInitLearnRate: 0.25,
-	adagradInitLearnRate: 0.05,
 	gradientEstimator: 'EUBO',
 	exampleTraces: utils.loadTraces(filename),
+	optimizer: {
+		name: 'adagrad',
+		// initLearnRate: 0.25
+		initLearnRate: 0.05
+	},
 	verbosity: {
 		flightNum: true,
 		time: true,

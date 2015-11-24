@@ -105,29 +105,27 @@ module.exports = function(env) {
     return out;
   }
 
+  function opt(opts, name, defaultval) {
+    var o = opts[name];
+    assert(o !== undefined || defaultval !== undefined,
+      'Variatonal - option "' + name +'" must be defined!');
+    return o === undefined ? defaultval : o;
+  }
+
   function Variational(s, k, a, wpplFn, opts) {
 
-    function opt(name, defaultval) {
-      var o = opts[name];
-      assert(o !== undefined || defaultval !== undefined,
-        'Variatonal - option "' + name +'" must be defined!');
-      return o === undefined ? defaultval : o;
-    }
-
-    this.numParticles = opt('numParticles');
-    this.maxNumFlights = opt('maxNumFlights');
+    this.numParticles = opt(opts, 'numParticles');
+    this.maxNumFlights = opt(opts, 'maxNumFlights');
     this.flightsLeft = this.maxNumFlights;
-    this.convergeEps = opt('convergeEps', 0.1);
-    this.verbosity = opt('verbosity', {});
-    this.adagradInitLearnRate = opt('adagradInitLearnRate', 1);
-    this.tempSchedule = opt('tempSchedule', function() { return 1; });
-    this.regularizationWeight = opt('regularizationWeight', 0);
-    this.exampleTraces = opt('exampleTraces', []);
-    this.warnOnZeroGradient = opt('warnOnZeroGradient', false);
-    this.warnOnAnyZeroDerivative = opt('warnOnAnyZeroDerivative', false);
+    this.convergeEps = opt(opts, 'convergeEps');
+    this.verbosity = opt(opts, 'verbosity', {});
+    this.regularizationWeight = opt(opts, 'regularizationWeight', 0);
+    this.exampleTraces = opt(opts, 'exampleTraces', []);
+    this.warnOnZeroGradient = opt(opts, 'warnOnZeroGradient', false);
+    this.warnOnAnyZeroDerivative = opt(opts, 'warnOnAnyZeroDerivative', false);
 
     // How are we estimating stochastic gradients
-    this.gradientEstimator = opt('gradientEstimator', 'ELBO');
+    this.gradientEstimator = opt(opts, 'gradientEstimator');
     if (this.gradientEstimator === 'VPF') {
       this.estimateGradientImpl = this.estimateGradientVPF;
     } else if (this.gradientEstimator === 'ELBO') {
@@ -139,12 +137,19 @@ module.exports = function(env) {
       throw 'Unrecognized gradientEstimator ' + this.gradientEstimator;
     }
 
+    // How are we updating parameters using estimated gradients
+    var optimizerOpts = opt(opts, 'optimizer');
+    if (optimizerOpts.name === 'adagrad') {
+      var initLearnRate = opt(optimizerOpts, 'initLearnRate');
+      this.optimizer = adagradOptimizer(initLearnRate);
+    } else if (optimizerOpts.name === 'sgd') {
+      throw 'SGD not yet implemented';
+    }
+
     // Variational parameters
     this.params = {};
 
-    // AdaGrad running sum for gradient normalization
-    this.runningG2 = {};
-    // Convergence testing
+    // Convergence threshold
     this.maxDeltaAvg = 0;
 
     // Diagnostics
@@ -216,8 +221,6 @@ module.exports = function(env) {
   };
 
   Variational.prototype.factor = function(s, cc, a, score) {
-    var temp = this.tempSchedule(this.maxNumFlights - this.flightsLeft, this.maxNumFlights);
-    score *= temp;
     // Update particle weight
     var particle = this.currentParticle();
     particle.weight += score;
@@ -445,35 +448,60 @@ module.exports = function(env) {
     return tensors.map(function(x) { return new Tensor(x.dims); });
   }
 
+  // Optimizers mutate the gradient to reflect the actual delta performed
+  //    to the params
+
+  function adagradOptimizer(initLearnRate) {
+    var runningG2 = {};
+    return function(name, gradlist, paramlist) {
+      if (!runningG2.hasOwnProperty(name)) {
+        runningG2[name] = zeros(gradlist);
+      }
+      for (var i = 0; i < gradlist.length; i++) {
+        var grad = gradlist[i];
+        var params = ad.value(paramlist[i]);
+        var rg2 = runningG2[name][i];
+        rg2.addeq(grad.mul(grad));
+        var weight = rg2.sqrt().pseudoinverteq().muleq(initLearnRate);
+        if (!weight.isFinite().allreduce()) {
+          console.log('Found non-finite AdaGrad weight!');
+          console.log('name: ' + paramlist[i].name);
+          console.log('grad: ' + JSON.stringify(grad.toArray()));
+          console.log('weight: ' + JSON.stringify(weight.toArray()));
+          assert(false);
+        }
+        params.addeq(grad.muleq(weight));
+      }
+    }
+  }
+
   Variational.prototype.doGradientUpdate = function() {
     if (this.verbosity.params) {
       console.log('  params before update: ' + JSON.stringify(readableParams(this.params)));
     }
     var gradient = this.estimateGradient();
     var maxDelta = 0;
-    // Update parameters using AdaGrad
     for (var name in gradient) {
       var gradlist = gradient[name];
       var paramlist = this.params[name];
-      if (!this.runningG2.hasOwnProperty(name)) {
-        this.runningG2[name] = zeros(gradlist);
-      }
-      for (var i = 0; i < gradlist.length; i++) {
-        var grad = gradlist[i];
-        var params = ad.value(paramlist[i]);
-        if (this.regularizationWeight > 0) {
+
+      // Do regularization, if requested
+      if (this.regularizationWeight > 0) {
+        for (var i = 0; i < gradlist.length; i++) {
+          var grad = gradlist[i];
+          var params = ad.value(paramlist[i]);
           grad.subeq(params.mul(this.regularizationWeight));
         }
-        var rg2 = this.runningG2[name][i];
-        rg2.addeq(grad.mul(grad));
-        var weight = rg2.sqrt().pseudoinverteq().muleq(this.adagradInitLearnRate);
-        if (!weight.isFinite().allreduce()) {
-          console.log('name: ' + paramlist[i].name);
-          console.log('grad: ' + JSON.stringify(grad.toArray()));
-          console.log('weight: ' + JSON.stringify(weight.toArray()));
-          assert(false, 'Found non-finite AdaGrad weight!');
-        }
-        params.addeq(grad.muleq(weight));
+      }
+
+      // Do gradient update
+      // (Destructively updates the gradient to reflect the actual
+      //    delta done to the params)
+      this.optimizer(name, gradlist, paramlist);
+
+      // Computer convergence test stat
+      for (var i = 0; i < gradlist.length; i++) {
+        var grad = gradlist[i];
         maxDelta = Math.max(grad.abs().maxreduce(), maxDelta);
       }
     }
