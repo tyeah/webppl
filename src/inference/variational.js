@@ -408,6 +408,18 @@ module.exports = function(env) {
     if (this.verbosity.guideScore) {
       console.log('  guideScore: ' + guideScore);
     }
+    if (this.verbosity.guideScoreAvg) {
+      var nTotal = this.diagnostics.guideScore.length;
+      var nBack = this.verbosity.guideScoreAvg;
+      var iStart = Math.max(0, nTotal - nBack);
+      var n = nTotal - iStart;
+      var avg = 0;
+      for (var i = iStart; i < nTotal; i++) {
+        avg += this.diagnostics.guideScore[i];
+      }
+      avg /= n;
+      console.log('  guideScore (avg of last ' + n + '): ' + avg);
+    }
     if (this.verbosity.targetScore) {
       console.log('  targetScore: ' + targetScore);
     }

@@ -45,7 +45,8 @@ var trainingOpts = {
 	verbosity: {
 		flightNum: true,
 		time: true,
-		guideScore: true,
+		// guideScore: true,
+		guideScoreAvg: 100,
 		endStatus: true,
 
 		// params: true,
