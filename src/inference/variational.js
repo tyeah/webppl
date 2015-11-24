@@ -122,13 +122,22 @@ module.exports = function(env) {
     this.adagradInitLearnRate = opt('adagradInitLearnRate', 1);
     this.tempSchedule = opt('tempSchedule', function() { return 1; });
     this.regularizationWeight = opt('regularizationWeight', 0);
-    this.gradientEstimator = opt('gradientEstimator', 'ELBO');
     this.exampleTraces = opt('exampleTraces', []);
     this.warnOnZeroGradient = opt('warnOnZeroGradient', false);
     this.warnOnAnyZeroDerivative = opt('warnOnAnyZeroDerivative', false);
 
-    assert(this.gradientEstimator !== 'EUBO' || this.exampleTraces.length > 0,
-      'gradientEstimator EUBO requires exampleTraces');
+    // How are we estimating stochastic gradients
+    this.gradientEstimator = opt('gradientEstimator', 'ELBO');
+    if (this.gradientEstimator === 'VPF') {
+      this.estimateGradientImpl = this.estimateGradientVPF;
+    } else if (this.gradientEstimator === 'ELBO') {
+      this.estimateGradientImpl = this.estimateGradientELBO;
+    } else if (this.gradientEstimator === 'EUBO') {
+      assert(this.exampleTraces.length > 0, 'gradientEstimator EUBO requires exampleTraces');
+      this.estimateGradientImpl = this.estimateGradientEUBO;
+    } else {
+      throw 'Unrecognized gradientEstimator ' + this.gradientEstimator;
+    }
 
     // Variational parameters
     this.params = {};
@@ -475,21 +484,10 @@ module.exports = function(env) {
   };
 
   Variational.prototype.estimateGradient = function() {
-    var gradient;
-    if (this.gradientEstimator === 'VPF') {
-      gradient = this.estimateGradientVPF();
-    } else if (this.gradientEstimator === 'ELBO') {
-      gradient = this.estimateGradientELBO();
-    } else if (this.gradientEstimator === 'EUBO') {
-      gradient = this.estimateGradientEUBO();
-    } else {
-      throw 'Unrecognized gradientEstimator ' + this.gradientEstimator;
-    }
-
+    var gradient = this.estimateGradientImpl();
     if (this.verbosity.gradientEstimate) {
       console.log('  gradientEst: ' + JSON.stringify(readableGradient(this.params, gradient)));
     }
-
     return gradient;
   };
 
