@@ -30,8 +30,8 @@ Arch.init = function(globalStore) {
 Arch.nnFunction('paramPredictMLP', function(name, nOut) {
 	return nn.mlp(this.nTotalFeatures, [
 		{nOut: Math.floor(this.nTotalFeatures/2), activation: nn.tanh},
-		{nOut: Math.floor(this.nTotalFeatures/4), activation: nn.tanh},
-		{nOut: Math.floor(this.nTotalFeatures/8), activation: nn.tanh},
+		// {nOut: Math.floor(this.nTotalFeatures/4), activation: nn.tanh},
+		// {nOut: Math.floor(this.nTotalFeatures/8), activation: nn.tanh},
 		{nOut: nOut}
 	], name);
 });

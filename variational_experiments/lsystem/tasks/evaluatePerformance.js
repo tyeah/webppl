@@ -24,7 +24,6 @@ var render = require('../render.js');
 // Parse options
 var opts = require('minimist')(process.argv.slice(2), {
 	default: {
-		numReps: 50,
 		start: 1,
 		end: 10,
 		incr: 1
@@ -67,6 +66,24 @@ if (trainedModel) {
 }
 
 
+// Define list of target images we will test on
+var testlist = [];
+if (opts.targetName) {
+	// The same target, 49 times
+	for (var i = 0; i < 49; i++) {
+		testlist.push(targetDB.getTargetByName(opts.targetName).index);
+	}
+} else {
+	// Every other image in our 98-image training set
+	// TODO: Evaluate each multiple times? (but that's so expensive...)
+	for (var i = 0; i < 49; i++) {
+		testlist.push(2*i);
+	}
+}
+// TODO: A proper, separate test set
+// TODO: Old, random target behavior?
+
+
 // Run evaluation, generate CSV
 var outfilename = performance_eval + '/' + outputName + '.csv';
 var outfile = fs.openSync(outfilename, 'w');
@@ -78,14 +95,10 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	var times = [];
 	var sims = [];
 	var avgTime = 0;
-	for (var j = 0; j < opts.numReps; j++) {
+	for (var j = 0; j < testlist.length; j++) {
 		console.log('    repetition ' + (j+1));
-		if (opts.targetName) {
-			globalStore.target = targetDB.getTargetByName(opts.targetName);
-		} else {
-			var targetIdx = Math.floor(Math.random() * targetDB.numTargets());
-			globalStore.target = targetDB.getTargetByIndex(targetIdx);	
-		}
+		var targetIdx = testlist[j];
+		globalStore.target = targetDB.getTargetByIndex(targetIdx);	
 		var t0 = present();
 		var retval;
 		utils.runwebppl(ParticleFilter, [generate, np], globalStore, '', function(s, ret) {
@@ -100,8 +113,8 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		sims.push(sim);
 		avgTime += time;
 	}
-	avgTime /= opts.numReps;
-	for (var j = 0; j < opts.numReps; j++) {
+	avgTime /= testlist.length;
+	for (var j = 0; j < testlist.length; j++) {
 		var sim = sims[j];
 		var time = times[j];
 		fs.writeSync(outfile, util.format('%d,%d,%d,%d\n',
