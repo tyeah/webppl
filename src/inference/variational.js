@@ -641,6 +641,7 @@ module.exports = function(env) {
       }
     }
     for (var name in sumGrad) {
+      var gradlist = sumGrad[name];
       for (var j = 0; j < gradlist.length; j++) {
         sumGrad[name][j].diveq(this.numParticles);
       }
