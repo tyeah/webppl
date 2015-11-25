@@ -82,3 +82,5 @@ Arch.predict = function(globalStore, localState, name, paramBounds) {
 
 
 module.exports = Arch;
+
+
