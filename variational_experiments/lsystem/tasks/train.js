@@ -40,10 +40,14 @@ var trainingOpts = {
 	convergeEps: 0.001,
 	gradientEstimator: 'EUBO',
 	exampleTraces: utils.loadTraces(filename),
+	// optimizer: {
+	// 	name: 'adagrad',
+	// 	initLearnRate: 0.05
+	// },
 	optimizer: {
-		name: 'adagrad',
-		// initLearnRate: 0.25
-		initLearnRate: 0.05
+		name: 'windowgrad',
+		initLearnRate: 0.01,
+		blendWeight: 0.75
 	},
 	// optimizer: {
 	// 	name: 'sgd',

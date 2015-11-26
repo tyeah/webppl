@@ -142,7 +142,7 @@ module.exports = function(env) {
     if (optimizerOpts.name === 'adagrad') {
       var initLearnRate = opt(optimizerOpts, 'initLearnRate');
       this.optimizer = adagradOptimizer(initLearnRate);
-    } else if (optimizer.name === 'windowgrad') {
+    } else if (optimizerOpts.name === 'windowgrad') {
       var initLearnRate = opt(optimizerOpts, 'initLearnRate');
       var blendWeight = opt(optimizerOpts, 'blendWeight');
       this.optimizer = windowgradOptimizer(initLearnRate, blendWeight);
