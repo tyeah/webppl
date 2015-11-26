@@ -12,10 +12,12 @@ var ad = require.call(null, 'adnn/ad');
 
 // var nnGuide = require.call(null, __ROOT + '/nnarch/mlp.js');
 var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_fixed.js');
-//If true, will incrementally render image so far each time before predict() is called, and store in globalStore.genImg
-var imageSoFar = false; 
-//Save rendered image so far to imagesSoFar directory 
+// var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_linear.js');
+// var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_linearfilters.js');
+
+// Save rendered image so far to imagesSoFar directory 
 var saveImageSoFar = false;
+
 
 // ----------------------------------------------------------------------------
 // Other globals / constants
@@ -55,6 +57,10 @@ var computeSim = function(branches, inInference) {
 		render.render(target.canvas, viewport, branches, true, false);
 	}
 	globalStore.genImg = utils.new(lsysUtils.ImageData2D).loadFromCanvas(target.canvas);
+	// Save?
+	if (saveImageSoFar) {
+		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.numBranches).toString() + '.png');
+	}
 	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
 };
 
@@ -114,24 +120,6 @@ var makeProgram = function(neurallyGuided) {
 			var params = Array.prototype.slice.call(arguments, 0, n);
 			var localState = arguments[n];
 			var name = arguments[n+1];	// TODO: replace with callsite id?
-
-			//Update globalStore.genImg, if nnArch uses image so far
-			if (imageSoFar) {
-				if (globalStore.branches != undefined)  { //Otherwise just a completely white canvas
-					var target = globalStore.target;
-					globalStore.genImg.copyToCanvas(target.canvas);
-
-					//Incremental render
-					render.render(target.canvas, viewport, globalStore.branches, true, false);
-					globalStore.genImg = utils.new(lsysUtils.ImageData2D).loadFromCanvas(target.canvas);
-					
-					//Save
-					if (saveImageSoFar) {
-						globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.numBranches).toString() + '.png');
-					}
-				}				
-			}
-
 			var vparams = nnGuide.predict(globalStore, localState, name, bounds);
 			verp.importanceERP.setParams(vparams);
 			return sample(verp, params);
@@ -168,6 +156,7 @@ var makeProgram = function(neurallyGuided) {
 		var width = widthDecay * currState.width;
 		var length = 2;
 		var newang = currState.angle + _gaussian(0, Math.PI/8, currState, 'angle');
+		// var newang = _gaussian(currState.angle, Math.PI/8, currState, 'angle');
 		var newbranch = {
 			start: currState.pos,
 			angle: newang,
