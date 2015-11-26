@@ -142,6 +142,10 @@ module.exports = function(env) {
     if (optimizerOpts.name === 'adagrad') {
       var initLearnRate = opt(optimizerOpts, 'initLearnRate');
       this.optimizer = adagradOptimizer(initLearnRate);
+    } else if (optimizer.name === 'windowgrad') {
+      var initLearnRate = opt(optimizerOpts, 'initLearnRate');
+      var blendWeight = opt(optimizerOpts, 'blendWeight');
+      this.optimizer = windowgradOptimizer(initLearnRate, blendWeight);
     } else if (optimizerOpts.name === 'sgd') {
       var initLearnRate = opt(optimizerOpts, 'initLearnRate');
       var decayFactor = opt(optimizerOpts, 'decayFactor');
@@ -481,6 +485,31 @@ module.exports = function(env) {
         var weight = rg2.sqrt().pseudoinverteq().muleq(initLearnRate);
         if (!weight.isFinite().allreduce()) {
           console.log('Found non-finite AdaGrad weight!');
+          console.log('name: ' + paramlist[i].name);
+          console.log('grad: ' + JSON.stringify(grad.toArray()));
+          console.log('weight: ' + JSON.stringify(weight.toArray()));
+          assert(false);
+        }
+        params.addeq(grad.muleq(weight));
+      }
+    };
+  }
+
+  function windowgradOptimizer(initLearnRate, blendWeight) {
+    var runningG2 = {};
+    return function(name, gradlist, paramlist) {
+      if (!runningG2.hasOwnProperty(name)) {
+        runningG2[name] = zeros(gradlist);
+      }
+      for (var i = 0; i < gradlist.length; i++) {
+        var grad = gradlist[i];
+        var params = ad.value(paramlist[i]);
+        var rg2 = runningG2[name][i];
+        var g2 = grad.mul(grad).muleq(1 - blendWeight);
+        rg2.muleq(blendWeight).addeq(g2);
+        var weight = rg2.sqrt().pseudoinverteq().muleq(initLearnRate);
+        if (!weight.isFinite().allreduce()) {
+          console.log('Found non-finite WindowGrad weight!');
           console.log('name: ' + paramlist[i].name);
           console.log('grad: ' + JSON.stringify(grad.toArray()));
           console.log('weight: ' + JSON.stringify(weight.toArray()));
