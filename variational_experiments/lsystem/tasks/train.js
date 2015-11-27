@@ -50,6 +50,10 @@ var trainingOpts = {
 		blendWeight: 0.75
 	},
 	// optimizer: {
+	// 	name: 'adadelta',
+	// 	blendWeight: 0.5
+	// },
+	// optimizer: {
 	// 	name: 'sgd',
 	// 	initLearnRate: 0.001,
 	// 	decayFactor: 1
