@@ -94,7 +94,6 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	console.log('  numParticles = ' + np);
 	var times = [];
 	var sims = [];
-	var avgTime = 0;
 	for (var j = 0; j < testlist.length; j++) {
 		console.log('    repetition ' + (j+1));
 		var targetIdx = testlist[j];
@@ -111,9 +110,11 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		var sim = lsysUtils.normalizedSimilarity(img , globalStore.target);
 		times.push(time);
 		sims.push(sim);
-		avgTime += time;
 	}
-	avgTime /= testlist.length;
+	// We use median time as our measure of average, since it's less sensitive
+	//    to outliers than mean.
+	var sortedTimes = times.slice(); sortedTimes.sort();
+	var avgTime = sortedTimes[Math.floor(sortedTimes.length/2)];
 	for (var j = 0; j < testlist.length; j++) {
 		var sim = sims[j];
 		var time = times[j];
