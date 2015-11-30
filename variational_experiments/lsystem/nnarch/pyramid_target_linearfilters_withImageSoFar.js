@@ -29,6 +29,15 @@ Arch.nnFunction('downsampleAndFilter', function(name) {
 	]);
 });
 
+Arch.constructImageSoFarPyramid = function(globalStore) {
+	globalStore.imageSoFarPyramid = [ this.firstLevelFilters('gen_level0_filter').eval(globalStore.genImg.toTensor()) ]; 
+	for (var i = 0; i < nPyramidLevels-1; i++) {
+		var prev = globalStore.imageSoFarPyramid[i];
+		var next = this.downsampleAndFilter('gen_level'+(i+1)).eval(prev);
+		globalStore.imageSoFarPyramid.push(next);
+	}
+};
+
 Arch.init = function(globalStore) {
 	// Construct target pyramid
 	globalStore.pyramid = [ this.firstLevelFilters('target_level0_filter').eval(globalStore.target.tensor) ];
@@ -37,7 +46,14 @@ Arch.init = function(globalStore) {
 		var next = this.downsampleAndFilter('target_level'+(i+1)).eval(prev);
 		globalStore.pyramid.push(next);
 	}
+	// Construct image so far pyramid 
+	this.constructImageSoFarPyramid(globalStore);
 	this.nTotalFeatures = 2*9*nPyramidLevels*nFilters + this.nLocalFeatures;
+};
+
+Arch.step = function(globalStore, localState) {
+	// Construct image so far pyramid 
+	this.constructImageSoFarPyramid(globalStore);
 };
 
 Arch.nnFunction('paramPredictMLP', function(name, nOut) {
@@ -50,7 +66,7 @@ Arch.nnFunction('paramPredictMLP', function(name, nOut) {
 });
 
 Arch.nnFunction('outOfBounds', function(name) {
-	return nn.constantparams([nPyramidLevels, nFilters], 'outOfBounds');
+	return nn.constantparams([nPyramidLevels, nFilters], name);
 });
 
 function normalize(x, lo, hi) {
@@ -58,18 +74,10 @@ function normalize(x, lo, hi) {
 }
 
 Arch.predict = function(globalStore, localState, name, paramBounds) {
-
-	// Construct image so far pyramid 
-	globalStore.imageSoFarPyramid = [ this.firstLevelFilters('gen_level0_filter').eval(globalStore.genImg.toTensor()) ]; 
-	for (var i = 0; i < nPyramidLevels-1; i++) {
-		var prev = globalStore.imageSoFarPyramid[i];
-		var next = this.downsampleAndFilter('gen_level'+(i+1)).eval(prev);
-		globalStore.imageSoFarPyramid.push(next);
-	}
-
 	// Extract pixel neighborhood at each pyramid level, concat into
 	//    one vector (along with local features)
-	var outOfBoundsVals = ad.tensorToScalars(this.outOfBounds().eval());
+	var outOfBoundsValsTarget = ad.tensorToScalars(this.outOfBounds('target_outOfBounds').eval());
+	var outOfBoundsValsSoFar = ad.tensorToScalars(this.outOfBounds('gen_outOfBounds').eval());
 	var features = new Array(this.nTotalFeatures);
 	var v = this.constants.viewport;
 	var x = normalize(localState.pos.x, v.xmin, v.xmax);
@@ -82,16 +90,17 @@ Arch.predict = function(globalStore, localState, name, paramBounds) {
 		var cx = Math.floor(x*imgsize);
 		var cy = Math.floor(y*imgsize);
 		for (var j = 0; j < nFilters; j++) {
-			var outOfBounds = outOfBoundsVals[i*nFilters + j];
+			var outOfBoundsTarget = outOfBoundsValsTarget[i*nFilters + j];
+			var outOfBoundsSoFar = outOfBoundsValsSoFar[i*nFilters + j];
 			for (var wy = cy - 1; wy <= cy + 1; wy++) {
 				for (var wx = cx - 1; wx <= cx + 1; wx++) {
 					var imgidx = wx + imgsize*(wy + imgsize*j);
 					var inbounds = wx >= 0 && wx < imgsize && wy >= 0 && wy < imgsize;
-					features[fidx] = inbounds ? ad.tensorEntry(img, imgidx) : outOfBounds;
+					features[fidx] = inbounds ? ad.tensorEntry(img, imgidx) : outOfBoundsTarget;
 					fidx++;
 					
 					//Adding image so far to features
-					features[fidx] = inbounds ? ad.tensorEntry(imgSoFar, imgidx) : outOfBounds;
+					features[fidx] = inbounds ? ad.tensorEntry(imgSoFar, imgidx) : outOfBoundsSoFar;
 					fidx++;
 				}
 			}

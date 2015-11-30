@@ -12,10 +12,9 @@ var ad = require.call(null, 'adnn/ad');
 
 // var nnGuide = require.call(null, __ROOT + '/nnarch/meanfield.js');
 // var nnGuide = require.call(null, __ROOT + '/nnarch/mlp.js');
-var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_fixed.js');
-// var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_linear.js');
+// var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_fixed.js');
 // var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_linearfilters.js');
-// var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_nonlinearfilters.js');
+var nnGuide = require.call(null, __ROOT + '/nnarch/pyramid_target_linearfilters_withImageSoFar.js');
 
 // Save rendered image so far to imagesSoFar directory 
 var saveImageSoFar = false;
@@ -229,12 +228,8 @@ var makeProgram = function(neurallyGuided) {
 		globalStore.numBranches = 0;
 		globalStore.bbox = utils.new(THREE.Box2);
 
-		// var startState = state({
-		// 	depth: 0,
-		// 	pos: utils.new(THREE.Vector2, 0, 0),
-		// 	angle: gaussian(-Math.PI/2, Math.PI/6),
-		// 	width: initialWidth
-		// });
+		// These are separated like this so that we can have an initial local
+		//    state to feed to the _gaussian for the initial angle.
 		var initState = state({
 			depth: 0,
 			pos: utils.new(THREE.Vector2, 0, 0),

@@ -26,19 +26,32 @@ var nPyramidLevels = 4;
 //    with nnFunction.
 var downsampleNet = nn.meanpool({filterSize: 2});
 
+Arch.constructImageSoFarPyramid = function(globalStore) {
+	globalStore.imageSoFarPyramid = [globalStore.genImg.toTensor()]; 
+	for (var i = 0; i < nPyramidLevels-1; i++) {
+		var prev = globalStore.imageSoFarPyramid[i];
+		var next = downsampleNet.eval(prev);
+		globalStore.imageSoFarPyramid.push(next);
+	}
+};
+
 Arch.init = function(globalStore) {
 	// Construct target pyramid 
-
 	globalStore.pyramid = [globalStore.target.tensor];
-
 	for (var i = 0; i < nPyramidLevels-1; i++) {
 		var targetPrev = globalStore.pyramid[i];
 		var targetNext = downsampleNet.eval(targetPrev);
 		globalStore.pyramid.push(targetNext);
 	}
-
+	// Construct image so far pyramid 
+	this.constructImageSoFarPyramid(globalStore);
 	//Doubling due to adding features for image so far
 	this.nTotalFeatures = 2*9*nPyramidLevels + this.nLocalFeatures; 
+};
+
+Arch.step = function(globalStore, localState) {
+	// Construct image so far pyramid 
+	this.constructImageSoFarPyramid(globalStore);
 };
 
 Arch.nnFunction('paramPredictMLP', function(name, nOut) {
@@ -55,15 +68,6 @@ function normalize(x, lo, hi) {
 }
 
 Arch.predict = function(globalStore, localState, name, paramBounds) {
-	// Construct image so far pyramid 
-	globalStore.imageSoFarPyramid = [globalStore.genImg.toTensor()]; 
-
-	for (var i = 0; i < nPyramidLevels-1; i++) {
-		var prev = globalStore.imageSoFarPyramid[i];
-		var next = downsampleNet.eval(prev);
-		globalStore.imageSoFarPyramid.push(next);
-	}
-
 	// Extract pixel neighborhood at each pyramid level, concat into
 	//    one vector (along with local features)
 	var features = new Tensor([this.nTotalFeatures]);
