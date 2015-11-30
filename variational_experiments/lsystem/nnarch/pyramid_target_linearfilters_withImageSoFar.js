@@ -19,7 +19,7 @@ var nFilters = 1;
 // var nFilters = 4;
 
 Arch.nnFunction('firstLevelFilters', function(name) {
-	return nn.convolution({filterSize: filterSize, outDepth: nFilters}, 'level0_filter');
+	return nn.convolution({filterSize: filterSize, outDepth: nFilters}, name);
 });
 
 Arch.nnFunction('downsampleAndFilter', function(name) {
@@ -31,10 +31,10 @@ Arch.nnFunction('downsampleAndFilter', function(name) {
 
 Arch.init = function(globalStore) {
 	// Construct target pyramid
-	globalStore.pyramid = [ this.firstLevelFilters().eval(globalStore.target.tensor) ];
+	globalStore.pyramid = [ this.firstLevelFilters('target_level0_filter').eval(globalStore.target.tensor) ];
 	for (var i = 0; i < nPyramidLevels-1; i++) {
 		var prev = globalStore.pyramid[i];
-		var next = this.downsampleAndFilter('level'+(i+1)).eval(prev);
+		var next = this.downsampleAndFilter('target_level'+(i+1)).eval(prev);
 		globalStore.pyramid.push(next);
 	}
 	this.nTotalFeatures = 2*9*nPyramidLevels*nFilters + this.nLocalFeatures;
@@ -43,8 +43,8 @@ Arch.init = function(globalStore) {
 Arch.nnFunction('paramPredictMLP', function(name, nOut) {
 	return nn.mlp(this.nTotalFeatures, [
 		{nOut: Math.floor(this.nTotalFeatures/2), activation: nn.tanh},
-		{nOut: Math.floor(this.nTotalFeatures/4), activation: nn.tanh},
-		{nOut: Math.floor(this.nTotalFeatures/8), activation: nn.tanh},
+		// {nOut: Math.floor(this.nTotalFeatures/4), activation: nn.tanh},
+		// {nOut: Math.floor(this.nTotalFeatures/8), activation: nn.tanh},
 		{nOut: nOut}
 	], name);
 });
@@ -58,13 +58,12 @@ function normalize(x, lo, hi) {
 }
 
 Arch.predict = function(globalStore, localState, name, paramBounds) {
-	// Construct image so far pyramid 
-	
-	globalStore.imageSoFarPyramid = [globalStore.genImg.toTensor()]; 
 
+	// Construct image so far pyramid 
+	globalStore.imageSoFarPyramid = [ this.firstLevelFilters('gen_level0_filter').eval(globalStore.genImg.toTensor()) ]; 
 	for (var i = 0; i < nPyramidLevels-1; i++) {
 		var prev = globalStore.imageSoFarPyramid[i];
-		var next = this.downsampleAndFilter('level'+(i+1)).eval(prev);
+		var next = this.downsampleAndFilter('gen_level'+(i+1)).eval(prev);
 		globalStore.imageSoFarPyramid.push(next);
 	}
 
