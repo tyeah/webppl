@@ -71,13 +71,8 @@ var trainingOpts = {
 	warnOnZeroGradient: true
 };
 
-var trainingStore = _.extend(_.clone(globalStore), {
-	// // With EUBO training, we may not need to compute factors (if our neural
-	// //    nets don't need access to the rendered image)
-	// noFactors: true
-});
 console.log('Training...');
-utils.runwebppl(Variational, [generateGuided, trainingOpts], trainingStore, '', function(s, diagnostics) {
+utils.runwebppl(Variational, [generateGuided, trainingOpts], globalStore, '', function(s, diagnostics) {
 	console.log('FINISHED training.');
 	// Not doing anything with diagnostics for now
 
