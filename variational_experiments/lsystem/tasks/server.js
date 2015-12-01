@@ -20,6 +20,7 @@ var utils = require('../../utils.js');
 var webppl = require('../../../src/main.js');
 var lsysUtils = require('../utils.js');
 var particleHistoryUtils = require('../particleHistoryUtils.js');
+var nnarch = require('../nnarch');
 
 
 // Parse options
@@ -31,15 +32,11 @@ var opts = require('minimist')(process.argv.slice(2), {
 		numParticles: 300
 	}
 });
-var trainedNets;
+var nnGuide;
 if (opts.trainedModel) {
-	var nn = require('adnn/nn');
 	var saved_params = __dirname + '/../saved_params';
 	var paramfile = saved_params + '/' + opts.trainedModel + '.txt';
-	var jsonNets = JSON.parse(fs.readFileSync(paramfile).toString());
-	trainedNets = _.mapObject(jsonNets, function(jn) {
-		return nn.deserializeJSON(jn);
-	});
+	nnGuide = nnarch.loadFromFile(paramfile);
 }
 console.log(opts);
 
@@ -53,12 +50,8 @@ function generateResult() {
 	var generate = opts.trainedModel ? rets.generateGuided : rets.generate;
 	var targetDB = rets.targetDB;
 	var viewport = rets.viewport;
-	var neuralNets = rets.neuralNets;
 	if (opts.trainedModel) {
-		for (var name in neuralNets) {
-			neuralNets[name] = undefined;
-		}
-		_.extend(neuralNets, trainedNets);
+		globalStore.nnGuide = nnGuide;
 	}
 
 	// Run

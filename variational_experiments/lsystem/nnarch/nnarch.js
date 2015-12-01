@@ -1,6 +1,9 @@
 var assert = require('assert');
+var fs = require('fs');
+var _ = require('underscore');
 var Tensor = require('adnn/tensor');
 var ad = require('adnn/ad');
+var nn = require('adnn/nn');
 
 
 var fuzz = [0, 1e-8];
@@ -21,6 +24,7 @@ function normang(theta) {
 
 
 // Base class for all neural net architectures
+// All subclasses will live in ./architectures
 
 function NNArch() {
 	this.constants = {};
@@ -68,7 +72,54 @@ NNArch.prototype.predict = function(globalStore, localState, name, paramBounds) 
 };
 
 
+// Save/load/retrieve interface -----------------------------------------------
+
+NNArch.getArchByName = function(name) {
+	return require('./architectures/' + name + '.js');
+}
+
+// Serialization / deserialization
+NNArch.prototype.serializeJSON = function() {
+	return {
+		name: this.name,
+		nnCache: _.mapObject(this.nnCache, function(net) {
+			return net.serializeJSON();
+		})
+	};
+};
+NNArch.deserializeJSON = function(json) {
+	var ctor = NNArch.getArchByName(json.name);
+	var archObj = new ctor();
+	archObj.nnCache = _.mapObject(json.nnCache, function(jn) {
+		return nn.deserializeJSON(jn);
+	});
+	return archObj;
+};
+
+// File loading / saving
+NNArch.prototype.saveToFile = function(filename) {
+	fs.writeFileSync(filename, JSON.stringify(this.serializeJSON()));
+};
+NNArch.loadFromFile = function(filename) {
+	return NNArch.deserializeJSON(JSON.parse(fs.readFileSync(filename).toString()));
+};
+
+
 // Private interface (for subclasses only) ------------------------------------
+
+
+// Create new architecture subclass
+NNArch.subclass = function(name, properties) {
+	var ctor = function() {
+		NNArch.call(this);
+		this.name = name;
+	};
+	ctor.prototype = Object.create(NNArch.prototype);
+	for (var prop in properties) {
+		ctor.prototype[prop] = properties[prop];
+	}
+	return ctor;
+};
 
 
 // Split a parameter tensor into scalars, then apply bounding transforms
@@ -82,13 +133,13 @@ NNArch.prototype.splitAndBoundParams = function(params, bounds) {
 	return sparams;
 };
 
-// Register a new function that creates neural nets.
+// Wrapper around function that creates neural nets.
 // The first argument to the function must be a name for the net.
 //    (if undefined, the name is assumed to be the function name)
 // The function is memoized on this first argument.
-NNArch.prototype.nnFunction = function(fnname, fn) {
-	this[fnname] = function() {
-		var name = arguments[0] || fnname;
+NNArch.nnFunction = function(fn) {
+	return function() {
+		var name = arguments[0];
 		var net = this.nnCache[name];
 		if (net === undefined) {
 			net = fn.apply(this, arguments);
@@ -97,12 +148,7 @@ NNArch.prototype.nnFunction = function(fnname, fn) {
 			net.setTraining(true);
 		}
 		return net;
-	}.bind(this);
-};
-
-// Get a reference to the cache of created neural nets
-NNArch.prototype.getNeuralNetCache = function() {
-	return this.nnCache;
+	};
 };
 
 

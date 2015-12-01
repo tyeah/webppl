@@ -14,11 +14,11 @@ var _ = require('underscore');
 var assert = require('assert');
 var fs = require('fs');
 var utils = require('../../utils.js');
-var nn = require('adnn/nn');
 var util = require('util');
 var present = require('present');
 var lsysUtils = require('../utils.js');
 var render = require('../render.js');
+var nnarch = require('../nnarch');
 
 
 // Parse options
@@ -49,20 +49,13 @@ var globalStore = rets.globalStore;
 var viewport = rets.viewport;
 var targetDB = rets.targetDB;
 var generate = trainedModel ? rets.generateGuided : rets.generate;
-var neuralNets = rets.neuralNets;
 
 
-// Load trained networks
+// Load trained networks?
 if (trainedModel) {
 	var paramfile = saved_params + '/' + opts.trainedModel + '.txt';
-	var jsonNets = JSON.parse(fs.readFileSync(paramfile).toString());
-	var trainedNets = _.mapObject(jsonNets, function(jn) {
-		return nn.deserializeJSON(jn);
-	});
-	for (var name in neuralNets) {
-		neuralNets[name] = undefined;
-	}
-	_.extend(neuralNets, trainedNets);
+	var nnGuide = nnarch.loadFromFile(paramfile);
+	globalStore.nnGuide = nnGuide;
 }
 
 

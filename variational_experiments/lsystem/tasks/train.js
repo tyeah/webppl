@@ -2,21 +2,27 @@
 //    neural net library.
 // Command line arguments:
 // * --trainingTraces=name: Trains on traces in gen_traces/name.txt
+// * --arch=name: Name of neural guide architecture, looks in nnarch/architectures
 // * --outputName=name: Writes output neural nets to saved_params/name.txt
-//   [Optional] If omitted, will use value of --trainingTraces
+//   [Optional] If omitted, will use value of --arch
 
 
 var _ = require('underscore');
 var assert = require('assert');
 var fs = require('fs');
 var utils = require('../../utils.js');
+var nnarch = require('../nnarch');
 
 
 // Parse options
 var opts = require('minimist')(process.argv.slice(2));
 var trainingTraces = opts.trainingTraces;
 assert(trainingTraces, 'Must define --trainingTraces option');
-var outputName = opts.outputName || trainingTraces;
+var arch = opts.arch;
+assert(arch, 'Must define --arch option');
+var ArchType = nnarch.getArchByName(arch);
+console.log(nnGuide);
+var outputName = opts.outputName || arch;
 console.log(opts);
 
 var gen_traces = __dirname + '/../gen_traces';
@@ -29,7 +35,6 @@ var rootdir = __dirname + '/..';
 var rets = utils.execWebpplFileWithRoot(file, rootdir);
 var globalStore = rets.globalStore;
 var generateGuided = rets.generateGuided;
-var neuralNets = rets.neuralNets;
 
 
 var filename = gen_traces + '/' + trainingTraces + '.txt';
@@ -71,20 +76,19 @@ var trainingOpts = {
 	warnOnZeroGradient: true
 };
 
+var nnGuide = new ArchType();
+globalStore.nnGuide = nnGuide;
+
 console.log('Training...');
 utils.runwebppl(Variational, [generateGuided, trainingOpts], globalStore, '', function(s, diagnostics) {
 	console.log('FINISHED training.');
-	// Not doing anything with diagnostics for now
 
 	// Save neural nets to disk
 	if (!fs.existsSync(saved_params)) {
 		fs.mkdirSync(saved_params);
 	}
 	var paramfile = saved_params + '/' + outputName + '.txt';
-	var nets = _.mapObject(neuralNets, function(net) {
-		return net.serializeJSON();
-	});
-	fs.writeFileSync(paramfile, JSON.stringify(nets));
+	nnGuide.saveToFile(paramfile);
 	console.log('Wrote neural nets/params to disk.');
 
 	// Save diagnostics to disk
@@ -103,3 +107,6 @@ utils.runwebppl(Variational, [generateGuided, trainingOpts], globalStore, '', fu
 	fs.closeSync(df);
 	console.log('Wrote diagnostics to file.');
 });
+
+
+
