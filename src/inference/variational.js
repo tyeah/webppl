@@ -149,6 +149,11 @@ module.exports = function(env) {
     } else if (optimizerOpts.name === 'adadelta') {
       var blendWeight = opt(optimizerOpts, 'blendWeight');
       this.optimizer = adadeltaOptimizer(blendWeight);
+    } else if (optimizerOpts.name === 'adam') {
+      var initLearnRate = opt(optimizerOpts, 'initLearnRate');
+      var bw1 = opt(optimizerOpts, 'blendWeight1');
+      var bw2 = opt(optimizerOpts, 'blendWeight2');
+      this.optimizer = adamOptimizer(initLearnRate, bw1, bw2);
     } else if (optimizerOpts.name === 'sgd') {
       var initLearnRate = opt(optimizerOpts, 'initLearnRate');
       var decayFactor = opt(optimizerOpts, 'decayFactor');
@@ -464,7 +469,7 @@ module.exports = function(env) {
 
   function sgdOptimizer(initLearnRate, decayFactor) {
     var learnRate = initLearnRate;
-    return function(name, gradlist, paramlist) {
+    return function(t, name, gradlist, paramlist) {
       for (var i = 0; i < gradlist.length; i++) {
         var grad = gradlist[i];
         var params = ad.value(paramlist[i]);
@@ -476,7 +481,7 @@ module.exports = function(env) {
 
   function adagradOptimizer(initLearnRate) {
     var runningG2 = {};
-    return function(name, gradlist, paramlist) {
+    return function(t, name, gradlist, paramlist) {
       if (!runningG2.hasOwnProperty(name)) {
         runningG2[name] = zeros(gradlist);
       }
@@ -500,7 +505,7 @@ module.exports = function(env) {
 
   function windowgradOptimizer(initLearnRate, blendWeight) {
     var runningG2 = {};
-    return function(name, gradlist, paramlist) {
+    return function(t, name, gradlist, paramlist) {
       if (!runningG2.hasOwnProperty(name)) {
         runningG2[name] = zeros(gradlist);
       }
@@ -526,7 +531,7 @@ module.exports = function(env) {
   function adadeltaOptimizer(blendWeight) {
     var runningG2 = {};
     var runningX2 = {};
-    return function(name, gradlist, paramlist) {
+    return function(t, name, gradlist, paramlist) {
       if (!runningG2.hasOwnProperty(name)) {
         runningG2[name] = zeros(gradlist);
         runningX2[name] = zeros(gradlist);
@@ -554,10 +559,46 @@ module.exports = function(env) {
     };
   }
 
+  function adamOptimizer(initLearnRate, blendWeight1, blendWeight2) {
+    var firstMom = {};
+    var secondMom = {};
+    return function(t, name, gradlist, paramlist) {
+      var bwPow1 = Math.pow(blendWeight1, t);
+      var bwPow2 = Math.pow(blendWeight2, t);
+      if (!firstMom.hasOwnProperty(name)) {
+        firstMom[name] = zeros(gradlist);
+        secondMom[name] = zeros(gradlist);
+      }
+      var mom1 = firstMom[name];
+      var mom2 = secondMom[name];
+      for (var i = 0; i < gradlist.length; i++) {
+        var params = ad.value(paramlist[i]);
+        var grad = gradlist[i];
+        var gradSq = grad.mul(grad);
+        var m1 = mom1[i];
+        var m2 = mom2[i];
+        m1.muleq(blendWeight1).addeq(grad.muleq(1 - blendWeight1));
+        m2.muleq(blendWeight2).addeq(gradSq.muleq(1 - blendWeight2));
+        var firstCorr = m1.div(1 - bwPow1);
+        var secondCorr = m2.div(1 - bwPow2);
+        var dx = firstCorr.muleq(initLearnRate).muleq(secondCorr.sqrteq().pseudoinverteq());
+        if (!dx.isFinite().allreduce()) {
+          console.log('Found non-finite Adam update!');
+          console.log('name: ' + paramlist[i].name);
+          console.log('grad: ' + JSON.stringify(grad.toArray()));
+          console.log('dx: ' + JSON.stringify(dx.toArray()));
+          assert(false);
+        }
+        params.addeq(dx);
+      }
+    };
+  }
+
   Variational.prototype.doGradientUpdate = function() {
     if (this.verbosity.params) {
       console.log('  params before update: ' + JSON.stringify(readableParams(this.params)));
     }
+    var iterNum = this.maxNumFlights - this.flightsLeft + 1;
     var gradient = this.estimateGradient();
     var maxDelta = 0;
     for (var name in gradient) {
@@ -576,7 +617,7 @@ module.exports = function(env) {
       // Do gradient update
       // (Destructively updates the gradient to reflect the actual
       //    delta done to the params)
-      this.optimizer(name, gradlist, paramlist);
+      this.optimizer(iterNum, name, gradlist, paramlist);
 
       // Computer convergence test stat
       for (var i = 0; i < gradlist.length; i++) {

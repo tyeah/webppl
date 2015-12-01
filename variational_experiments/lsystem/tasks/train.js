@@ -49,15 +49,21 @@ var trainingOpts = {
 	// 	name: 'adagrad',
 	// 	initLearnRate: 0.05
 	// },
-	optimizer: {
-		name: 'windowgrad',
-		initLearnRate: 0.01,
-		blendWeight: 0.75
-	},
+	// optimizer: {
+	// 	name: 'windowgrad',
+	// 	initLearnRate: 0.01,
+	// 	blendWeight: 0.75
+	// },
 	// optimizer: {
 	// 	name: 'adadelta',
 	// 	blendWeight: 0.5
 	// },
+	optimizer: {
+		name: 'adam',
+		initLearnRate: 0.01,
+		blendWeight1: 0.75,
+		blendWeight2: 0.75
+	},
 	// optimizer: {
 	// 	name: 'sgd',
 	// 	initLearnRate: 0.001,
