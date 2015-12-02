@@ -23,11 +23,14 @@ var names = opts._;
 
 var outfilename = performance_compare + '/' + opts.outputName + '.csv';
 var csvfile = fs.openSync(outfilename, 'w');
-fs.writeSync(csvfile, 'condition,numParticles,sim,time,avgTime\n');
 for (var i = 0; i < names.length; i++) {
 	var name = names[i];
 	var filename = performance_eval + '/' + name + '.csv';
 	var lines = fs.readFileSync(filename).toString().split('\n');
+	if (i === 0) {
+		var header = lines[0];
+		fs.writeSync(csvfile, 'condition,' + header + '\n');
+	}
 	lines = lines.slice(1, lines.length-1);	// strip header and trailing newline
 	for (var j = 0; j < lines.length; j++) {
 		fs.writeSync(csvfile, name + ',' + lines[j] + '\n');

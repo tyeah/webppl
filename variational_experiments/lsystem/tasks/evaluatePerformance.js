@@ -80,13 +80,15 @@ if (opts.targetName) {
 // Run evaluation, generate CSV
 var outfilename = performance_eval + '/' + outputName + '.csv';
 var outfile = fs.openSync(outfilename, 'w');
-fs.writeSync(outfile, 'numParticles,sim,time,avgTime\n');
+fs.writeSync(outfile, 'numParticles,sim,time,avgTime,length,normTime,avgNormTime\n');
 var img = new lsysUtils.ImageData2D();
 for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	var np = i;
 	console.log('  numParticles = ' + np);
 	var times = [];
 	var sims = [];
+	var lengths = [];
+	var normTimes = [];
 	for (var j = 0; j < testlist.length; j++) {
 		console.log('    repetition ' + (j+1));
 		var targetIdx = testlist[j];
@@ -100,19 +102,25 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		var time = (t1 - t0)/1000;
 		render.render(globalStore.target.canvas, viewport, retval);
 		img.loadFromCanvas(globalStore.target.canvas);
-		var sim = lsysUtils.normalizedSimilarity(img , globalStore.target);
+		var sim = lsysUtils.normalizedSimilarity(img, globalStore.target);
 		times.push(time);
 		sims.push(sim);
+		lengths.push(retval.n);
+		normTimes.push(time / (retval.n * np));
 	}
 	// We use median time as our measure of average, since it's less sensitive
 	//    to outliers than mean.
 	var sortedTimes = times.slice(); sortedTimes.sort();
 	var avgTime = sortedTimes[Math.floor(sortedTimes.length/2)];
+	var sortedNormTimes = normTimes.slice(); sortedNormTimes.sort();
+	var avgNormTime = sortedNormTimes[Math.floor(sortedNormTimes.length/2)];
 	for (var j = 0; j < testlist.length; j++) {
 		var sim = sims[j];
 		var time = times[j];
-		fs.writeSync(outfile, util.format('%d,%d,%d,%d\n',
-			np, sim, time, avgTime));
+		var length = lengths[j];
+		var normTime = normTimes[j];
+		fs.writeSync(outfile, util.format('%d,%d,%d,%d,%d,%d,%d\n',
+			np, sim, time, avgTime, length, normTime, avgNormTime));
 	}
 }
 fs.closeSync(outfile);

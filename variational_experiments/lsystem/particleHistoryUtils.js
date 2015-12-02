@@ -47,7 +47,7 @@ particleHistoryUtils.compress = function(history) {
 			log_post: p.logpost,
 			active: p.active,
 			similarity: p.store.sim,
-			num_branches: p.store.numBranches,
+			num_branches: p.store.branches.n,
 			branches: branchIdToIndex[p.store.branches.__id]
 		}
 	});

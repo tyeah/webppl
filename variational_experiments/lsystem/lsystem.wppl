@@ -2,6 +2,7 @@ var utils = require.call(null, __ROOT + '/../utils.js');
 var lsysUtils = require.call(null, __ROOT + '/utils.js');
 var render = require.call(null, __ROOT + '/render.js');
 var nnarch = require.call(null, __ROOT + '/nnarch');
+var _ = require.call(null, 'underscore');
 var THREE = require.call(null, 'three');
 var ad = require.call(null, 'adnn/ad');
 
@@ -48,7 +49,7 @@ var computeSim = function(branches, inInference) {
 	globalStore.genImg = utils.new(lsysUtils.ImageData2D).loadFromCanvas(target.canvas);
 	// Save?
 	if (saveImageSoFar) {
-		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.numBranches).toString() + '.png');
+		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.branches.n).toString() + '.png');
 	}
 	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
 };
@@ -152,8 +153,11 @@ var makeProgram = function(neurallyGuided) {
 		};
 
 		// Update model state
-		globalStore.branches = { branch: newbranch, next: globalStore.branches };
-		globalStore.numBranches = globalStore.numBranches + 1;
+		globalStore.branches = {
+			branch: newbranch,
+			next: globalStore.branches,
+			n: globalStore.branches ? globalStore.branches.n + 1 : 1
+		};
 		globalStore.bbox = globalStore.bbox.clone();
 		globalStore.bbox.expandByPoint(newbranch.start);
 		globalStore.bbox.expandByPoint(newbranch.end);
@@ -218,7 +222,6 @@ var makeProgram = function(neurallyGuided) {
 		}
 		
 		globalStore.branches = undefined;
-		globalStore.numBranches = 0;
 		globalStore.bbox = utils.new(THREE.Box2);
 
 		// These are separated like this so that we can have an initial local
@@ -238,6 +241,7 @@ var makeProgram = function(neurallyGuided) {
 
 		future(function() { branch(startState); });
 		finishAllFutures();
+
 		return globalStore.branches;
 	};
 
