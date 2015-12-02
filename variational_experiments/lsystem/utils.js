@@ -55,19 +55,6 @@ ImageData2D.prototype = {
 		var sim = this.numSameBinary(other);
 		return sim / (this.height*this.width);
 	},
-	percentFilledSameBinary: function(other) {
-		assert(this.width === other.width && this.height === other.height,
-			'percentFilledSameBinary: image dimensions do not match!');
-		var sim = 0;
-		var n = 0;
-		for (var i = 0; i < this.data.length; i += 4) {  // stride of 4 for RGBA pixels
-			if (this.data[i] !== 255) {
-				sim += (other.data[i] !== 255);
-				n++;
-			}
-		}
-		return n > 0 ? sim / n : 0;
-	},
 	toBinaryByteArray: function() {
 		var numPixels = this.width*this.height;
 		var numBytes = Math.ceil(numPixels/8);
