@@ -45,7 +45,8 @@ ImageData2D.prototype = {
 		assert(this.width === other.width && this.height === other.height,
 			'numSameBinary: image dimensions do not match!');
 		var sim = 0;
-		for (var i = 0; i < this.data.length; i += 4) {  // stride of 4 for RGBA pixels
+		var n = this.data.length | 0;
+		for (var i = 0; i < n; i += 4) {  // stride of 4 for RGBA pixels
 			var eq = (this.data[i] === 255) === (other.data[i] === 255);
 			sim += eq;
 		}
