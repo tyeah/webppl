@@ -1,3 +1,3 @@
 
 
-module.exports = require('./reflex.js');
+module.exports = require('./finiteWindow.js');

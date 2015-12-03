@@ -16,7 +16,7 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 
 	predict: function(globalStore, localState, name, paramBounds) {
 		var nOut = paramBounds.length;
-		var x = localState.features;
+		var x = this.localFeatures(globalStore, localState);
 		var y = this.paramPredictMLP(name, nOut).eval(x);
 		return this.splitAndBoundParams(y, paramBounds);
 	}

@@ -93,8 +93,9 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 				}
 			}
 		}
+		var localFeatures = this.localFeatures(globalStore, localState);
 		for (var i = 0; i < this.nLocalFeatures; i++, fidx++) {
-			features[fidx] = localState.features.data[i];
+			features.data[fidx] = localFeatures.data[i];
 		}
 		features = ad.scalarsToTensor(features);
 

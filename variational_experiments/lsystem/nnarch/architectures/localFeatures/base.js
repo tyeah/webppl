@@ -19,8 +19,9 @@ function normang(theta) {
 };
 
 
-module.exports = NNArch.subclass(NNArch, 'reflexLocalFeatures', {
-	localFeatures: function(localState) {
+module.exports = NNArch.subclass(NNArch, 'baseLocalFeatures', {
+
+	featurize: function(localState) {
 		var viewport = this.constants.viewport;
 		var minWidth = this.constants.minWidth;
 		var initialWidth = this.constants.initialWidth;
@@ -30,7 +31,5 @@ module.exports = NNArch.subclass(NNArch, 'reflexLocalFeatures', {
 			normalize(localState.width, minWidth, initialWidth),
 			normalize(normang(localState.angle), 0, 2*Math.PI)
 		]);
-	},
-
-	nLocalFeatures: 4
+	}
 });

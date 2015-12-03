@@ -28,13 +28,21 @@ NNArch.prototype.constant = function(name, val) {
 // By default, do nothing
 NNArch.prototype.init = function(globalStore) {};
 
+// Computation done upon entering a function
+// By default, do nothing
+NNArch.prototype.enter = function(globalStore, localState) {};
+
+// Computation done upon exiting a function
+// By default, do nothing
+NNArch.prototype.exit = function(globalStore) {};
+
 // Computation done after new geometry has been added
 // By default, do nothing
 NNArch.prototype.step = function(globalStore, localState) {};
 
-// Compute local features from a local state object
+// Retrieve local context features
 // By default, do nothing
-NNArch.prototype.localFeatures = function(localState) {};
+NNArch.prototype.localFeatures = function(globalStore, localState) {};
 // The number of local features (subclasses will need to know this when
 //    building neural nets)
 NNArch.prototype.nLocalFeatures = 0;
