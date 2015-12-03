@@ -721,7 +721,7 @@ module.exports = function(env) {
       elboGradEst[name] = new Array(n);
       for (var i = 0; i < n; i++) {
         // Overwrite a bunch of temporaries to save space
-        aStar[name][i] = sumWeightedGradSq[name][i].diveq(sumGradSq[name][i]);
+        aStar[name][i] = sumGradSq[name][i].pseudoinverteq().muleq(sumWeightedGradSq[name][i]);
         elboGradEst[name][i] = sumWeightedGrad[name][i].subeq(
           sumGrad[name][i].muleq(aStar[name][i])).diveq(this.numParticles);
       }
