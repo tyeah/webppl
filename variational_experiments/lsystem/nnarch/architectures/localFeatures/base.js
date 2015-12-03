@@ -31,5 +31,11 @@ module.exports = NNArch.subclass(NNArch, 'baseLocalFeatures', {
 			normalize(localState.width, minWidth, initialWidth),
 			normalize(normang(localState.angle), 0, 2*Math.PI)
 		]);
-	}
+	},
+
+	localFeatures: function(globalStore, localState) {
+		return this.featurize(localState);
+	},
+
+	nLocalFeatures: 4
 });

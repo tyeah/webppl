@@ -195,7 +195,7 @@ var makeProgram = function(neurallyGuided) {
 		});
 
 		if (neurallyGuided) {
-			globalStore.nnGuide.exit(globalStore, currState);
+			globalStore.nnGuide.exit(globalStore);
 		}
 	};
 

@@ -1,3 +1,4 @@
+var ad = require('adnn/ad');
 var nn = require('adnn/nn');
 var NNArch = require('../nnarch.js');
 var Tensor = require('adnn/tensor');
@@ -57,7 +58,8 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 		// Construct image so far pyramid 
 		this.constructImageSoFarPyramid(globalStore);
 		// Doubling due to adding features for image so far
-		this.nTotalFeatures = 2*9*nPyramidLevels + this.nLocalFeatures; 
+		this.nPyramidFeatures = 2*9*nPyramidLevels;
+		this.nTotalFeatures = this.nPyramidFeatures + this.nLocalFeatures; 
 	},
 
 	step: function(globalStore, localState) {
@@ -75,7 +77,7 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 	predict: function(globalStore, localState, name, paramBounds) {
 		// Extract pixel neighborhood at each pyramid level, concat into
 		//    one vector (along with local features)
-		var features = new Tensor([this.nTotalFeatures]);
+		var features = new Tensor([this.nPyramidFeatures]);
 		var v = this.constants.viewport;
 		var x = normalize(localState.pos.x, v.xmin, v.xmax);
 		var y = normalize(localState.pos.y, v.ymin, v.ymax);
@@ -102,10 +104,9 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 				}
 			}
 		}
+		
 		var localFeatures = this.localFeatures(globalStore, localState);
-		for (var i = 0; i < this.nLocalFeatures; i++, fidx++) {
-			features.data[fidx] = localFeatures.data[i];
-		}
+		var features = ad.tensor.concat(features, localFeatures);
 
 		// Feed features into MLP
 		var nOut = paramBounds.length;

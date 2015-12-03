@@ -5,9 +5,11 @@ var ad = require('adnn/ad');
 
 // How big is the finite window?
 nFrames = 1;
+// nFrames = 4;
 
+var base = require('./base.js');
 
-module.exports = NNArch.subclass(require('./base.js'), 'finiteWindowLocalFeatures', {
+module.exports = NNArch.subclass(base, 'finiteWindowLocalFeatures', {
 
 	enter: function(globalStore, localState) {
 		var f = this.featurize(localState);
@@ -43,5 +45,5 @@ module.exports = NNArch.subclass(require('./base.js'), 'finiteWindowLocalFeature
 		return ad.tensor.concat(arr);
 	},
 
-	nLocalFeatures: 4 * nFrames
+	nLocalFeatures: base.prototype.nLocalFeatures * nFrames
 });
