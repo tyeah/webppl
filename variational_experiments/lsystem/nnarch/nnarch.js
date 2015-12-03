@@ -29,6 +29,7 @@ function normang(theta) {
 function NNArch() {
 	this.constants = {};
 	this.nnCache = {};
+	training: false
 };
 
 
@@ -70,6 +71,15 @@ NNArch.prototype.nLocalFeatures = 4;
 NNArch.prototype.predict = function(globalStore, localState, name, paramBounds) {
 	assert(false, 'predict must be implemented!');
 };
+
+// Set whether we're in training or test
+NNArch.prototype.setTraining = function(flag) {
+	this.training = flag;
+	for (var name in this.nnCache) {
+		var net = this.nnCache[name];
+		net.setTraining(flag);
+	}
+}
 
 
 // Save/load/retrieve interface -----------------------------------------------
@@ -145,7 +155,7 @@ NNArch.nnFunction = function(fn) {
 			net = fn.apply(this, arguments);
 			this.nnCache[name] = net;
 			Variational.registerParams(name, net.parameters);
-			net.setTraining(true);
+			net.setTraining(this.training);
 		}
 		return net;
 	};

@@ -204,6 +204,7 @@ var makeProgram = function(neurallyGuided) {
 	var generate = function() {
 		// Constants needed by the guide architecture
 		if (neurallyGuided) {
+			globalStore.nnGuide.constant('targetDB', targetDB);
 			globalStore.nnGuide.constant('viewport', viewport);
 			globalStore.nnGuide.constant('initialWidth', initialWidth);
 			globalStore.nnGuide.constant('minWidth', minWidth);

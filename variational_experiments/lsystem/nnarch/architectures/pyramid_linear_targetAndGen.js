@@ -26,6 +26,16 @@ module.exports = NNArch.subclass(archname, {
 		return nn.convolution({filterSize: 2, stride: 2}, name);
 	}),
 
+	constructTargetPyramid: function(inputImageTensor) {
+		var pyramid = [inputImageTensor];
+		for (var i = 0; i < nPyramidLevels-1; i++) {
+			var prev = pyramid[i];
+			var next = this.downsample('target_level'+i).eval(prev);
+			pyramid.push(next);
+		}
+		return pyramid;
+	},
+
 	constructImageSoFarPyramid: function(globalStore) {
 		globalStore.imageSoFarPyramid = [ globalStore.genImg.toTensor() ]; 
 		for (var i = 0; i < nPyramidLevels-1; i++) {
@@ -37,11 +47,13 @@ module.exports = NNArch.subclass(archname, {
 
 	init: function(globalStore) {
 		// Construct target pyramid
-		globalStore.pyramid = [globalStore.target.tensor];
-		for (var i = 0; i < nPyramidLevels-1; i++) {
-			var prev = globalStore.pyramid[i];
-			var next = this.downsample('target_level'+i).eval(prev);
-			globalStore.pyramid.push(next);
+		if (this.training) {
+			globalStore.pyramid = this.constructTargetPyramid(globalStore.target.tensor);
+		} else {
+			if (globalStore.target.pyramid === undefined) {
+				globalStore.target.pyramid = this.constructTargetPyramid(globalStore.target.tensor);
+			}
+			globalStore.pyramid = globalStore.target.pyramid;
 		}
 		// Construct image so far pyramid
 		this.constructImageSoFarPyramid(globalStore);

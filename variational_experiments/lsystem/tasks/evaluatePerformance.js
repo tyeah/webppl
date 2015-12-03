@@ -82,15 +82,25 @@ var outfilename = performance_eval + '/' + outputName + '.csv';
 var outfile = fs.openSync(outfilename, 'w');
 fs.writeSync(outfile, 'numParticles,sim,time,avgTime,length,normTime,avgNormTime\n');
 var img = new lsysUtils.ImageData2D();
+var warmUp = true;
 for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	var np = i;
-	console.log('  numParticles = ' + np);
+	// We run through all test targets once, just to make sure everything is warmed
+	//    up (JIT, precomputation, etc.)
+	if (warmUp) {
+		console.log('Warming up...');
+	}
+	if (!warmUp) {
+		console.log('numParticles = ' + np);
+	}
 	var times = [];
 	var sims = [];
 	var lengths = [];
 	var normTimes = [];
 	for (var j = 0; j < testlist.length; j++) {
-		console.log('    repetition ' + (j+1));
+		if (!warmUp) {
+			console.log('  test ' + (j+1));
+		}
 		var targetIdx = testlist[j];
 		globalStore.target = targetDB.getTargetByIndex(targetIdx);	
 		var t0 = present();
@@ -108,19 +118,25 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		lengths.push(retval.n);
 		normTimes.push(time / (retval.n * np));
 	}
-	// We use median time as our measure of average, since it's less sensitive
-	//    to outliers than mean.
-	var sortedTimes = times.slice(); sortedTimes.sort();
-	var avgTime = sortedTimes[Math.floor(sortedTimes.length/2)];
-	var sortedNormTimes = normTimes.slice(); sortedNormTimes.sort();
-	var avgNormTime = sortedNormTimes[Math.floor(sortedNormTimes.length/2)];
-	for (var j = 0; j < testlist.length; j++) {
-		var sim = sims[j];
-		var time = times[j];
-		var length = lengths[j];
-		var normTime = normTimes[j];
-		fs.writeSync(outfile, util.format('%d,%d,%d,%d,%d,%d,%d\n',
-			np, sim, time, avgTime, length, normTime, avgNormTime));
+	if (!warmUp) {
+		// We use median time as our measure of average, since it's less sensitive
+		//    to outliers than mean.
+		var sortedTimes = times.slice(); sortedTimes.sort();
+		var avgTime = sortedTimes[Math.floor(sortedTimes.length/2)];
+		var sortedNormTimes = normTimes.slice(); sortedNormTimes.sort();
+		var avgNormTime = sortedNormTimes[Math.floor(sortedNormTimes.length/2)];
+		for (var j = 0; j < testlist.length; j++) {
+			var sim = sims[j];
+			var time = times[j];
+			var length = lengths[j];
+			var normTime = normTimes[j];
+			fs.writeSync(outfile, util.format('%d,%d,%d,%d,%d,%d,%d\n',
+				np, sim, time, avgTime, length, normTime, avgNormTime));
+		}
+	}
+	if (warmUp === true) {
+		warmUp = false;
+		i--;
 	}
 }
 fs.closeSync(outfile);

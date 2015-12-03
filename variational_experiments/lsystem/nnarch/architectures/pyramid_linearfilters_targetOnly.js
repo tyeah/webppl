@@ -33,13 +33,25 @@ module.exports = NNArch.subclass(archname, {
 		]);
 	}),
 
+	constructTargetPyramid: function(inputImageTensor) {
+		var pyramid = [ this.firstLevelFilters('level0_filters').eval(inputImageTensor) ];
+		for (var i = 0; i < nPyramidLevels-1; i++) {
+			var prev = pyramid[i];
+			var next = this.downsampleAndFilter('level'+(i+1)).eval(prev);
+			pyramid.push(next);
+		}
+		return pyramid;
+	},
+
 	init: function(globalStore) {
 		// Construct target pyramid
-		globalStore.pyramid = [ this.firstLevelFilters('level0_filters').eval(globalStore.target.tensor) ];
-		for (var i = 0; i < nPyramidLevels-1; i++) {
-			var prev = globalStore.pyramid[i];
-			var next = this.downsampleAndFilter('level'+(i+1)).eval(prev);
-			globalStore.pyramid.push(next);
+		if (this.training) {
+			globalStore.pyramid = this.constructTargetPyramid(globalStore.target.tensor);
+		} else {
+			if (globalStore.target.pyramid === undefined) {
+				globalStore.target.pyramid = this.constructTargetPyramid(globalStore.target.tensor);
+			}
+			globalStore.pyramid = globalStore.target.pyramid;
 		}
 		this.nTotalFeatures = 9*nPyramidLevels*nFilters + this.nLocalFeatures;
 	},

@@ -77,12 +77,14 @@ var trainingOpts = {
 		endStatus: true,
 
 		// params: true,
-		// gradientEstimate: true
+		// gradientEstimate: true,
+		// gradientSamples: true
 	},
 	warnOnZeroGradient: true
 };
 
 var nnGuide = new ArchType();
+nnGuide.setTraining(true);
 globalStore.nnGuide = nnGuide;
 
 console.log('Training...');
