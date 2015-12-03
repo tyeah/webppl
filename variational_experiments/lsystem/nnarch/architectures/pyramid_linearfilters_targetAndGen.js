@@ -22,7 +22,7 @@ function normalize(x, lo, hi) {
 }
 
 
-module.exports = NNArch.subclass(archname, {
+module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 
 	firstLevelFilters: NNArch.nnFunction(function(name) {
 		return nn.convolution({filterSize: filterSize, outDepth: nFilters}, name);
