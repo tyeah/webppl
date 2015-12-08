@@ -53,8 +53,7 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 			}
 			globalStore.pyramid = globalStore.target.pyramid;
 		}
-		this.nPyramidFeatures = 9*nPyramidLevels*nFilters;
-		this.nTotalFeatures = this.nPyramidFeatures + this.nLocalFeatures;
+		this.nTotalFeatures = 9*nPyramidLevels*nFilters + this.nLocalFeatures;
 	},
 
 	paramPredictMLP: NNArch.nnFunction(function(name, nOut) {
@@ -72,7 +71,7 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 		// Extract pixel neighborhood at each pyramid level, concat into
 		//    one vector (along with local features)
 		var outOfBoundsVals = ad.tensorToScalars(this.outOfBounds('outOfBounds').eval());
-		var features = new Array(this.nPyramidFeatures);
+		var features = new Array(this.nTotalFeatures);
 		var v = this.constants.viewport;
 		var x = normalize(localState.pos.x, v.xmin, v.xmax);
 		var y = normalize(localState.pos.y, v.ymin, v.ymax);
@@ -94,10 +93,10 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 				}
 			}
 		}
-		
-		var localFeatures = this.localFeatures(globalStore, localState);
-		var features = ad.scalarsToTensor(features);
-		features = ad.tensor.concat(features, localFeatures);
+		for (var i = 0; i < this.nLocalFeatures; i++, fidx++) {
+			features[fidx] = localState.features.data[i];
+		}
+		features = ad.scalarsToTensor(features);
 
 		// Feed features into MLP
 		var nOut = paramBounds.length;

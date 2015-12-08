@@ -1,5 +1,7 @@
-var NNArch = require('../../nnarch.js');
+var NNArch = require('../nnarch.js');
 var Tensor = require('adnn/tensor');
+
+var archname = __filename.split('/').pop().slice(0, -3);
 
 
 var fuzz = [0, 1e-8];
@@ -19,9 +21,10 @@ function normang(theta) {
 };
 
 
-module.exports = NNArch.subclass(NNArch, 'baseLocalFeatures', {
 
-	featurize: function(localState) {
+module.exports = NNArch.subclass(NNArch, archname, {
+
+	localFeatures: function(localState) {
 		var viewport = this.constants.viewport;
 		var minWidth = this.constants.minWidth;
 		var initialWidth = this.constants.initialWidth;
@@ -32,13 +35,7 @@ module.exports = NNArch.subclass(NNArch, 'baseLocalFeatures', {
 			normalize(normang(localState.angle), 0, 2*Math.PI)
 		]);
 	},
+	
+	nLocalFeatures: 4,
 
-	localFeatures: function(globalStore, localState) {
-		if (localState.features === undefined) {
-			localState.features = this.featurize(localState);
-		}
-		return localState.features;
-	},
-
-	nLocalFeatures: 4
 });

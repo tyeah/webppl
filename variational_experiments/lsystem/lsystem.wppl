@@ -124,15 +124,21 @@ var makeProgram = function(neurallyGuided) {
 	var minWidthPercent = 0.2;
 	var minWidth = minWidthPercent*initialWidth;
 
+	var state = function(obj) {
+		return {
+			depth: obj.depth,
+			pos: obj.pos,
+			angle: obj.angle,
+			width: obj.width,
+			features: neurallyGuided ? globalStore.nnGuide.localFeatures(obj) : undefined
+		};
+	};
+
 	var polar2rect = function(r, theta) {
 		return utils.new(THREE.Vector2, r*Math.cos(theta), r*Math.sin(theta));
 	};
 
 	var branch = function(currState) {
-
-		if (neurallyGuided) {
-			globalStore.nnGuide.enter(globalStore, currState);
-		}
 
 		// Generate new branch
 		var width = widthDecay * currState.width;
@@ -159,12 +165,12 @@ var makeProgram = function(neurallyGuided) {
 		// Add new heuristic factor
 		if (!globalStore.noFactors) targetFactor();
 
-		var newState = {
+		var newState = state({
 			depth: currState.depth + 1,
 			pos: newbranch.end,
 			angle: newbranch.angle,
 			width: newbranch.width
-		};
+		});
 
 		if (neurallyGuided) {
 			globalStore.nnGuide.step(globalStore, newState);
@@ -193,15 +199,12 @@ var makeProgram = function(neurallyGuided) {
 				});
 			}
 		});
-
-		if (neurallyGuided) {
-			globalStore.nnGuide.exit(globalStore);
-		}
 	};
 
 	var generate = function() {
 		// Constants needed by the guide architecture
 		if (neurallyGuided) {
+			globalStore.nnGuide.constant('targetDB', targetDB);
 			globalStore.nnGuide.constant('viewport', viewport);
 			globalStore.nnGuide.constant('initialWidth', initialWidth);
 			globalStore.nnGuide.constant('minWidth', minWidth);
@@ -224,18 +227,18 @@ var makeProgram = function(neurallyGuided) {
 
 		// These are separated like this so that we can have an initial local
 		//    state to feed to the _gaussian for the initial angle.
-		var initState = {
+		var initState = state({
 			depth: 0,
 			pos: utils.new(THREE.Vector2, 0, 0),
 			angle: 0,
 			width: initialWidth
-		};
-		var startState = {
+		});
+		var startState = state({
 			depth: initState.depth,
 			pos: initState.pos,
 			angle: _gaussian(-Math.PI/2, Math.PI/6, initState, 'startAngle'),
 			width: initState.width
-		};
+		});
 
 		future(function() { branch(startState); });
 		finishAllFutures();

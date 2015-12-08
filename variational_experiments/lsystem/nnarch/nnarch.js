@@ -5,6 +5,7 @@ var ad = require('adnn/ad');
 var nn = require('adnn/nn');
 
 
+
 // Base class for all neural net architectures
 // All subclasses will live in ./architectures
 
@@ -28,21 +29,13 @@ NNArch.prototype.constant = function(name, val) {
 // By default, do nothing
 NNArch.prototype.init = function(globalStore) {};
 
-// Computation done upon entering a function
-// By default, do nothing
-NNArch.prototype.enter = function(globalStore, localState) {};
-
-// Computation done upon exiting a function
-// By default, do nothing
-NNArch.prototype.exit = function(globalStore) {};
-
 // Computation done after new geometry has been added
 // By default, do nothing
 NNArch.prototype.step = function(globalStore, localState) {};
 
-// Retrieve local context features
+// Compute local features from a local state object
 // By default, do nothing
-NNArch.prototype.localFeatures = function(globalStore, localState) {};
+NNArch.prototype.localFeatures = function(localState) {};
 // The number of local features (subclasses will need to know this when
 //    building neural nets)
 NNArch.prototype.nLocalFeatures = 0;
