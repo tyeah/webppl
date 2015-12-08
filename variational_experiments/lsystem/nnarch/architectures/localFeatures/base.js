@@ -34,7 +34,10 @@ module.exports = NNArch.subclass(NNArch, 'baseLocalFeatures', {
 	},
 
 	localFeatures: function(globalStore, localState) {
-		return this.featurize(localState);
+		if (localState.features === undefined) {
+			localState.features = this.featurize(localState);
+		}
+		return localState.features;
 	},
 
 	nLocalFeatures: 4
