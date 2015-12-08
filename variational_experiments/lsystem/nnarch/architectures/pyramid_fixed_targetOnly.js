@@ -20,7 +20,7 @@ function normalize(x, lo, hi) {
 }
 
 
-module.exports = NNArch.subclass(archname, {
+module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 
 	constructTargetPyramid: function(inputImageTensor) {
 		var pyramid = [inputImageTensor];

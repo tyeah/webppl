@@ -1,26 +1,9 @@
 var assert = require('assert');
 var fs = require('fs');
 var _ = require('underscore');
-var Tensor = require('adnn/tensor');
 var ad = require('adnn/ad');
 var nn = require('adnn/nn');
 
-
-var fuzz = [0, 1e-8];
-function normalize(x, lo, hi) {
-	// Fuzz prevents values from normalizing to exactly zero (causing zero
-	//    derivatives)
-	return (2 * (x - lo) / (hi - lo)) - 1 + gaussianERP.sample(fuzz);
-};
-
-var TWOPI = 2*Math.PI;
-function normang(theta) {
-	if (theta >= 0) {
-		return theta - (TWOPI*Math.floor(theta / TWOPI));
-	} else {
-		return theta - (TWOPI*Math.ceil(theta / TWOPI)) + TWOPI;
-	}
-};
 
 
 // Base class for all neural net architectures
@@ -51,21 +34,11 @@ NNArch.prototype.init = function(globalStore) {};
 NNArch.prototype.step = function(globalStore, localState) {};
 
 // Compute local features from a local state object
-// By default, ues normalized position, width, and angle
-NNArch.prototype.localFeatures = function(localState) {
-	var viewport = this.constants.viewport;
-	var minWidth = this.constants.minWidth;
-	var initialWidth = this.constants.initialWidth;
-	return new Tensor([4]).fromFlatArray([
-		normalize(localState.pos.x, viewport.xmin, viewport.xmax),
-		normalize(localState.pos.y, viewport.ymin, viewport.ymax),
-		normalize(localState.width, minWidth, initialWidth),
-		normalize(normang(localState.angle), 0, 2*Math.PI)
-	]);
-};
+// By default, do nothing
+NNArch.prototype.localFeatures = function(localState) {};
 // The number of local features (subclasses will need to know this when
 //    building neural nets)
-NNArch.prototype.nLocalFeatures = 4;
+NNArch.prototype.nLocalFeatures = 0;
 
 // Computation done to predict ERP params
 NNArch.prototype.predict = function(globalStore, localState, name, paramBounds) {
@@ -119,12 +92,12 @@ NNArch.loadFromFile = function(filename) {
 
 
 // Create new architecture subclass
-NNArch.subclass = function(name, properties) {
+NNArch.subclass = function(parent, name, properties) {
 	var ctor = function() {
-		NNArch.call(this);
+		parent.call(this);
 		this.name = name;
 	};
-	ctor.prototype = Object.create(NNArch.prototype);
+	ctor.prototype = Object.create(parent.prototype);
 	for (var prop in properties) {
 		ctor.prototype[prop] = properties[prop];
 	}
