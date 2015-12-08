@@ -54,7 +54,7 @@ var trainingOpts = {
 	// optimizer: {
 	// 	name: 'windowgrad',
 	// 	initLearnRate: 0.01,
-	// 	blendWeight: 0.75
+	// 	blendWeight: 0.9
 	// },
 	// optimizer: {
 	// 	name: 'adadelta',
@@ -63,8 +63,8 @@ var trainingOpts = {
 	optimizer: {
 		name: 'adam',
 		initLearnRate: 0.01,
-		blendWeight1: 0.75,
-		blendWeight2: 0.75
+		blendWeight1: 0.9,
+		blendWeight2: 0.9
 	},
 	// optimizer: {
 	// 	name: 'sgd',
