@@ -20,7 +20,7 @@ function normalize(x, lo, hi) {
 module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 
 	downsample: NNArch.nnFunction(function(name) {
-		return nn.convolution({filterSize: 2, stride: 2}, name);
+		return nn.convolution({filterSize: 2, stride: 2, pad: 0}, name);
 	}),
 
 	constructTargetPyramid: function(inputImageTensor) {
