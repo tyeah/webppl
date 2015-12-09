@@ -122,7 +122,7 @@ module.exports = function(env) {
       var i = this.firstActiveParticleIndex();
       if (i === -1) {
         // All particles completed, no more computation to do
-        return this.finish();
+        return this.finish(s);
       } else {
         this.particleIndex = i;
       }
@@ -233,7 +233,7 @@ module.exports = function(env) {
     var i = this.nextActiveParticleIndex();
     if (i === -1) {
       // All particles completed
-      return this.finish();
+      return this.finish(s);
     } else {
       if (i < this.particleIndex) {
         // We have updated all particles and will now wrap around
@@ -242,7 +242,7 @@ module.exports = function(env) {
         i = this.firstActiveParticleIndex();
         if (i === -1) {
           // All particles completed, no more computation to do
-          return this.finish();
+          return this.finish(s);
         }
       }
       this.particleIndex = i;
@@ -250,7 +250,7 @@ module.exports = function(env) {
     }
   };
 
-  ParticleFilter.prototype.finish = function() {
+  ParticleFilter.prototype.finish = function(s) {
     // Compute marginal distribution from (unweighted) particles
     var hist = {};
     _.each(
@@ -286,6 +286,9 @@ module.exports = function(env) {
     } else {
       dist.particleHistory = [this.particles];
     }
+    // Save the store from the last particle to finish (I found at least one
+    //    case where I want this, for inspection purposes)
+    dist.finalStore = s;
     ////
 
     // Reinstate previous coroutine:

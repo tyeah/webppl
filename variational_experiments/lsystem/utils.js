@@ -100,7 +100,9 @@ ImageData2D.prototype = {
 		return x;
 	},
 	// Converts [-1, 1] to [0, 255]
-	fromTensor: function(x, w, h) {
+	fromTensor: function(x) {
+		var h = x.dims[1];
+		var w = x.dims[2];
 		this.fillWhite(w, h);
 		var numPixels = this.width*this.height;
 		for (var i = 0; i < numPixels; i++) {
