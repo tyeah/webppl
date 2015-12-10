@@ -41,10 +41,12 @@ var computeSim = function(branches, inInference) {
 	// If not in inference, just render everything
 	if (!inInference) {
 		render.render(target.canvas, viewport, branches);
-	// Otherwise, do an incremental render of the last branch
+	// Otherwise, do an incremental render of the last branch,
+	//    saving the affected bounding box
 	} else {
 		globalStore.genImg.copyToCanvas(target.canvas);
-		render.render(target.canvas, viewport, branches, true, false);
+		globalStore.lastRenderedBBox = 
+			render.render(target.canvas, viewport, branches, true, false);
 	}
 	globalStore.genImg = utils.new(lsysUtils.ImageData2D).loadFromCanvas(target.canvas);
 	// Save?

@@ -28,6 +28,14 @@ render.render = function(canvas, viewport, branches, isIncremental, fillBackgrou
 		ctx.moveTo(istart.x, istart.y);
 		ctx.lineTo(iend.x, iend.y);
 		ctx.stroke();
+
+		// Return the affected bounding box
+		var box = new THREE.Box2();
+		box.expandByPoint(istart);
+		box.expandByPoint(iend);
+		box.expandByScalar(iwidth);
+		box.min.floor(); box.max.ceil();
+		return box;
 	}
 
 	if (fillBackground) {
@@ -40,7 +48,7 @@ render.render = function(canvas, viewport, branches, isIncremental, fillBackgrou
 	ctx.strokeStyle = 'black';
 	ctx.lineCap = 'round';
 	if (isIncremental) {
-		renderBranch(branches.branch);
+		return renderBranch(branches.branch);
 	} else {
 		for (var brObj = branches; brObj; brObj = brObj.next) {
 			renderBranch(brObj.branch);
