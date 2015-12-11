@@ -67,15 +67,12 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 		// Construct image so far pyramid 
 		this.constructImageSoFarPyramid(globalStore);
 		this.nTotalFeatures = 2*9*nPyramidLevels*nFilters + this.nLocalFeatures;
+		this.nTotalFeatures += nPyramidLevels*2; // Extra location features
 	},
 
 	step: function(globalStore, localState) {
-		// if (globalStore.branches.n % 2 === 0) {
-		// if (globalStore.branches.n % 3 === 0) {
-		// if (globalStore.branches.n % 4 === 0) {
-			// Construct image so far pyramid 
-			this.constructImageSoFarPyramid(globalStore);
-		// }
+		// Construct image so far pyramid 
+		this.constructImageSoFarPyramid(globalStore);
 	},
 
 	paramPredictMLP: NNArch.nnFunction(function(name, nOut) {
@@ -103,8 +100,13 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 			var img = globalStore.pyramid[i];
 			var imgSoFar = globalStore.imageSoFarPyramid[i];
 			var imgsize = ad.value(img).dims[1];	// dim 0 is channel depth (i.e. nFilters)
-			var cx = Math.floor(x*imgsize);
-			var cy = Math.floor(y*imgsize);
+			var cxx = x*imgsize;
+			var cyy = y*imgsize;
+			var cx = Math.floor(cxx);
+			var cy = Math.floor(cyy);
+			features[fidx] = (cxx - cx) / imgsize;
+			features[fidx+1] = (cyy - cy) / imgsize;
+			fidx += 2;
 			for (var j = 0; j < nFilters; j++) {
 				var outOfBoundsTarget = outOfBoundsValsTarget[i*nFilters + j];
 				var outOfBoundsSoFar = outOfBoundsValsSoFar[i*nFilters + j];
