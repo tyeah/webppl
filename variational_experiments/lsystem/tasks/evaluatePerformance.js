@@ -8,6 +8,8 @@
 //      trained model provided.
 // * --targetName=name: Only tests on targets/training/name.png
 //   [Optional] If omitted, will test on all target images
+// * --simType=name: binary (0) or sobel (1).
+//	 [Optional] If omitted, will use binary similarity. 
 
 
 var _ = require('underscore');
@@ -112,7 +114,13 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		var time = (t1 - t0)/1000;
 		render.render(globalStore.target.canvas, viewport, retval);
 		img.loadFromCanvas(globalStore.target.canvas);
-		var sim = lsysUtils.normalizedSimilarity(img, globalStore.target);
+		var sim;
+		if (opts.simType) {
+			sim = lsysUtils.normalizedSimilarity(img, globalStore.target, opts.simType); 
+		}
+		else {
+			sim = lsysUtils.normalizedSimilarity(img, globalStore.target, 0); //Binary by default
+		}
 		times.push(time);
 		sims.push(sim);
 		lengths.push(retval.n);

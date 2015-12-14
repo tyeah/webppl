@@ -30,7 +30,7 @@ setFuturePolicy(futurePolicy);
 
 // ----------------------------------------------------------------------------
 // Factor encouraging similarity to target image
-
+var simType = 0; //0 - binary; 1 - Sobel
 
 // Save rendered image so far to imagesSoFar directory 
 var saveImageSoFar = false;
@@ -51,7 +51,8 @@ var computeSim = function(branches, inInference) {
 	if (saveImageSoFar) {
 		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.branches.n).toString() + '.png');
 	}
-	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
+
+	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target, simType);
 };
 
 // Basically Gaussian log-likelihood, without the constant factor

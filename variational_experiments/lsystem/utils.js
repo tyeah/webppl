@@ -2,6 +2,7 @@ var fs = require('fs');
 var Canvas = require('canvas');
 var assert = require('assert');
 var Tensor = require('adnn/tensor');
+var Sobel = require('image_processing/sobel.js');
 
 
 function ImageData2D() {}
@@ -116,9 +117,29 @@ ImageData2D.prototype = {
 	}
 };
 
-// Similarity function between target image and another image
-function similarity(img, targetImg) {
+// Binary similarity function between target image and another image
+function binarySimilarity(img, targetImg) {
 	return img.percentSameBinary(targetImg);
+}
+
+// Sobel similarity
+function sobelSimilarity(img, targetImg) {
+	var sobelImg = Sobel.sobel(img.toTensor());
+	var sobelTarget = Sobel.sobel(targetImg.toTensor());
+	var numEntries = sobelImg.dims[1]*sobelImg.dims[2];
+
+	//Compute L2 distance between gradient images
+	var l2 = 0;
+	for (var i = 0; i < numEntries; i++) {
+		l2 += (sobelImg.data[i] - sobelTarget.data[i])*(sobelImg.data[i] - sobelTarget.data[i]);
+	}
+
+	l2 = Math.sqrt(l2);
+
+	sim = 1.0/(1.0+l2);
+
+	return sim; //(0,1]
+
 }
 
 // Baseline similarity of a blank image to a target image
@@ -126,14 +147,19 @@ function baselineSimilarity(targetImg) {
 	var w = targetImg.width;
 	var h = targetImg.height;
 	var img = new ImageData2D().fillWhite(w, h);
-	return similarity(img, targetImg);
+	return binarySimilarity(img, targetImg);
 }
 
 // Similarity normalized against the baseline
 // 'target' is a target object from the TargetImageDatabase
-function normalizedSimilarity(img, target) {
-	var sim = similarity(img, target.image);
-	return (sim - target.baseline) / (1 - target.baseline);
+function normalizedSimilarity(img, target, simType) {
+	if (simType == 0) {
+		var sim = binarySimilarity(img, target.image);		
+		return (sim - target.baseline) / (1 - target.baseline);
+	}
+	if (simType == 1) {
+		return sobelSimilarity(img, target.image);
+	}
 }
 
 
