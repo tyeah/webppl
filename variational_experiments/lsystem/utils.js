@@ -151,17 +151,21 @@ function baselineSimilarity(targetImg) {
 }
 
 // Similarity normalized against the baseline
-// 'target' is a target object from the TargetImageDatabase
-function normalizedSimilarity(img, target, simType) {
-	if (simType == 0) {
-		var sim = binarySimilarity(img, target.image);		
-		return (sim - target.baseline) / (1 - target.baseline);
-	}
-	if (simType == 1) {
+// 'target' is a target object from the TargetImageDatabase 
+function normalizedSimilarity(img, target, weight) {
+	if (weight == 0) {
 		return sobelSimilarity(img, target.image);
 	}
+	else if (weight == 1) {
+		var sim = binarySimilarity(img, target.image);		
+		return (sim - target.baseline) / (1 - target.baseline);		
+	}
+	else {
+		var sobelSim = sobelSimilarity(img, target.image);
+		var binarySim = (binarySimilarity(img, target.image) - target.baseline)/(1 - target.baseline);
+		return weight*binarySim + (1 - weight)*sobelSim; 	
+	}
 }
-
 
 function TargetImageDatabase(directory) {
 	this.targetsByIndex = [];
