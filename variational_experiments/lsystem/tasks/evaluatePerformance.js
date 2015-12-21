@@ -105,7 +105,7 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		globalStore.target = targetDB.getTargetByIndex(targetIdx);	
 		var t0 = present();
 		var retval;
-		utils.runwebppl(ParticleFilter, [generate, np], globalStore, '', function(s, ret) {
+		utils.runwebppl(ParticleFilter, [generate, np, true, false, true], globalStore, '', function(s, ret) {
 			retval = ret.MAPparticle.value;
 		});
 		var t1 = present();

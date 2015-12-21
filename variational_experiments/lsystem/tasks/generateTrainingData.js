@@ -47,7 +47,7 @@ while (true) {
 		globalStore.target = targetDB.getTargetByIndex(targetIdx);	
 	}
 	var MAPtrace;
-	utils.runwebppl(ParticleFilter, [generate, opts.numParticles], globalStore, '', function(s, ret) {
+	utils.runwebppl(ParticleFilter, [generate, opts.numParticles, true, false, true], globalStore, '', function(s, ret) {
 		MAPtrace = ret.MAPparticle.trace;
 	});
 	var outTrace = [globalStore.target.index].concat(MAPtrace);

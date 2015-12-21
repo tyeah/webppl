@@ -60,7 +60,7 @@ function generateResult() {
 	globalStore.target = targetDB.getTargetByName(opts.target);
 	var particleHistory;
 	var t0 = present();
-	utils.runwebppl(ParticleFilter, [generate, opts.numParticles, true, saveHistory], globalStore, '', function(s, ret) {
+	utils.runwebppl(ParticleFilter, [generate, opts.numParticles, true, saveHistory, true], globalStore, '', function(s, ret) {
 		particleHistory = ret.particleHistory;
 		var t1 = present();
 		console.log('   (Time taken: ' + (t1-t0)/1000 + ')');

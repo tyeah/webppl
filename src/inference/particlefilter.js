@@ -37,7 +37,7 @@ module.exports = function(env) {
     };
   }
 
-  function ParticleFilter(s, k, a, wpplFn, numParticles, strict, saveHistory) {
+  function ParticleFilter(s, k, a, wpplFn, numParticles, strict, saveHistory, noHistogram) {
 
     this.particles = [];
     this.particleIndex = 0;  // marks the active particle
@@ -77,6 +77,8 @@ module.exports = function(env) {
         this.processHistoryParticle = function(p) { return p; };
       }
     }
+
+    this.noHistogram = noHistogram;
 
     // Move old coroutine out of the way and install this as the current
     // handler.
@@ -252,17 +254,20 @@ module.exports = function(env) {
 
   ParticleFilter.prototype.finish = function(s) {
     // Compute marginal distribution from (unweighted) particles
-    var hist = {};
-    _.each(
-        this.particles,
-        function(particle) {
-          var k = JSON.stringify(particle.value);
-          if (hist[k] === undefined) {
-            hist[k] = {prob: 0, val: particle.value};
-          }
-          hist[k].prob += 1;
-        });
-    var dist = erp.makeMarginalERP(util.logHist(hist));
+    var dist = {};
+    if (!this.noHistogram) {
+      var hist = {};
+      _.each(
+          this.particles,
+          function(particle) {
+            var k = JSON.stringify(particle.value);
+            if (hist[k] === undefined) {
+              hist[k] = {prob: 0, val: particle.value};
+            }
+            hist[k].prob += 1;
+          });
+      dist = erp.makeMarginalERP(util.logHist(hist));
+    }
 
     // Save estimated normalization constant in erp (average particle weight)
     dist.normalizationConstant = this.particles[0].weight;
@@ -300,8 +305,11 @@ module.exports = function(env) {
 
   ParticleFilter.prototype.incrementalize = env.defaultCoroutine.incrementalize;
 
-  function pf(s, cc, a, wpplFn, numParticles, strict, saveHistory) {
-    return new ParticleFilter(s, cc, a, wpplFn, numParticles, strict === undefined ? true : strict, saveHistory).run();
+  function pf(s, cc, a, wpplFn, numParticles, strict, saveHistory, noHistogram) {
+    return new ParticleFilter(s, cc, a, wpplFn, numParticles,
+      strict === undefined ? true : strict,
+      saveHistory === undefined ? false : saveHistory,
+      noHistogram === undefined ? false : noHistogram).run();
   }
 
   return {

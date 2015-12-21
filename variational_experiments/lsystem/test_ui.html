@@ -535,7 +535,7 @@
 				render.render(canvas, viewport, particle.branches, false, false);
 			}
 
-			function renderParticle(canvas, particle, tgtimage) {
+			function renderParticle(canvas, particle, renderFn, tgtimage) {
 				var ctx = canvas.getContext('2d');
 				if (tgtimage) {
 					// Draw gray-ed out target as background
@@ -547,8 +547,7 @@
 					ctx.globalCompositeOperation = 'source-over';
 				}
 				// Draw branches
-				// renderParticleAsLineSegs(canvas, particle);
-				renderParticleAsVines(canvas, particle);
+				renderFn(canvas, particle);
 			}
 
 			function showCurrentParticle() {
@@ -564,8 +563,9 @@
 					ctx.putImageData(particle.imageData, 0, 0);
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
-					renderParticle(canvas, particle, targetImg);
-					renderParticle(canvas_small, particle);
+					// renderParticle(canvas, particle, renderParticleAsLineSegs, targetImg);
+					renderParticle(canvas, particle, renderParticleAsVines, targetImg);
+					renderParticle(canvas_small, particle, renderParticleAsLineSegs);
 					// Save image
 					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 					particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
