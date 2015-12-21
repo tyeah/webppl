@@ -10,7 +10,7 @@ var render = {};
 // Line segment rendering
 
 
-render.render = function(canvas, viewport, branches, isIncremental, fillBackground) {
+render.renderLineSegs = function(canvas, viewport, branches, isIncremental, fillBackground) {
 	if (viewport === undefined)
 		viewport = {xmin: 0, ymin: 0, xmax: canvas.width, ymax: canvas.height};
 

@@ -110,7 +110,7 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		});
 		var t1 = present();
 		var time = (t1 - t0)/1000;
-		render.render(globalStore.target.canvas, viewport, retval);
+		render.renderLineSegs(globalStore.target.canvas, viewport, retval);
 		img.loadFromCanvas(globalStore.target.canvas);
 		var sim = lsysUtils.normalizedSimilarity(img, globalStore.target);
 		times.push(time);
