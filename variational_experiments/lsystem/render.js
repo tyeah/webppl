@@ -262,23 +262,11 @@ function vine(cps, curveFn, width0, width1, v0, v1) {
 	return mesh;
 }
 
-function viewportMatrix(v) {
-	// Column-major nonsense
-	return [
-		2 /(v.xmax - v.xmin), 0, 0,
-		0, 2 / (v.ymax - v.ymin), 0,
-		-(v.xmin + v.xmax) / (v.xmax - v.xmin), -(v.ymin + v.ymax) / (v.ymax - v.ymin), 1
-	];
-}
+function vineTree(tree, bezFn) {
 
-function drawVineSeg(gl, locs, bezFn, cps, width0, width1, v0, v1) {
-	var mesh = vine(cps, bezFn, width0, width1, v0, v1);
-	mesh.draw(gl, locs);
-	mesh.destroyBuffers();
-}
+	var mesh = new Mesh2D();
 
-function drawVineTree(gl, locs, bezFn, tree) {
-	function drawVineTreeRec(tree, v, prevs) {
+	function buildVineTreeRec(tree, v, prevs) {
 		// Handle this point
 		if (prevs.length > 0) {
 			var p0 = prevs[prevs.length - 1].point;
@@ -297,7 +285,8 @@ function drawVineTree(gl, locs, bezFn, tree) {
 			var cps = controlPoints(p0, p1, prev, next);
 			var w0 = prevs[prevs.length - 1].width;
 			var w1 = tree.width;
-			drawVineSeg(gl, locs, bezFn, cps, w0, w1, v, v + 1);
+			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1);
+			mesh.append(vineMesh);
 		}
 
 		// Recurse
@@ -306,11 +295,12 @@ function drawVineTree(gl, locs, bezFn, tree) {
 			prevs.shift();
 		}
 		for (var i = 0; i < tree.children.length; i++) {
-			drawVineTreeRec(tree.children[i], v + 1, prevs.slice());
+			buildVineTreeRec(tree.children[i], v + 1, prevs.slice());
 		}
 	}
 
-	drawVineTreeRec(tree, 0, []);
+	buildVineTreeRec(tree, 0, []);
+	return mesh;
 }
 
 // Convert branch linked list (w/ parent pointers) to a top-down point tree
@@ -354,6 +344,15 @@ function branchListToPointTree(branches) {
 	return treeNodes.root;
 }
 
+function viewportMatrix(v) {
+	// Column-major nonsense
+	return [
+		2 /(v.xmax - v.xmin), 0, 0,
+		0, 2 / (v.ymax - v.ymin), 0,
+		-(v.xmin + v.xmax) / (v.xmax - v.xmin), -(v.ymin + v.ymax) / (v.ymax - v.ymin), 1
+	];
+}
+
 var bezFn = makeBezierUniform(20);
 render.renderVines = function(gl, prog, locs, viewport, branches, clearColor) {
 
@@ -369,8 +368,10 @@ render.renderVines = function(gl, prog, locs, viewport, branches, clearColor) {
 		gl.clear(gl.COLOR_BUFFER_BIT);
 	}
 	var tree = branchListToPointTree(branches);
-	drawVineTree(gl, locs, bezFn, tree);
+	var mesh = vineTree(tree, bezFn);
+	mesh.draw(gl, locs);
 	gl.flush();
+	mesh.destroyBuffers();
 }
 
 
