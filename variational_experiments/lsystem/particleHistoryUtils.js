@@ -31,11 +31,14 @@ particleHistoryUtils.compress = function(history) {
 		var branches = uniqueParticlesList[i].store.branches;
 		registerBranches(branches);
 	}
-	// Convert branches 'next' pointers to indices, get rid of __id tags.
+	// Convert branches 'next' and 'parent' pointers to indices, get rid of __id tags.
 	uniqueBranches = uniqueBranches.map(function(branches) {
 		var b = { branch: branches.branch, next: null };
 		if (branches.next) {
 			b.next = branchIdToIndex[branches.next.__id];
+		}
+		if (branches.parent) {
+			b.parent = branchIdToIndex[branches.parent.__id];
 		}
 		return b;
 	})
@@ -69,6 +72,9 @@ particleHistoryUtils.decompress = function(compressedHistory) {
 		var branches = compressedHistory.branches[i];
 		if (branches.next !== null) {
 			branches.next = compressedHistory.branches[branches.next];
+		}
+		if (branches.parent !== null) {
+			branches.parent = compressedHistory.branches[branches.parent];
 		}
 	}
 	// Convert particle branch ids to pointers as well.
