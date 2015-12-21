@@ -113,7 +113,107 @@ function controlPoints(p0, p1, prev, next) {
 	return [p0, p01, p11, p1];
 }
 
+function Mesh2D() {
+	this.vertices = [];
+	this.uvs = [];
+	this.normals = [];
+	this.indices = [];
+
+	this.buffers = undefined;
+};
+Mesh2D.prototype.append = function(other) {
+	var n = this.vertices.length;
+	this.vertices = this.vertices.concat(other.vertices);
+	this.uvs = this.uvs.concat(other.uvs);
+	this.normals = this.normals.concat(other.normals);
+	var m = other.indices.length;
+	for (var i = 0; i < m; i++) {
+		this.indices.push(other.indices[i] + n);
+	}
+};
+Mesh2D.prototype.recomputeBuffers = function() {
+	var n = this.vertices.length;
+
+	var vertices = new Float32Array(n*2);
+	for (var i = 0; i < n; i++) {
+		var v = this.vertices[i];
+		vertices[2*i] = v.x;
+		vertices[2*i+1] = v.y;
+	}
+
+	var uvs = new Float32Array(n*2);
+	for (var i = 0; i < n; i++) {
+		var uv = this.uvs[i];
+		uvs[2*i] = uv.x;
+		uvs[2*i+1] = uv.y;
+	}
+
+	var normals = new Float32Array(n*2);
+	for (var i = 0; i < n; i++) {
+		var nrm = this.normals[i];
+		normals[2*i] = nrm.x;
+		normals[2*i+1] = nrm.y;
+	}
+
+	indices = new Uint16Array(this.indices);
+
+	// ------
+
+	this.destroyBuffers();	// get rid of existing buffers (if any)
+	this.buffers = {};
+
+	this.buffers.vertices = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
+	gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+	this.buffers.uvs = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
+	gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+
+	this.buffers.normals = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
+	gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+
+	this.buffers.indices = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+	this.buffers.numIndices = indices.length;
+};
+Mesh2D.prototype.destroyBuffers = function() {
+	if (this.buffers !== undefined) {
+		gl.deleteBuffer(this.buffers.vertices);
+		gl.deleteBuffer(this.buffers.uvs);
+		gl.deleteBuffer(this.buffers.normals);
+		gl.deleteBuffer(this.buffers.indices);
+		this.buffers = undefined;
+	}
+};
+Mesh2D.prototype.draw = function(gl, locs) {
+	if (this.buffers === undefined) {
+		this.recomputeBuffers();
+	}
+
+	gl.enableVertexAttribArray( locs.vertices );
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
+	gl.vertexAttribPointer(locs.vertices, 2, gl.FLOAT, false, 0, 0);
+
+	gl.enableVertexAttribArray( locs.uvs );
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
+	gl.vertexAttribPointer(locs.uvs, 2, gl.FLOAT, false, 0, 0);
+
+	gl.enableVertexAttribArray( locs.normals );
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
+	gl.vertexAttribPointer(locs.normals, 2, gl.FLOAT, false, 0, 0);
+
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
+	gl.drawElements(gl.TRIANGLES, this.buffers.numIndices, gl.UNSIGNED_SHORT, 0);
+};
+// TODO: Destroy buffers method
+
 function vine(cps, curveFn, width0, width1, v0, v1) {
+
+	var mesh = new Mesh2D();
+
 	var points = curveFn(cps);
 	var n = points.length;
 
@@ -127,17 +227,14 @@ function vine(cps, curveFn, width0, width1, v0, v1) {
 	}
 	var totallength = accumlengths[n-1];
 	var ts = [];
-	var uvs = [];
 	for (var i = 0; i < n; i++) {
 		var t = accumlengths[i] / totallength;
 		ts.push(t);
 		var v = (1-t)*v0 + t*v1;
-		uvs.push(new THREE.Vector2(0, v));
-		uvs.push(new THREE.Vector2(1, v));
+		mesh.uvs.push(new THREE.Vector2(0, v));
+		mesh.uvs.push(new THREE.Vector2(1, v));
 	}
 
-	var vertices = [];
-	var normals = [];
 	for (var i = 0; i < n; i++) {
 		var b = points[i];
 		var center = b.point;
@@ -149,57 +246,20 @@ function vine(cps, curveFn, width0, width1, v0, v1) {
 		normal.multiplyScalar(w2);
 		var p0 = center.clone().sub(normal);
 		var p1 = center.clone().add(normal);
-		vertices.push(p0);
-		vertices.push(p1);
-		normals.push(normal.clone().negate());
-		normals.push(normal);
+		mesh.vertices.push(p0);
+		mesh.vertices.push(p1);
+		mesh.normals.push(normal.clone().negate());
+		mesh.normals.push(normal);
 	}
 
-	var indices = [];
 	var idx = 0;
 	for (var i = 0; i < n-1; i++) {
-		indices.push(idx); indices.push(idx+1); indices.push(idx+2);
-		indices.push(idx+1); indices.push(idx+3); indices.push(idx+2);
+		mesh.indices.push(idx); mesh.indices.push(idx+1); mesh.indices.push(idx+2);
+		mesh.indices.push(idx+1); mesh.indices.push(idx+3); mesh.indices.push(idx+2);
 		idx += 2;
 	}
 
-	return {
-		vertices: vertices,
-		uvs: uvs,
-		normals: normals,
-		indices: indices
-	};
-}
-
-function meshToBuffers(mesh) {
-
-	var vertices = [];
-	var n = mesh.vertices.length;
-	for (var i = 0; i < n; i++) {
-		var v = mesh.vertices[i];
-		vertices.push(v.x); vertices.push(v.y);
-	}
-
-	var uvs = [];
-	n = mesh.uvs.length;
-	for (var i = 0; i < n; i++) {
-		var uv = mesh.uvs[i];
-		uvs.push(uv.x); uvs.push(uv.y);
-	}
-
-	var normals = [];
-	n = mesh.normals.length;
-	for (var i = 0; i < n; i++) {
-		var nrm = mesh.normals[i];
-		normals.push(nrm.x); normals.push(nrm.y);
-	}
-
-	return {
-		vertices: new Float32Array(vertices),
-		uvs: new Float32Array(uvs),
-		normals: new Float32Array(normals),
-		indices: new Uint16Array(mesh.indices)
-	};
+	return mesh;
 }
 
 function viewportMatrix(v) {
@@ -211,36 +271,10 @@ function viewportMatrix(v) {
 	];
 }
 
-function drawBuf(gl, locs, buf) {
-	gl.enableVertexAttribArray( locs.vertices );
-	var posBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, buf.vertices, gl.STATIC_DRAW);
-	gl.vertexAttribPointer(locs.vertices, 2, gl.FLOAT, false, 0, 0);
-
-	gl.enableVertexAttribArray( locs.uvs );
-	var uvBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, buf.uvs, gl.STATIC_DRAW);
-	gl.vertexAttribPointer(locs.uvs, 2, gl.FLOAT, false, 0, 0);
-
-	gl.enableVertexAttribArray( locs.normals );
-	var normBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, normBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, buf.normals, gl.STATIC_DRAW);
-	gl.vertexAttribPointer(locs.normals, 2, gl.FLOAT, false, 0, 0);
-
-	var indexBuffer = gl.createBuffer();
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, buf.indices, gl.STATIC_DRAW);
-
-	gl.drawElements(gl.TRIANGLES, buf.indices.length, gl.UNSIGNED_SHORT, 0);
-}
-
 function drawVineSeg(gl, locs, bezFn, cps, width0, width1, v0, v1) {
 	var mesh = vine(cps, bezFn, width0, width1, v0, v1);
-	var buf = meshToBuffers(mesh);
-	drawBuf(gl, locs, buf);
+	mesh.draw(gl, locs);
+	mesh.destroyBuffers();
 }
 
 function drawVineTree(gl, locs, bezFn, tree) {
