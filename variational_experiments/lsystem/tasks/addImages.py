@@ -1,8 +1,8 @@
 """
-Iterate through images in source directory, add those meeting a condition to images.txt file.
+Iterate through images in source directory, add filenames meeting a condition to images.txt file.
 
-Usage: addImages.py --outputDir dir --endStr str, adds images in targets/source 
-which end with str to dir. 
+Usage: addImages.py --outputDir dir --endStr str, adds image filenames in targets/source 
+which end with str to targets/dataset/dir/images.txt. 
 
 """
 import os

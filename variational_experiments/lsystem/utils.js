@@ -168,6 +168,7 @@ function normalizedSimilarity(img, target, weight) {
 }
 
 function TargetImageDatabase(directory) {
+	this.directory = directory;
 	this.targetsByIndex = [];
 	this.targetsByName = {};
 	var filenames = fs.readdirSync(directory);

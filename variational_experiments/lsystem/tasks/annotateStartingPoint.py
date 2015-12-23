@@ -9,10 +9,11 @@ Displays each image in targets/source, records coordinates of mouseclick,
 saves normalized coordinates for each image file to targets/source/file.txt.
 Close window to advance to the next image. 
 
-Usage: annotateStarting.py --file [file] --startX [startX] --startY [startY]. If file is given then only file will
-be annotated, otherwise will loop through all images in targets/source. 
-If startX and startY are given then text files for all images (or, if --file is specified, only one images) 
-will be generated with the same starting point, and no manual annotation willl be done. 
+Usage: annotateStarting.py --file [file] --startX [startX] --startY [startY]. If file is given then 
+only file will be annotated, otherwise will loop through all images in targets/source. 
+
+If startX and startY are given then text files for all images (or, if --file is specified, only one image)
+will be generated with the same starting point, without manual annotation. 
 
 """
 source_dir = '../targets/source/'

@@ -3,6 +3,10 @@ var webppl = require('../src/main.js');
 
 function loadTraces(filename) {
 	var lines = fs.readFileSync(filename).toString().split('\n');
+	
+	//Remove first line, which is the name of the training dataset
+	lines.shift();
+
 	if (lines[lines.length-1] === '') {
 		lines.splice(lines.length-1, 1);
 	}

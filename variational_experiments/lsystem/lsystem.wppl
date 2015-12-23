@@ -13,7 +13,7 @@ var ad = require.call(null, 'adnn/ad');
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/training');
+var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/training'); 
 
 // var futurePolicy = 'immediate';
 // var futurePolicy = 'lifo';

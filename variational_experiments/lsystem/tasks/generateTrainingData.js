@@ -34,6 +34,11 @@ if (!fs.existsSync(gen_traces)) {
 	fs.mkdirSync(gen_traces);
 }
 var filename = gen_traces + '/' + outputName + '.txt';
+
+//Add line at the top with target dataset name
+fs.appendFileSync(filename, targetDB.directory);
+fs.appendFileSync(filename, '\n');
+
 var t0 = present();
 var counter = 1;
 while (true) {
