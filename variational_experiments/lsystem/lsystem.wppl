@@ -13,7 +13,7 @@ var ad = require.call(null, 'adnn/ad');
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 
-var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/training'); 
+var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/training'); //targets/datasets/dir
 
 // var futurePolicy = 'immediate';
 // var futurePolicy = 'lifo';
@@ -228,9 +228,13 @@ var makeProgram = function(neurallyGuided) {
 
 		// These are separated like this so that we can have an initial local
 		//    state to feed to the _gaussian for the initial angle.
+		
+		// Determine starting state by inverting viewport transform
+		var starting_world_pos = render.img2world(globalStore.target.startPos, viewport, globalStore.target.canvas);
+
 		var initState = state({
 			depth: 0,
-			pos: utils.new(THREE.Vector2, 0, 0),
+			pos: starting_world_pos, //utils.new(THREE.Vector2, 0, 0),
 			angle: 0,
 			width: initialWidth
 		});

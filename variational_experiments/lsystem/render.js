@@ -48,6 +48,16 @@ render.render = function(canvas, viewport, branches, isIncremental, fillBackgrou
 	}
 }
 
+function img2world(p, viewport, canvas) {
+	return new THREE.Vector2(
+		viewport.xmin + (p.x/canvas.width)*(viewport.xmax - viewport.xmin), 
+		viewport.ymin + (p.y/canvas.height)*(viewport.ymax - viewport.ymin)
+	);	
+}
+
 if (typeof(window) === 'undefined') {
-	module.exports = render
+	module.exports = { 
+		render: render,
+		img2world: img2world
+	}
 }
