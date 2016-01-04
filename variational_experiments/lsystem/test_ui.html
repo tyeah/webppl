@@ -1,5 +1,5 @@
-<html>
 	<head>
+<html>
 		<title>SOSMC L-System Test UI</title>
 		<script src='http://code.jquery.com/jquery-1.11.3.min.js'> </script>
 		<script src='https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5.1/dat.gui.min.js'></script>
@@ -23,82 +23,54 @@
 			var targetImg;
 			var smallTargetImg;
 
-			var vertShaderName = 'vine_bumpy';
-			var fragShaderName = 'vine_textured';
-			// var vertShaderName = 'vine_smooth';
-			// var fragShaderName = 'vine_black';
-			var vertShaderSrc;
-			var fragShaderSrc;
+			var gl;
 
 			// ----------------------------------------------------------------
 
-			function compileShader ( gl, type, src ){
-			   var shader;
-			   if (type == "fragment")
-			           shader = gl.createShader ( gl.FRAGMENT_SHADER );
-			   else if (type == "vertex")
-			           shader = gl.createShader(gl.VERTEX_SHADER);
-			   else return null;
-			   gl.shaderSource(shader, src);
-			   gl.compileShader(shader);
-			   if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) == 0)
-			      alert(type + "\n" + gl.getShaderInfoLog(shader));
-			   return shader;
-			}
-
-			function compileProgram(gl, vertSrc, fragSrc) {
-				var prog  = gl.createProgram();
-				var vertShader = compileShader(gl, 'vertex', vertSrc);
-				var fragShader = compileShader(gl, 'fragment', fragSrc);
-				gl.attachShader(prog, vertShader);
-				gl.attachShader(prog, fragShader);
-				gl.linkProgram(prog);
-				return prog;
-			}
-
-			var gl, prog;
-			function renderParticleAsVines(canvas, particle) {
+			function renderParticleAsVines(canvas, particle, callback) {
 				// Setup WebGL context & shader program
 				if (gl === undefined) {
 					var glcanvas = $('#canvas-gl')[0];
 					gl = glcanvas.getContext('webgl');
-					prog  = compileProgram(gl, vertShaderSrc, fragShaderSrc);
 				}
 
 				// Render
-				var clearColor = [0, 0, 0, 0];
-				render.renderVines(gl, prog, viewport, particle.branches, clearColor);
+				gl.clearColor(0, 0, 0, 0);
+				gl.clear(gl.COLOR_BUFFER_BIT);
+				render.renderVines(gl, viewport, particle.branches, function() {
+					// Read back pixels
+					var arr = new Uint8Array(canvas.width*canvas.height*4);
+					gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, arr);
+					var ctx = canvas.getContext('2d');
+					// Draw image to canvas
+					// (Doing this pixel-by-pixel on CPU, b/c there doesn't appear to be 
+					//    a generally-supported better alternative as of yet)
+					var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+					var data = imgData.data;
+					var n = data.length / 4;
+					for (var i = 0; i < n; i++) {
+						var ri = 4*i;
+						var gi = 4*i+1;
+						var bi = 4*i+2;
 
-				// Read back pixels
-				var arr = new Uint8Array(canvas.width*canvas.height*4);
-				gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, arr);
-				var ctx = canvas.getContext('2d');
-				// Draw image to canvas
-				// (Doing this pixel-by-pixel on CPU, b/c there doesn't appear to be 
-				//    a generally-supported better alternative as of yet)
-				var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-				var data = imgData.data;
-				var n = data.length / 4;
-				for (var i = 0; i < n; i++) {
-					var ri = 4*i;
-					var gi = 4*i+1;
-					var bi = 4*i+2;
-
-					var alpha = arr[4*i+3]/255;
-					data[ri] = Math.floor((1-alpha)*data[ri] + alpha*arr[ri]);
-					data[gi] = Math.floor((1-alpha)*data[gi] + alpha*arr[gi]);
-					data[bi] = Math.floor((1-alpha)*data[bi] + alpha*arr[bi]);
-				}
-				ctx.putImageData(imgData, 0, 0);
+						var alpha = arr[4*i+3]/255;
+						data[ri] = Math.floor((1-alpha)*data[ri] + alpha*arr[ri]);
+						data[gi] = Math.floor((1-alpha)*data[gi] + alpha*arr[gi]);
+						data[bi] = Math.floor((1-alpha)*data[bi] + alpha*arr[bi]);
+					}
+					ctx.putImageData(imgData, 0, 0);
+					callback();
+				});
 			}
 
 			// ----------------------------------------------------------------
 
-			function renderParticleAsLineSegs(canvas, particle) {
+			function renderParticleAsLineSegs(canvas, particle, callback) {
 				render.renderLineSegs(canvas, viewport, particle.branches, false, false);
+				callback();
 			}
 
-			function renderParticle(canvas, particle, renderFn, tgtimage) {
+			function renderParticle(canvas, particle, tgtimage, renderFn, callback) {
 				var ctx = canvas.getContext('2d');
 				if (tgtimage) {
 					// Draw gray-ed out target as background
@@ -110,7 +82,7 @@
 					ctx.globalCompositeOperation = 'source-over';
 				}
 				// Draw branches
-				renderFn(canvas, particle);
+				renderFn(canvas, particle, callback);
 			}
 
 			function showCurrentParticle() {
@@ -126,12 +98,12 @@
 					ctx.putImageData(particle.imageData, 0, 0);
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
-					// renderParticle(canvas, particle, renderParticleAsLineSegs, targetImg);
-					renderParticle(canvas, particle, renderParticleAsVines, targetImg);
-					renderParticle(canvas_small, particle, renderParticleAsLineSegs);
-					// Save image
-					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-					particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
+					renderParticle(canvas, particle, targetImg, renderParticleAsVines, function() {
+						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+					});
+					renderParticle(canvas_small, particle, undefined, renderParticleAsLineSegs, function() {
+						particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
+					});
 				}
 
 				// Update UI
@@ -350,29 +322,8 @@
 				});
 			}
 
-			// Load resources, and then place the generate button
-			function init() {
-				// Load shaders
-				$.ajax({
-				    url: 'shaders/' + vertShaderName + '.vert',
-				    dataType: 'text',
-				    success: function (data) {
-				        vertShaderSrc = data;
-				        $.ajax({
-						    url: 'shaders/' + fragShaderName + '.frag',
-						    dataType: 'text',
-						    success: function (data) {
-						        fragShaderSrc = data;
-
-						        // The generate button
-								$('<button>Generate</button>').css('font-size', '18pt').click(generate).appendTo('body');
-						    }
-						});
-				    }
-				});
-			}
-
-			init();
+			// The generate button
+			$('<button>Generate</button>').css('font-size', '18pt').click(generate).appendTo('body');
 
 		</script>
 	</body>

@@ -1,10 +1,201 @@
-if (typeof(window) === 'undefined')  {
+// NOTE: throughout this file, the context 'gl' is passed to functions.
+//    However, we assume that these functions only ever see one such
+//    context during the lifetime of the program.
+
+if (typeof(window) === 'undefined') {
 	var THREE = require('three');
 }
 
 var render = {};
 
 (function() {
+
+var client = (typeof(window) === 'undefined') ? 'node' : 'browser';
+
+var ROOT = '';
+render.setRootDir = function(dir) { ROOT = dir; }
+
+
+// ----------------------------------------------------------------------------
+// Loading / compiling shaders
+
+
+function compileShader ( gl, type, src ){
+   var shader;
+   if (type == "fragment")
+           shader = gl.createShader ( gl.FRAGMENT_SHADER );
+   else if (type == "vertex")
+           shader = gl.createShader(gl.VERTEX_SHADER);
+   else return null;
+   gl.shaderSource(shader, src);
+   gl.compileShader(shader);
+   if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) == 0)
+      console.log(type + "\n" + gl.getShaderInfoLog(shader));
+   return shader;
+}
+
+function compileProgram(gl, vertSrc, fragSrc) {
+	var prog  = gl.createProgram();
+	var vertShader = compileShader(gl, 'vertex', vertSrc);
+	var fragShader = compileShader(gl, 'fragment', fragSrc);
+	gl.attachShader(prog, vertShader);
+	gl.attachShader(prog, fragShader);
+	gl.linkProgram(prog);
+	return prog;
+}
+
+function loadShader_node(filename, async, callback) {
+	var fs = require('fs');
+	if (async) {
+		fs.readFile(filename, function(err, data) {
+			callback(data.toString());
+		});
+	} else {
+		var text = fs.readFileSync(filename).toString();
+		callback(text); 
+	}
+}
+function loadShader_browser(filename, async, callback) {
+	$.ajax({
+		async: async,
+		dataType: 'text',
+	    url: filename,
+	    success: function (data) {
+	        callback(data);
+	    }
+	});
+}
+var loadShader = (client === 'node') ? loadShader_node : loadShader_browser;
+
+function loadShaders(shaders, async, callback) {
+	loadShader(shaders[0], async, function(text) {
+		if (shaders.length === 1) {
+			callback([text]);
+		} else {
+			loadShaders(shaders.slice(1), async, function(textList) {
+				var fullList = [text].concat(textList);
+				callback(fullList);
+			});
+		}
+	});
+}
+
+function loadAndCompileProgram(gl, vertFilename, fragFilename, async, callback) {
+	loadShaders([vertFilename, fragFilename], async, function(sources) {
+		var prog = compileProgram(gl, sources[0], sources[1]);
+		callback(prog);
+	});
+}
+
+
+// ----------------------------------------------------------------------------
+// 2D Mesh class
+
+
+function Mesh2D() {
+	this.vertices = [];
+	this.uvs = [];
+	this.normals = [];
+	this.indices = [];
+
+	this.buffers = undefined;
+};
+Mesh2D.prototype.append = function(other) {
+	var n = this.vertices.length;
+	this.vertices = this.vertices.concat(other.vertices);
+	this.uvs = this.uvs.concat(other.uvs);
+	this.normals = this.normals.concat(other.normals);
+	var m = other.indices.length;
+	for (var i = 0; i < m; i++) {
+		this.indices.push(other.indices[i] + n);
+	}
+};
+Mesh2D.prototype.recomputeBuffers = function() {
+	var n = this.vertices.length;
+
+	var vertices = new Float32Array(n*2);
+	for (var i = 0; i < n; i++) {
+		var v = this.vertices[i];
+		vertices[2*i] = v.x;
+		vertices[2*i+1] = v.y;
+	}
+
+	var uvs = new Float32Array(n*2);
+	for (var i = 0; i < n; i++) {
+		var uv = this.uvs[i];
+		uvs[2*i] = uv.x;
+		uvs[2*i+1] = uv.y;
+	}
+
+	var normals = new Float32Array(n*2);
+	for (var i = 0; i < n; i++) {
+		var nrm = this.normals[i];
+		normals[2*i] = nrm.x;
+		normals[2*i+1] = nrm.y;
+	}
+
+	indices = new Uint16Array(this.indices);
+
+	// ------
+
+	this.destroyBuffers();	// get rid of existing buffers (if any)
+	this.buffers = {};
+
+	this.buffers.vertices = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
+	gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+	this.buffers.uvs = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
+	gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+
+	this.buffers.normals = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
+	gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+
+	this.buffers.indices = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+	this.buffers.numIndices = indices.length;
+};
+Mesh2D.prototype.destroyBuffers = function() {
+	if (this.buffers !== undefined) {
+		gl.deleteBuffer(this.buffers.vertices);
+		gl.deleteBuffer(this.buffers.uvs);
+		gl.deleteBuffer(this.buffers.normals);
+		gl.deleteBuffer(this.buffers.indices);
+		this.buffers = undefined;
+	}
+};
+Mesh2D.prototype.draw = function(gl, prog) {
+	if (this.buffers === undefined) {
+		this.recomputeBuffers();
+	}
+
+	var vertLoc = gl.getAttribLocation(prog, "inPos");
+	var uvLoc = gl.getAttribLocation(prog, "inUV");
+	var normLoc = gl.getAttribLocation(prog, "inNorm");
+
+	gl.enableVertexAttribArray(vertLoc);
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
+	gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
+
+	if (uvLoc !== -1) {
+		gl.enableVertexAttribArray(uvLoc);
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
+		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
+	}
+
+	if (normLoc !== -1) {
+		gl.enableVertexAttribArray(normLoc);
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
+		gl.vertexAttribPointer(normLoc, 2, gl.FLOAT, false, 0, 0);
+	}
+
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
+	gl.drawElements(gl.TRIANGLES, this.buffers.numIndices, gl.UNSIGNED_SHORT, 0);
+};
+
 
 // ----------------------------------------------------------------------------
 // Line segment rendering
@@ -112,110 +303,6 @@ function controlPoints(p0, p1, prev, next) {
 	var p11 = p1.clone().sub(m1.divideScalar(3));
 	return [p0, p01, p11, p1];
 }
-
-function Mesh2D() {
-	this.vertices = [];
-	this.uvs = [];
-	this.normals = [];
-	this.indices = [];
-
-	this.buffers = undefined;
-};
-Mesh2D.prototype.append = function(other) {
-	var n = this.vertices.length;
-	this.vertices = this.vertices.concat(other.vertices);
-	this.uvs = this.uvs.concat(other.uvs);
-	this.normals = this.normals.concat(other.normals);
-	var m = other.indices.length;
-	for (var i = 0; i < m; i++) {
-		this.indices.push(other.indices[i] + n);
-	}
-};
-Mesh2D.prototype.recomputeBuffers = function() {
-	var n = this.vertices.length;
-
-	var vertices = new Float32Array(n*2);
-	for (var i = 0; i < n; i++) {
-		var v = this.vertices[i];
-		vertices[2*i] = v.x;
-		vertices[2*i+1] = v.y;
-	}
-
-	var uvs = new Float32Array(n*2);
-	for (var i = 0; i < n; i++) {
-		var uv = this.uvs[i];
-		uvs[2*i] = uv.x;
-		uvs[2*i+1] = uv.y;
-	}
-
-	var normals = new Float32Array(n*2);
-	for (var i = 0; i < n; i++) {
-		var nrm = this.normals[i];
-		normals[2*i] = nrm.x;
-		normals[2*i+1] = nrm.y;
-	}
-
-	indices = new Uint16Array(this.indices);
-
-	// ------
-
-	this.destroyBuffers();	// get rid of existing buffers (if any)
-	this.buffers = {};
-
-	this.buffers.vertices = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
-	gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-
-	this.buffers.uvs = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
-	gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
-
-	this.buffers.normals = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
-	gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
-
-	this.buffers.indices = gl.createBuffer();
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-	this.buffers.numIndices = indices.length;
-};
-Mesh2D.prototype.destroyBuffers = function() {
-	if (this.buffers !== undefined) {
-		gl.deleteBuffer(this.buffers.vertices);
-		gl.deleteBuffer(this.buffers.uvs);
-		gl.deleteBuffer(this.buffers.normals);
-		gl.deleteBuffer(this.buffers.indices);
-		this.buffers = undefined;
-	}
-};
-Mesh2D.prototype.draw = function(gl, prog) {
-	if (this.buffers === undefined) {
-		this.recomputeBuffers();
-	}
-
-	var vertLoc = gl.getAttribLocation(prog, "inPos");
-	var uvLoc = gl.getAttribLocation(prog, "inUV");
-	var normLoc = gl.getAttribLocation(prog, "inNorm");
-
-	gl.enableVertexAttribArray(vertLoc);
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
-	gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
-
-	if (uvLoc !== -1) {
-		gl.enableVertexAttribArray(uvLoc);
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
-		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
-	}
-
-	if (normLoc !== -1) {
-		gl.enableVertexAttribArray(normLoc);
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
-		gl.vertexAttribPointer(normLoc, 2, gl.FLOAT, false, 0, 0);
-	}
-
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
-	gl.drawElements(gl.TRIANGLES, this.buffers.numIndices, gl.UNSIGNED_SHORT, 0);
-};
 
 function vine(cps, curveFn, width0, width1, v0, v1) {
 
@@ -361,31 +448,41 @@ function viewportMatrix(v) {
 }
 
 var bezFn = makeBezierUniform(20);
-render.renderVines = function(gl, prog, viewport, branches, clearColor) {
+var vineVertShader = ROOT + '/shaders/vine_bumpy.vert';
+var vineFragShader = ROOT + '/shaders/vine_textured.frag';
+var vineProg;
+function renderVinesImpl(gl, viewport, branches, asyncCallback) {
 
-	gl.useProgram(prog);
+	gl.useProgram(vineProg);
 
 	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
 	var viewportMat = viewportMatrix(viewport);
-	gl.uniformMatrix3fv(gl.getUniformLocation(prog, 'viewMat'), false, viewportMat);
+	gl.uniformMatrix3fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
 
-	if (clearColor) {
-		gl.clearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
-		gl.clear(gl.COLOR_BUFFER_BIT);
-	}
 	var tree = branchListToPointTree(branches);
 	var mesh = vineTree(tree, bezFn);
-	mesh.draw(gl, prog);
+	mesh.draw(gl, vineProg);
 	gl.flush();
 	mesh.destroyBuffers();
+
+	if (asyncCallback) asyncCallback();
+}
+render.renderVines = function(gl, viewport, branches, asyncCallback) {
+	if (vineProg === undefined) {
+		loadAndCompileProgram(gl, vineVertShader, vineFragShader, asyncCallback !== undefined, function(prog) {
+			vineProg = prog;
+			renderVinesImpl(gl, viewport, branches, asyncCallback);
+		});
+	} else {
+		renderVinesImpl(gl, viewport, branches, asyncCallback);
+	}
 }
 
 
 // ----------------------------------------------------------------------------
 
-
-if (typeof(window) === 'undefined') {
+if (client === 'node') {
 	module.exports = render
 }
 
