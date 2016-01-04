@@ -508,3 +508,24 @@ var sortOn = function(l, key, pred) {
 var condition = function(bool) {
   factor(bool ? 0 : -Infinity);
 };
+
+var flatten = function(lst) {
+  if (lst.length === 0) {
+    return [];
+  }
+  var fst = first(lst);
+  if (_.isArray(fst)) {
+    return append(flatten(fst), flatten(rest(lst)));
+  } else {
+    return cons(fst, flatten(rest(lst)));
+  }
+};
+
+var group = function(lst, n) {
+  if (lst.length === 0) {
+    return [];
+  } else {
+    return cons(lst.slice(0, n), group(lst.slice(n), n));
+  }
+};
+

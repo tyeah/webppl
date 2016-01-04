@@ -225,7 +225,7 @@ module.exports = function(env) {
     particle.guideScore = ad.scalar.add(particle.guideScore, importanceScore);
     if (!isFinite(particle.weight)) {
       console.log('name: ' + a);
-      console.log('erp: ' + erp.sample.name);
+      console.log('erp: ' + erp.name);
       console.log('val: ' + val);
       console.log('prior params: ' + params);
       console.log('guide params: ' + importanceERP.rawparams);
@@ -811,7 +811,14 @@ module.exports = function(env) {
   }
 
 
-  // For each ERP, define a version that has an importance ERP that uses its own stored parameters
+  function adValueRecursive(lst) {
+    return lst.map(function(x) {
+      return _.isArray(x) ? adValueRecursive(x) : ad.value(x);
+    });
+  }
+
+
+  // For each ERP, define a guide version that uses its own stored parameters
   //    instead of the parameters passed to its sample and score functions.
   for (var propname in erp) {
     var prop = erp[propname];
@@ -821,16 +828,14 @@ module.exports = function(env) {
         baseERP: erpObj,
         setParams: function(params) {
           this.params = params;
-          this.rawparams = params.map(ad.value);
+          // this.rawparams = params.map(ad.value);
+          this.rawparams = adValueRecursive(params);
         },
         sample: function(params) { return this.baseERP.sample(this.rawparams); },
         score: function(params, val) { return this.baseERP.score(this.rawparams, val); },
         adscore: function(params, val) { return this.baseERP.adscore(this.params, val); }
       });
-      var vpfErpObj = _.extend(_.clone(erpObj), {
-        importanceERP: impErpObj
-      });
-      VI[propname] = vpfErpObj;
+      VI[propname] = impErpObj;
     }
   }
 

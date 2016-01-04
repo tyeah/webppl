@@ -502,6 +502,34 @@ var makeMultiplexERP = function(vs, erps) {
   });
 };
 
+// Make a mixture density ERP from another ERP type
+// Resulting ERP expects two arrays as params: one is the list
+//    of mix weights, the other is the list of params for each
+//    mixture component (an array of arrays)
+var makeMixtureERP = function(erp, numParams) {
+  return new ERP({
+    sample: function(params) {
+      var ws = params[0];
+      var ps = params[1];
+      var i = multinomialSample(ws);
+      return erp.sample(ps[i]);
+    },
+    score: function(params, val) {
+      var ws = params[0];
+      var ps = params[1];
+      return scorers.mixture(erp.score, ps, ws, val);
+    },
+    adscore: function(params, val) {
+      var ws = params[0];
+      var ps = params[1];
+      return adscorers.mixture(erp.adscore, ps, ws, val);
+    },
+    name: erp.name + 'Mixture'
+  });
+};
+
+var gaussianMixtureERP = makeMixtureERP(gaussianERP, 2);
+
 function isErp(x) {
   return x && _.isFunction(x.score) && _.isFunction(x.sample);
 }
@@ -538,6 +566,8 @@ module.exports = setErpNames({
   makeMarginalERP: makeMarginalERP,
   makeCategoricalERP: makeCategoricalERP,
   makeMultiplexERP: makeMultiplexERP,
+  makeMixtureERP: makeMixtureERP,
+  gaussianMixtureERP: gaussianMixtureERP,
   isErp: isErp,
   isErpWithSupport: isErpWithSupport
 });

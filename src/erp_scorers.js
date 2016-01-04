@@ -214,6 +214,31 @@ function dirichletScore(params, val) {
   return logp;
 }
 
+function logsumexp(a) {
+  var m = -Infinity;
+  for (var i = 0; i < a.length; i++) {
+    m = Math.max(m, a[i]);
+  }
+  var sum = 0;
+  for (var i = 0; i < a.length; ++i) {
+    sum = sum + (a[i] === -Infinity ? 0 : Math.exp(a[i] - m));
+  }
+  return m + Math.log(sum);
+}
+
+function mixtureScore(scorer, params, weights, val) {
+  var wsum = 0;
+  for (var i = 0; i < weights.length; i++) {
+    wsum = wsum + weights[i];
+  }
+  var weightedScores = [];
+  for (var i = 0; i < weights.length; i++) {
+    var ls = Math.log(weights[i]/wsum) + scorer(params[i], val);
+    weightedScores.push(ls);
+  }
+  return logsumexp(weightedScores);
+}
+
 
 module.exports = {
 	uniform: uniformScore,
@@ -226,7 +251,8 @@ module.exports = {
 	beta: betaScore,
 	binomial: binomialScore,
 	poisson: poissonScore,
-	dirichlet: dirichletScore		
+	dirichlet: dirichletScore,
+  mixture: mixtureScore
 }
 
 
