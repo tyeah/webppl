@@ -7,7 +7,9 @@
 //   [Optional] Defaults to the value of --trainedModel, or 'prior' if there
 //      trained model provided.
 // * --targetName=name: Only tests on targets/training/name.png
-//   [Optional] If omitted, will test on all target images
+//   [Optional] If omitted, will test on all training images
+// * --useTestDB: For separate test set; tests on testDB specified in lsystem.wppl 
+//   [Optional] If omitted, will test on all training images
 // * --simWeight=name: determines linear combination of the two similarity functions; simWeight*binarySim + (1 - simWeight)*sobelSim.
 //	 [Optional] If omitted, will use binary similarity, i.e. simWeight = 1. 
 
@@ -35,6 +37,13 @@ var trainedModel = opts.trainedModel;
 var outputName = opts.outputName || trainedModel || 'prior';
 console.log(opts);
 
+var useTestDB = opts.useTestDB;
+var testDB = rets.testDB;
+var targetDB = rets.targetDB;
+
+if (!useTestDB) {
+	testDB = targetDB;
+}
 
 var saved_params = __dirname + '/../saved_params';
 var performance_eval = __dirname + '/../performance_eval';
@@ -49,7 +58,6 @@ var rootdir = __dirname + '/..';
 var rets = utils.execWebpplFileWithRoot(file, rootdir);
 var globalStore = rets.globalStore;
 var viewport = rets.viewport;
-var targetDB = rets.targetDB;
 var generate = trainedModel ? rets.generateGuided : rets.generate;
 
 
@@ -66,7 +74,7 @@ var testlist = [];
 if (opts.targetName) {
 	// The same target, 49 times
 	for (var i = 0; i < 49; i++) {
-		testlist.push(targetDB.getTargetByName(opts.targetName).index);
+		testlist.push(testDB.getTargetByName(opts.targetName).index);
 	}
 } else {
 	// Every other image in our 98-image training set
