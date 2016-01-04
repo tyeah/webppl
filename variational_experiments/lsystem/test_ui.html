@@ -23,12 +23,16 @@
 			var targetImg;
 			var smallTargetImg;
 
+			var vertShaderName = 'vine_bumpy';
+			var fragShaderName = 'vine_textured';
+			// var vertShaderName = 'vine_smooth';
+			// var fragShaderName = 'vine_black';
 			var vertShaderSrc;
 			var fragShaderSrc;
 
 			// ----------------------------------------------------------------
 
-			function compileShader ( gl, name, type, src ){
+			function compileShader ( gl, type, src ){
 			   var shader;
 			   if (type == "fragment")
 			           shader = gl.createShader ( gl.FRAGMENT_SHADER );
@@ -52,25 +56,18 @@
 				return prog;
 			}
 
-			var gl, prog, locs;
+			var gl, prog;
 			function renderParticleAsVines(canvas, particle) {
 				// Setup WebGL context & shader program
 				if (gl === undefined) {
 					var glcanvas = $('#canvas-gl')[0];
 					gl = glcanvas.getContext('webgl');
-
 					prog  = compileProgram(gl, vertShaderSrc, fragShaderSrc);
-
-					locs = {
-						vertices: gl.getAttribLocation(prog, "inPos"),
-						uvs: gl.getAttribLocation(prog, "inUV"),
-						normals: gl.getAttribLocation(prog, "inNorm")
-					}
 				}
 
 				// Render
 				var clearColor = [0, 0, 0, 0];
-				render.renderVines(gl, prog, locs, viewport, particle.branches, clearColor);
+				render.renderVines(gl, prog, viewport, particle.branches, clearColor);
 
 				// Read back pixels
 				var arr = new Uint8Array(canvas.width*canvas.height*4);
@@ -357,12 +354,12 @@
 			function init() {
 				// Load shaders
 				$.ajax({
-				    url: 'shaders/vine_bumpy.vert',
+				    url: 'shaders/' + vertShaderName + '.vert',
 				    dataType: 'text',
 				    success: function (data) {
 				        vertShaderSrc = data;
 				        $.ajax({
-						    url: 'shaders/vine_textured.frag',
+						    url: 'shaders/' + fragShaderName + '.frag',
 						    dataType: 'text',
 						    success: function (data) {
 						        fragShaderSrc = data;

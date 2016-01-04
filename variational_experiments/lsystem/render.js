@@ -188,22 +188,30 @@ Mesh2D.prototype.destroyBuffers = function() {
 		this.buffers = undefined;
 	}
 };
-Mesh2D.prototype.draw = function(gl, locs) {
+Mesh2D.prototype.draw = function(gl, prog) {
 	if (this.buffers === undefined) {
 		this.recomputeBuffers();
 	}
 
-	gl.enableVertexAttribArray( locs.vertices );
+	var vertLoc = gl.getAttribLocation(prog, "inPos");
+	var uvLoc = gl.getAttribLocation(prog, "inUV");
+	var normLoc = gl.getAttribLocation(prog, "inNorm");
+
+	gl.enableVertexAttribArray(vertLoc);
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
-	gl.vertexAttribPointer(locs.vertices, 2, gl.FLOAT, false, 0, 0);
+	gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
 
-	gl.enableVertexAttribArray( locs.uvs );
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
-	gl.vertexAttribPointer(locs.uvs, 2, gl.FLOAT, false, 0, 0);
+	if (uvLoc !== -1) {
+		gl.enableVertexAttribArray(uvLoc);
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
+		gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
+	}
 
-	gl.enableVertexAttribArray( locs.normals );
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
-	gl.vertexAttribPointer(locs.normals, 2, gl.FLOAT, false, 0, 0);
+	if (normLoc !== -1) {
+		gl.enableVertexAttribArray(normLoc);
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
+		gl.vertexAttribPointer(normLoc, 2, gl.FLOAT, false, 0, 0);
+	}
 
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
 	gl.drawElements(gl.TRIANGLES, this.buffers.numIndices, gl.UNSIGNED_SHORT, 0);
@@ -353,7 +361,7 @@ function viewportMatrix(v) {
 }
 
 var bezFn = makeBezierUniform(20);
-render.renderVines = function(gl, prog, locs, viewport, branches, clearColor) {
+render.renderVines = function(gl, prog, viewport, branches, clearColor) {
 
 	gl.useProgram(prog);
 
@@ -368,7 +376,7 @@ render.renderVines = function(gl, prog, locs, viewport, branches, clearColor) {
 	}
 	var tree = branchListToPointTree(branches);
 	var mesh = vineTree(tree, bezFn);
-	mesh.draw(gl, locs);
+	mesh.draw(gl, prog);
 	gl.flush();
 	mesh.destroyBuffers();
 }
