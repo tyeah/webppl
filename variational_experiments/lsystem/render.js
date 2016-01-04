@@ -208,7 +208,6 @@ Mesh2D.prototype.draw = function(gl, locs) {
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
 	gl.drawElements(gl.TRIANGLES, this.buffers.numIndices, gl.UNSIGNED_SHORT, 0);
 };
-// TODO: Destroy buffers method
 
 function vine(cps, curveFn, width0, width1, v0, v1) {
 
