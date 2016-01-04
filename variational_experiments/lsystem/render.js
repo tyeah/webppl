@@ -482,6 +482,7 @@ render.renderVines = function(gl, viewport, branches, asyncCallback) {
 
 // ----------------------------------------------------------------------------
 
+
 if (client === 'node') {
 	module.exports = render
 }
