@@ -194,6 +194,14 @@ Mesh2D.prototype.draw = function(gl, prog) {
 
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
 	gl.drawElements(gl.TRIANGLES, this.buffers.numIndices, gl.UNSIGNED_SHORT, 0);
+
+	gl.disableVertexAttribArray(vertLoc);
+	if (uvLoc !== 1) {
+		gl.disableVertexAttribArray(uvLoc);
+	}
+	if (normLoc !== -1) {
+		gl.disableVertexAttribArray(normLoc);
+	}
 };
 
 
@@ -447,12 +455,30 @@ function viewportMatrix(v) {
 	];
 }
 
-var bezFn = makeBezierUniform(20);
-var vineVertShader = ROOT + '/shaders/vine_bumpy.vert';
-var vineFragShader = ROOT + '/shaders/vine_textured.frag';
-var vineProg;
-function renderVinesImpl(gl, viewport, branches, asyncCallback) {
+function ensureShadersLoaded(fn, shaderObj) {
+	return function() {
+		var args = arguments;
+		var gl = args[0];
+		var asyncCallback = args[args.length - 1];
+		if (shaderObj.prog == undefined) {
+			loadAndCompileProgram(gl, shaderObj.vertShader, shaderObj.fragShader, asyncCallback, function(prog) {
+				shaderObj.prog = prog;
+				fn.apply(null, args);
+			})
+		} else {
+			fn.apply(null, args);
+		}
+	}
+}
 
+var bezFn = makeBezierUniform(20);
+var vineShaders = {
+	vertShader: ROOT + '/shaders/vine_bumpy.vert',
+	fragShader: ROOT + '/shaders/vine_textured.frag',
+	prog: undefined
+};
+function renderVinesImpl(gl, viewport, branches, asyncCallback) {
+	var vineProg = vineShaders.prog;
 	gl.useProgram(vineProg);
 
 	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -468,16 +494,80 @@ function renderVinesImpl(gl, viewport, branches, asyncCallback) {
 
 	if (asyncCallback) asyncCallback();
 }
-render.renderVines = function(gl, viewport, branches, asyncCallback) {
-	if (vineProg === undefined) {
-		loadAndCompileProgram(gl, vineVertShader, vineFragShader, asyncCallback !== undefined, function(prog) {
-			vineProg = prog;
-			renderVinesImpl(gl, viewport, branches, asyncCallback);
-		});
-	} else {
-		renderVinesImpl(gl, viewport, branches, asyncCallback);
+render.renderVines = ensureShadersLoaded(renderVinesImpl, vineShaders);
+
+
+// ----------------------------------------------------------------------------
+// Pixel drawing
+
+var drawPixelsShaders = {
+	vertShader: ROOT + '/shaders/drawPixels.vert',
+	fragShader: ROOT + '/shaders/drawPixels.frag',
+	prog: undefined
+};
+var vertBufferCache = {};
+var colorBufferCache = {};
+// Pixels come in as bytes
+function drawPixelsImpl(gl, pixelData, asyncCallback) {
+	var drawPixelsProg = drawPixelsShaders.prog;
+	gl.useProgram(drawPixelsProg);
+
+	var h = gl.drawingBufferHeight;
+	var w = gl.drawingBufferWidth;
+	var size = w + 'x' + h;
+	gl.viewport(0, 0, w, h);
+
+	// Build vertex buffer
+	var vertBuf = vertBufferCache[size];
+	if (vertBuf === undefined) {
+		vertBuf = gl.createBuffer();
+		vertBufferCache[size] = vertBuf;
+
+		var verts = [];
+		for (var y = 0; y < h; y++) {
+			var ty = (y + 0.5) / h;
+			var ny = (1-ty)*-1 + ty*1;
+			for (var x = 0; x < w; x++) {
+				var tx = (x + 0.5) / w;
+				var nx = (1-tx)*-1 + tx*1;
+				verts.push(nx); verts.push(ny);
+			}
+		}
+		verts = new Float32Array(verts);
+
+		gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+		gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
 	}
+
+	// Build color buffer
+	pixelData = new Float32Array(pixelData);	// Shader will do 1/255 division
+	var colorBuf = colorBufferCache[size];
+	if (colorBuf === undefined) {
+		colorBuf = gl.createBuffer();
+		colorBufferCache[size] = colorBuf;
+	}
+	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+	gl.bufferData(gl.ARRAY_BUFFER, pixelData, gl.STATIC_DRAW);
+
+	// Bind
+	var vertLoc = gl.getAttribLocation(drawPixelsProg, "inPos");
+	gl.enableVertexAttribArray(vertLoc);
+	gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+	gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
+	var colorLoc = gl.getAttribLocation(drawPixelsProg, "inColor");
+	gl.enableVertexAttribArray(colorLoc);
+	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+	gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, 0, 0);
+
+	// Render
+	gl.drawArrays(gl.POINTS, 0, pixelData.length/4);
+	gl.flush();
+	gl.disableVertexAttribArray(vertLoc);
+	gl.disableVertexAttribArray(colorLoc);
+
+	if (asyncCallback) asyncCallback();
 }
+render.drawPixels = ensureShadersLoaded(drawPixelsImpl, drawPixelsShaders);
 
 
 // ----------------------------------------------------------------------------

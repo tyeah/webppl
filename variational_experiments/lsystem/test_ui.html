@@ -27,32 +27,36 @@
 
 			// ----------------------------------------------------------------
 
+			function compositeGLPixelsToCanvas(canvas, pixelData) {
+				// (Doing this pixel-by-pixel on CPU, b/c there doesn't appear to be 
+				//    a generally-supported better alternative as of yet)
+				var ctx = canvas.getContext('2d');
+				var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+				var data = imgData.data;
+				var n = data.length / 4;
+				for (var i = 0; i < n; i++) {
+					var ri = 4*i;
+					var gi = 4*i+1;
+					var bi = 4*i+2;
+
+					var alpha = pixelData[4*i+3]/255;
+					data[ri] = Math.floor((1-alpha)*data[ri] + alpha*pixelData[ri]);
+					data[gi] = Math.floor((1-alpha)*data[gi] + alpha*pixelData[gi]);
+					data[bi] = Math.floor((1-alpha)*data[bi] + alpha*pixelData[bi]);
+				}
+				ctx.putImageData(imgData, 0, 0);
+			}
+
 			function renderParticleAsVines(canvas, particle, callback) {
 				// Render
 				gl.clearColor(0, 0, 0, 0);
 				gl.clear(gl.COLOR_BUFFER_BIT);
 				render.renderVines(gl, viewport, particle.branches, function() {
 					// Read back pixels
-					var arr = new Uint8Array(canvas.width*canvas.height*4);
-					gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, arr);
-					var ctx = canvas.getContext('2d');
+					var pixelData = new Uint8Array(canvas.width*canvas.height*4);
+					gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
 					// Draw image to canvas
-					// (Doing this pixel-by-pixel on CPU, b/c there doesn't appear to be 
-					//    a generally-supported better alternative as of yet)
-					var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-					var data = imgData.data;
-					var n = data.length / 4;
-					for (var i = 0; i < n; i++) {
-						var ri = 4*i;
-						var gi = 4*i+1;
-						var bi = 4*i+2;
-
-						var alpha = arr[4*i+3]/255;
-						data[ri] = Math.floor((1-alpha)*data[ri] + alpha*arr[ri]);
-						data[gi] = Math.floor((1-alpha)*data[gi] + alpha*arr[gi]);
-						data[bi] = Math.floor((1-alpha)*data[bi] + alpha*arr[bi]);
-					}
-					ctx.putImageData(imgData, 0, 0);
+					compositeGLPixelsToCanvas(canvas, pixelData);
 					callback();
 				});
 			}
