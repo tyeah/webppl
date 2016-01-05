@@ -1,6 +1,5 @@
 var utils = require.call(null, __ROOT + '/../utils.js');
 var lsysUtils = require.call(null, __ROOT + '/utils.js');
-var render = require.call(null, __ROOT + '/render.js');
 var nnarch = require.call(null, __ROOT + '/nnarch');
 var _ = require.call(null, 'underscore');
 var THREE = require.call(null, 'three');
@@ -10,6 +9,7 @@ var ad = require.call(null, 'adnn/ad');
 // ----------------------------------------------------------------------------
 // Globals / constants
 
+lsysUtils.rendering.setRootDir(__ROOT);
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 

@@ -19,8 +19,16 @@ ImageData2D.prototype = {
 		return this;
 	},
 	copyToCanvas: function(canvas) {
-		assert(this.imgDataObj);	// (For now) can only do this if we came from a canvas originally.
-		canvas.getContext('2d').putImageData(this.imgDataObj, 0, 0);
+		var ctx = canvas.getContext('2d');
+		var imgDataObj = this.imgDataObj;
+		if (imgDataObj === undefined) {
+			imgDataObj = ctx.getImageData(0, 0, canvas.width, canvas.height);
+			var n = this.data.length;
+			for (var i = 0; i < n; i++) {
+				imgDataObj.data[i] = this.data[i];
+			}
+		}
+		ctx.putImageData(imgDataObj, 0, 0);
 	},
 	loadFromFramebuffer: function(gl) {
 		this.width = gl.drawingBufferWidth;
@@ -211,8 +219,10 @@ TargetImageDatabase.prototype = {
 
 var render = require('./render.js');
 
-var rendering = {
+// Canvas version
+var canvasRendering = {
 	canvas: new Canvas(50, 50),
+	setRootDir: render.setRootDir,
 	renderStart: function(branches, viewport) {
 		render.renderLineSegs(this.canvas, viewport, branches);
 	},
@@ -226,6 +236,28 @@ var rendering = {
 		return new ImageData2D().loadFromCanvas(this.canvas);
 	}
 };
+// canvasRendering.canvas.getContext('2d').antialias = 'none';
+
+// GL Version
+var glRendering = {
+	gl: require('gl')(50, 50),
+	setRootDir: render.setRootDir,
+	renderStart: function(branches, viewport) {
+		render.renderLineSegsGL(this.gl, viewport, branches);
+	},
+	renderIncr: function(branches, viewport) {
+		render.renderLineSegsGL(this.gl, viewport, branches, true, false);
+	},
+	drawImgToRenderContext: function(img) {
+		img.copyToFramebuffer(this.gl);
+	},
+	copyImgFromRenderContext: function() {
+		return new ImageData2D().loadFromFramebuffer(this.gl);
+	}
+};
+
+// var rendering = canvasRendering;
+var rendering = glRendering;
 
 
 // ----------------------------------------------------------------------------

@@ -230,6 +230,7 @@
 						var glCanvas = $('#canvas-gl').length ? $('#canvas-gl') : $('<canvas/>', {id: 'canvas-gl'}).appendTo('body');
 						glCanvas.prop({width: targetImg.width, height: targetImg.height});
 						glCanvas.css('display', 'none');
+						// gl = glCanvas[0].getContext('webgl', {antialias: false});
 						gl = glCanvas[0].getContext('webgl');
 
 						callback();
