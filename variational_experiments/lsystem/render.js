@@ -374,12 +374,21 @@ render.renderVines = function(gl, prog, locs, viewport, branches, clearColor) {
 	mesh.destroyBuffers();
 }
 
+function img2world(p, viewport, canvas) {
+	return new THREE.Vector2(
+		viewport.xmin + (p.x/canvas.width)*(viewport.xmax - viewport.xmin), 
+		viewport.ymin + (p.y/canvas.height)*(viewport.ymax - viewport.ymin)
+	);	
+}
 
 // ----------------------------------------------------------------------------
 
 
 if (typeof(window) === 'undefined') {
-	module.exports = render
+	module.exports = { 
+		renderLineSegs: render.renderLineSegs,
+		img2world: img2world
+	}
 }
 
 
