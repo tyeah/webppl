@@ -32,7 +32,7 @@ setFuturePolicy(futurePolicy);
 // Factor encouraging similarity to target image
 
 
-// Save rendered image so far to imagesSoFar directory 
+// Save rendered image so far to imagesSoFar directory
 var saveImageSoFar = false;
 
 // Compute normalized similarity for a set of branches
@@ -40,13 +40,13 @@ var computeSim = function(branches, inInference) {
 	var target = globalStore.target;
 	// If not in inference, just render everything
 	if (!inInference) {
-		render.renderLineSegs(target.canvas, viewport, branches);
+		lsysUtils.rendering.renderStart(branches, viewport);
 	// Otherwise, do an incremental render of the last branch
 	} else {
-		globalStore.genImg.copyToCanvas(target.canvas);
-		render.renderLineSegs(target.canvas, viewport, branches, true, false);
+		lsysUtils.rendering.drawImgToRenderContext(globalStore.genImg);
+		lsysUtils.rendering.renderIncr(branches, viewport);
 	}
-	globalStore.genImg = utils.new(lsysUtils.ImageData2D).loadFromCanvas(target.canvas);
+	globalStore.genImg = lsysUtils.rendering.copyImgFromRenderContext();
 	// Save?
 	if (saveImageSoFar) {
 		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.branches.n).toString() + '.png');

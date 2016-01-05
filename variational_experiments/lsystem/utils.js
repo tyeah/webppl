@@ -4,6 +4,10 @@ var assert = require('assert');
 var Tensor = require('adnn/tensor');
 
 
+// ----------------------------------------------------------------------------
+// 2D image class
+
+
 function ImageData2D() {}
 ImageData2D.prototype = {
 	constructor: ImageData2D,
@@ -13,6 +17,21 @@ ImageData2D.prototype = {
 		this.width = canvas.width;
 		this.height = canvas.height;
 		return this;
+	},
+	copyToCanvas: function(canvas) {
+		assert(this.imgDataObj);	// (For now) can only do this if we came from a canvas originally.
+		canvas.getContext('2d').putImageData(this.imgDataObj, 0, 0);
+	},
+	loadFromFramebuffer: function(gl) {
+		this.width = gl.drawingBufferWidth;
+		this.height = gl.drawingBufferHeight;
+		this.data = new Uint8Array(this.width*this.height*4);
+		gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.data);
+		return this;
+	},
+	copyToFramebuffer: function(gl) {
+		var render = require('./render.js');
+		render.drawPixels(gl, this.data);
 	},
 	loadFromFile: function(filename) {
 		// Sort of a hack: load it to an Image, then draw to a Canvas, then do
@@ -27,6 +46,7 @@ ImageData2D.prototype = {
 		return this;
 	},
 	saveToFile: function(filename) {
+		// Again, hack: copy to canvas, then save that to a file.
 		var canv = new Canvas(this.width, this.height);
 		this.copyToCanvas(canv);
 		fs.writeFileSync(filename, canv.toBuffer());
@@ -37,9 +57,6 @@ ImageData2D.prototype = {
 		ctx.fillStyle = 'white';
 		ctx.fillRect(0, 0, w, h);
 		return this.loadFromCanvas(canv);
-	},
-	copyToCanvas: function(canvas) {
-		canvas.getContext('2d').putImageData(this.imgDataObj, 0, 0);
 	},
 	numSameBinary: function(other) {
 		assert(this.width === other.width && this.height === other.height,
@@ -116,6 +133,11 @@ ImageData2D.prototype = {
 	}
 };
 
+
+// ----------------------------------------------------------------------------
+// Similarity functions
+
+
 // Similarity function between target image and another image
 function similarity(img, targetImg) {
 	return img.percentSameBinary(targetImg);
@@ -137,6 +159,10 @@ function normalizedSimilarity(img, target) {
 }
 
 
+// ----------------------------------------------------------------------------
+// Database of target images
+
+
 function TargetImageDatabase(directory) {
 	this.targetsByIndex = [];
 	this.targetsByName = {};
@@ -150,7 +176,6 @@ function TargetImageDatabase(directory) {
 			filename: fullname,
 			image: undefined,
 			baseline: undefined,
-			canvas: undefined,
 			tensor: undefined
 		};
 		this.targetsByIndex.push(target);
@@ -161,7 +186,6 @@ function ensureTargetLoaded(target) {
 	if (target.image === undefined) {
 		target.image = new ImageData2D().loadFromFile(target.filename);
 		target.baseline = baselineSimilarity(target.image);
-		target.canvas = new Canvas(target.image.width, target.image.height);
 		target.tensor = target.image.toTensor();
 	}
 }
@@ -182,7 +206,29 @@ TargetImageDatabase.prototype = {
 };
 
 
+// ----------------------------------------------------------------------------
+// Render utilities actually exposed to the program during inference
 
+var render = require('./render.js');
+
+var rendering = {
+	canvas: new Canvas(50, 50),
+	renderStart: function(branches, viewport) {
+		render.renderLineSegs(this.canvas, viewport, branches);
+	},
+	renderIncr: function(branches, viewport) {
+		render.renderLineSegs(this.canvas, viewport, branches, true, false);
+	},
+	drawImgToRenderContext: function(img) {
+		img.copyToCanvas(this.canvas);
+	},
+	copyImgFromRenderContext: function() {
+		return new ImageData2D().loadFromCanvas(this.canvas);
+	}
+};
+
+
+// ----------------------------------------------------------------------------
 // Misc
 
 function deleteStoredImages(particle) {
@@ -190,10 +236,14 @@ function deleteStoredImages(particle) {
 }
 
 
+// ----------------------------------------------------------------------------
+
+
 module.exports = {
 	ImageData2D: ImageData2D,
 	TargetImageDatabase: TargetImageDatabase,
 	normalizedSimilarity: normalizedSimilarity,
+	rendering: rendering,
 	deleteStoredImages: deleteStoredImages
 };
 
