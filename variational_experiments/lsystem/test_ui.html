@@ -78,6 +78,11 @@
 					ctx.fillStyle = 'rgb(128, 128, 128)';
 					ctx.fill();
 					ctx.globalCompositeOperation = 'source-over';
+				} else {
+					// Fill with white
+					ctx.rect(0, 0, canvas.width, canvas.height);
+					ctx.fillStyle = 'white';
+					ctx.fill();
 				}
 				// Draw branches
 				renderFn(canvas, particle, callback);
@@ -96,11 +101,15 @@
 					ctx.putImageData(particle.imageData, 0, 0);
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
+					var glCanvas = $('#canvas-gl');
+					glCanvas.prop({width: targetImg.width, height: targetImg.height});
 					renderParticle(canvas, particle, targetImg, renderParticleAsVines, function() {
 						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-					});
-					renderParticle(canvas_small, particle, undefined, renderParticleAsLineSegs, function() {
-						particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
+						glCanvas.prop({width: 50, height: 50});
+						renderParticle(canvas_small, particle, undefined, renderParticleAsLineSegs, function() {
+						// renderParticle(canvas_small, particle, undefined, renderParticleAsVines, function() {
+							particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
+						});
 					});
 				}
 
