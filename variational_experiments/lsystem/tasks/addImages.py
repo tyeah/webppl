@@ -23,7 +23,7 @@ if not os.path.exists(dataset_dir + args.outputDir):
     os.makedirs(dataset_dir + args.outputDir)
 
 for file in filelist:
-	if file.startswith(args.endStr): 
+	if file.endswith(args.endStr): 
 		imagelist += file + '\n'
 
 image_file = open(dataset_dir + args.outputDir + '/images.txt', 'w')
