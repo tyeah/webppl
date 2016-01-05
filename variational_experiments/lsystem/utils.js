@@ -2,6 +2,7 @@ var fs = require('fs');
 var Canvas = require('canvas');
 var assert = require('assert');
 var Tensor = require('adnn/tensor');
+var THREE = require('three');
 
 
 function ImageData2D() {}
@@ -137,26 +138,41 @@ function normalizedSimilarity(img, target) {
 }
 
 
+//Target directory 
 function TargetImageDatabase(directory) {
+	this.directory = directory;
 	this.targetsByIndex = [];
 	this.targetsByName = {};
 	var filenames = fs.readdirSync(directory);
 	for (var i = 0; i < filenames.length; i++) {
-		var fullname = directory + '/' + filenames[i];
-		var shortname = filenames[i].slice(0,-4);	// strip the .png
-		var target = {
-			index: i,
-			shortname: shortname,
-			filename: fullname,
-			image: undefined,
-			baseline: undefined,
-			canvas: undefined,
-			tensor: undefined
-		};
-		this.targetsByIndex.push(target);
-		this.targetsByName[shortname] = target;
+		//Image files only
+		var ext = filenames[i].slice(-4);
+		if (ext == '.png' || ext == '.jpg') {
+			var fullname = directory + '/' + filenames[i];
+			var shortname = filenames[i].slice(0,-4);	// strip the .png
+
+			//Read .txt file with coordinates
+			var coordfile = fs.readFileSync(directory + '/' + shortname + '.txt', 'utf8');
+			var coords = coordfile.split(' ');
+
+			var startPos = new THREE.Vector2(parseFloat(coords[0]), parseFloat(coords[1]));
+
+			var target = {
+				index: i,
+				shortname: shortname,
+				filename: fullname,
+				image: undefined,
+				baseline: undefined,
+				canvas: undefined,
+				tensor: undefined,
+				startPos: startPos
+			};
+			this.targetsByIndex.push(target);
+			this.targetsByName[shortname] = target;
+		}
 	}
 }
+
 function ensureTargetLoaded(target) {
 	if (target.image === undefined) {
 		target.image = new ImageData2D().loadFromFile(target.filename);
