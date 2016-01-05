@@ -256,8 +256,8 @@ var glRendering = {
 	}
 };
 
-// var rendering = canvasRendering;
-var rendering = glRendering;
+var rendering = canvasRendering;
+// var rendering = glRendering;
 
 
 // ----------------------------------------------------------------------------
