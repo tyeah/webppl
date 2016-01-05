@@ -87,6 +87,32 @@ function loadAndCompileProgram(gl, vertFilename, fragFilename, async, callback) 
 	});
 }
 
+function ensureShadersLoaded(fn, shaderObj) {
+	return function() {
+		var args = arguments;
+		var gl = args[0];
+		var asyncCallback = args[args.length - 1];
+		if (shaderObj.prog == undefined) {
+			loadAndCompileProgram(gl, shaderObj.vertShader, shaderObj.fragShader, asyncCallback, function(prog) {
+				shaderObj.prog = prog;
+				fn.apply(null, args);
+			})
+		} else {
+			fn.apply(null, args);
+		}
+	}
+}
+
+
+function viewportMatrix(v) {
+	// Column-major nonsense
+	return [
+		2 /(v.xmax - v.xmin), 0, 0,
+		0, 2 / (v.ymax - v.ymin), 0,
+		-(v.xmin + v.xmax) / (v.xmax - v.xmin), -(v.ymin + v.ymax) / (v.ymax - v.ymin), 1
+	];
+}
+
 
 // ----------------------------------------------------------------------------
 // 2D Mesh class
@@ -111,6 +137,10 @@ Mesh2D.prototype.append = function(other) {
 	}
 };
 Mesh2D.prototype.recomputeBuffers = function() {
+
+	this.destroyBuffers();	// get rid of existing buffers (if any)
+	this.buffers = {};
+
 	var n = this.vertices.length;
 
 	var vertices = new Float32Array(n*2);
@@ -119,40 +149,35 @@ Mesh2D.prototype.recomputeBuffers = function() {
 		vertices[2*i] = v.x;
 		vertices[2*i+1] = v.y;
 	}
-
-	var uvs = new Float32Array(n*2);
-	for (var i = 0; i < n; i++) {
-		var uv = this.uvs[i];
-		uvs[2*i] = uv.x;
-		uvs[2*i+1] = uv.y;
-	}
-
-	var normals = new Float32Array(n*2);
-	for (var i = 0; i < n; i++) {
-		var nrm = this.normals[i];
-		normals[2*i] = nrm.x;
-		normals[2*i+1] = nrm.y;
-	}
-
-	indices = new Uint16Array(this.indices);
-
-	// ------
-
-	this.destroyBuffers();	// get rid of existing buffers (if any)
-	this.buffers = {};
-
 	this.buffers.vertices = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
 	gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
 
-	this.buffers.uvs = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
-	gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+	if (this.uvs.length > 0) {
+		var uvs = new Float32Array(n*2);
+		for (var i = 0; i < n; i++) {
+			var uv = this.uvs[i];
+			uvs[2*i] = uv.x;
+			uvs[2*i+1] = uv.y;
+		}
+		this.buffers.uvs = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.uvs);
+		gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+	}
 
-	this.buffers.normals = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
-	gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+	if (this.normals.length > 0) {
+		var normals = new Float32Array(n*2);
+		for (var i = 0; i < n; i++) {
+			var nrm = this.normals[i];
+			normals[2*i] = nrm.x;
+			normals[2*i+1] = nrm.y;
+		}
+		this.buffers.normals = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
+		gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+	}
 
+	indices = new Uint16Array(this.indices);
 	this.buffers.indices = gl.createBuffer();
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
@@ -196,7 +221,7 @@ Mesh2D.prototype.draw = function(gl, prog) {
 	gl.drawElements(gl.TRIANGLES, this.buffers.numIndices, gl.UNSIGNED_SHORT, 0);
 
 	gl.disableVertexAttribArray(vertLoc);
-	if (uvLoc !== 1) {
+	if (uvLoc !== -1) {
 		gl.disableVertexAttribArray(uvLoc);
 	}
 	if (normLoc !== -1) {
@@ -210,9 +235,6 @@ Mesh2D.prototype.draw = function(gl, prog) {
 
 
 render.renderLineSegs = function(canvas, viewport, branches, isIncremental, fillBackground) {
-	if (viewport === undefined)
-		viewport = {xmin: 0, ymin: 0, xmax: canvas.width, ymax: canvas.height};
-
 	fillBackground = fillBackground === undefined ? true : fillBackground;
 
 	var ctx = canvas.getContext('2d');
@@ -252,6 +274,65 @@ render.renderLineSegs = function(canvas, viewport, branches, isIncremental, fill
 		}
 	}
 }
+
+
+// OpenGL version of the same thing above (almost the same - minus the round line caps)
+var lineSegShaders = {
+	vertShader: ROOT + '/shaders/vine_smooth.vert',
+	fragShader: ROOT + '/shaders/vine_black.frag',
+	prog: undefined
+};
+function lineseg(start, end, width) {
+	start = new THREE.Vector2(start.x, start.y);
+	end = new THREE.Vector2(end.x, end.y);
+
+	var mesh = new Mesh2D();
+	var dir = end.clone().sub(start).normalize();
+	var normal = new THREE.Vector2(-dir.y, dir.x);
+	normal.multiplyScalar(0.5*width);
+
+	mesh.vertices.push(start.clone().add(normal));
+	mesh.vertices.push(start.clone().sub(normal));
+	mesh.vertices.push(end.clone().sub(normal));
+	mesh.vertices.push(end.clone().add(normal));
+
+	mesh.indices.push(0); mesh.indices.push(1); mesh.indices.push(2);
+	mesh.indices.push(2); mesh.indices.push(3); mesh.indices.push(0);
+
+	return mesh;
+}
+function renderLineSegsGLImpl(gl, viewport, branches, isIncremental, fillBackground, asyncCallback) {
+	fillBackground = fillBackground === undefined ? true : fillBackground;
+	var lineSegProg = lineSegShaders.prog;
+	gl.useProgram(lineSegProg);
+
+	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+	var viewportMat = viewportMatrix(viewport);
+	gl.uniformMatrix3fv(gl.getUniformLocation(lineSegProg, 'viewMat'), false, viewportMat);
+
+	if (fillBackground) {
+		gl.clearColor(1, 1, 1, 1);
+		gl.clear(gl.COLOR_BUFFER_BIT);
+	}
+
+	var mesh;
+	if (isIncremental) {
+		mesh = lineseg(branches.branch.start, branches.branch.end, branches.branch.width);
+	} else {
+		mesh = new Mesh2D();
+		for (var brObj = branches; brObj; brObj = brObj.next) {
+			var tmpMesh = lineseg(brObj.branch.start, brObj.branch.end, brObj.branch.width);
+			mesh.append(tmpMesh);
+		}
+	}
+	mesh.draw(gl, lineSegProg);
+	gl.flush();
+	mesh.destroyBuffers();
+
+	if (asyncCallback) asyncCallback();
+}
+render.renderLineSegsGL = ensureShadersLoaded(renderLineSegsGLImpl, lineSegShaders);
 
 
 // ----------------------------------------------------------------------------
@@ -444,31 +525,6 @@ function branchListToPointTree(branches) {
 
 
 	return treeNodes.root;
-}
-
-function viewportMatrix(v) {
-	// Column-major nonsense
-	return [
-		2 /(v.xmax - v.xmin), 0, 0,
-		0, 2 / (v.ymax - v.ymin), 0,
-		-(v.xmin + v.xmax) / (v.xmax - v.xmin), -(v.ymin + v.ymax) / (v.ymax - v.ymin), 1
-	];
-}
-
-function ensureShadersLoaded(fn, shaderObj) {
-	return function() {
-		var args = arguments;
-		var gl = args[0];
-		var asyncCallback = args[args.length - 1];
-		if (shaderObj.prog == undefined) {
-			loadAndCompileProgram(gl, shaderObj.vertShader, shaderObj.fragShader, asyncCallback, function(prog) {
-				shaderObj.prog = prog;
-				fn.apply(null, args);
-			})
-		} else {
-			fn.apply(null, args);
-		}
-	}
 }
 
 var bezFn = makeBezierUniform(20);
