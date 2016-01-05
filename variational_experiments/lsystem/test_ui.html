@@ -64,8 +64,20 @@
 			// ----------------------------------------------------------------
 
 			function renderParticleAsLineSegs(canvas, particle, callback) {
-				render.renderLineSegs(canvas, viewport, particle.branches, false, false);
-				callback();
+				// render.renderLineSegs(canvas, viewport, particle.branches, false, false);
+				// callback();
+
+				// Render
+				gl.clearColor(0, 0, 0, 0);
+				gl.clear(gl.COLOR_BUFFER_BIT);
+				render.renderLineSegsGL(gl, viewport, particle.branches, false, false, function() {
+					// Read back pixels
+					var pixelData = new Uint8Array(canvas.width*canvas.height*4);
+					gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+					// Draw image to canvas
+					compositeGLPixelsToCanvas(canvas, pixelData);
+					callback();
+				});
 			}
 
 			function renderParticle(canvas, particle, tgtimage, renderFn, callback) {
@@ -103,6 +115,7 @@
 				} else {
 					var glCanvas = $('#canvas-gl');
 					glCanvas.prop({width: targetImg.width, height: targetImg.height});
+					// renderParticle(canvas, particle, targetImg, renderParticleAsLineSegs, function() {
 					renderParticle(canvas, particle, targetImg, renderParticleAsVines, function() {
 						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 						glCanvas.prop({width: 50, height: 50});
