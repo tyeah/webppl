@@ -35,23 +35,15 @@ setFuturePolicy(futurePolicy);
 // Save rendered image so far to imagesSoFar directory
 var saveImageSoFar = false;
 
-// Compute normalized similarity for a set of branches
-var computeSim = function(branches, inInference) {
-	var target = globalStore.target;
-	// If not in inference, just render everything
-	if (!inInference) {
-		lsysUtils.rendering.renderStart(branches, viewport);
-	// Otherwise, do an incremental render of the last branch
-	} else {
-		lsysUtils.rendering.drawImgToRenderContext(globalStore.genImg);
-		lsysUtils.rendering.renderIncr(branches, viewport);
-	}
+// Render update
+var renderUpdate = function(branches) {
+	lsysUtils.rendering.drawImgToRenderContext(globalStore.genImg);
+	lsysUtils.rendering.renderIncr(branches, viewport);
 	globalStore.genImg = lsysUtils.rendering.copyImgFromRenderContext();
 	// Save?
 	if (saveImageSoFar) {
 		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.branches.n).toString() + '.png');
 	}
-	return lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
 };
 
 // Basically Gaussian log-likelihood, without the constant factor
@@ -62,10 +54,11 @@ var makescore = function(val, target, tightness) {
 
 var simTightness = 0.02;
 var boundsTightness = 0.001;
-var availableFuturesWeight = 25;
+// var availableFuturesWeight = 25;
 var targetFactor = function() {
+	renderUpdate(globalStore.branches);
 	// Similarity factor
-	var sim = computeSim(globalStore.branches, true);
+	var sim = lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
 	globalStore.sim = sim;
 	var simf = makescore(sim, 1, simTightness);
 	// Bounds factors
