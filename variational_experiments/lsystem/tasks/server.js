@@ -9,6 +9,8 @@
 //   [Optional] Defaults to 300
 // * --trainedModel=name: Load neural nets from saved_params/name.txt
 //   [Optional] If omitted, will use the prior program
+// * --sampler=[smc|mh]: Which sampling algorithm to use
+//   [Optional] Defaults to smc
 
 
 var _ = require('underscore');
@@ -29,7 +31,8 @@ var opts = require('minimist')(process.argv.slice(2), {
 		port: 8000,
 		// TODO: Make these eventually be controlled by the client UI?
 		target: 'a',
-		numParticles: 300
+		numParticles: 300,
+		sampler: 'smc'
 	}
 });
 var nnGuide;
@@ -60,11 +63,24 @@ function generateResult() {
 	globalStore.target = targetDB.getTargetByName(opts.target);
 	var particleHistory;
 	var t0 = present();
-	utils.runwebppl(ParticleFilter, [generate, opts.numParticles, true, saveHistory, true], globalStore, '', function(s, ret) {
-		particleHistory = ret.particleHistory;
-		var t1 = present();
-		console.log('   (Time taken: ' + (t1-t0)/1000 + ')');
-	});
+	if (opts.sampler === 'smc') {
+		utils.runwebppl(ParticleFilter, [generate, opts.numParticles, true, saveHistory, true], globalStore, '', function(s, ret) {
+			particleHistory = ret.particleHistory;
+			var t1 = present();
+			console.log('   (Time taken: ' + (t1-t0)/1000 + ')');
+		});
+	} else if (opts.sampler === 'mh') {
+		var mhopts = {
+			justSample: true
+		};
+		utils.runwebppl(HashMH, [generate, opts.numParticles, mhopts], globalStore, '', function(s, ret) {
+			particleHistory = [ret.samples];
+			var t1 = present();
+			console.log('   (Time taken: ' + (t1-t0)/1000 + ')');
+		});
+	} else {
+		throw 'Unrecognized sampler ' + opts.sampler;
+	}
 	var result = {
 		targetName: opts.target,
 		viewport: viewport,

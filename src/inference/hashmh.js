@@ -82,9 +82,10 @@ module.exports = function(env) {
 
   HashMH.prototype.sample = function(s, cont, name, erp, params, forceSample) {
     var prev = this.vars[name];
+    var importanceERP = erp.importanceERP || erp;
 
     var reuse = ! (prev === undefined || forceSample);
-    var val = reuse ? prev.val : erp.sample(params);
+    var val = reuse ? prev.val : importanceERP.sample(params);
     // On proposal: bail out early if the value didn't change
     if (forceSample && prev.val === val) {
       this.vars = this.oldVars;
@@ -93,17 +94,18 @@ module.exports = function(env) {
       return this.exit(null, this.oldVal);
     } else {
       var choiceScore = erp.score(params, val);
+      var importanceScore = erp === importanceERP ? choiceScore : importanceERP.score(params, val);
       var newEntry = {k: cont, name: name, erp: erp, params: params,
-        score: this.currScore, choiceScore: choiceScore,
+        score: this.currScore, choiceScore: choiceScore, importanceScore: importanceScore,
         val: val, reused: reuse, store: _.clone(s)};
       this.vars[name] = newEntry;
       // Case: we just created this choice for the first time
       if (prev === undefined)
-        this.fwdLP += choiceScore;
+        this.fwdLP += importanceScore;
       // Case: we made a proposal to this choice
       else if (forceSample) {
-        this.fwdLP += choiceScore;
-        this.rvsLP += prev.choiceScore;
+        this.fwdLP += importanceScore;
+        this.rvsLP += prev.importanceScore;
       }
       // Bail out early if score became -Infinity
       if (choiceScore === -Infinity)
@@ -146,7 +148,7 @@ module.exports = function(env) {
             var v = this.oldvarlist[i];
             if (reached[v.name] === undefined) {
               delete this.vars[v.name];
-              this.rvsLP += v.choiceScore;
+              this.rvsLP += v.importanceScore;
             }
           }
         }
@@ -165,6 +167,7 @@ module.exports = function(env) {
         } else {
           this.acceptedProps++;
           this.query.addAll(env.query);
+          if (s !== null) this.lastAcceptedStore = s;
         }
         env.query.clear();
 
@@ -176,9 +179,19 @@ module.exports = function(env) {
             val = this.query.getTable();
           // add val to hist:
           if (!this.onlyMAP) {
-            if (this.returnSamps)
-              this.returnSamps.push({score: this.score, value: val})
-            else {
+            if (this.returnSamps) {
+              // this.returnSamps.push({score: this.currScore, value: val});
+              this.returnSamps.push({
+                value: val,
+                score: this.currScore,
+                logpost: this.currScore,
+                logprior: 0,
+                loglike: 0,
+                active: false,
+                store: this.lastAcceptedStore,
+                id: this.totalIterations - this.iterations
+              });
+            } else {
               var stringifiedVal = JSON.stringify(val);
               if (this.returnHist[stringifiedVal] === undefined) {
                 this.returnHist[stringifiedVal] = { prob: 0, val: val };
@@ -220,7 +233,7 @@ module.exports = function(env) {
       if (this.returnHist)
         dist = erp.makeMarginalERP(util.logHist(this.returnHist));
       else
-        dist = erp.makeMarginalERP({});
+        dist = {};
       if (this.returnSamps) {
         if (this.onlyMAP)
           this.returnSamps.push(this.MAP);
