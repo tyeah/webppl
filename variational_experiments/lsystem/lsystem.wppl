@@ -254,7 +254,6 @@ var makeProgram = function(neurallyGuided) {
 
 		// Determine starting state by inverting viewport transform
 		var starting_world_pos = norm2world(globalStore.target.startPos);
-		console.log(starting_world_pos);
 
 		// These are separated like this so that we can have an initial local
 		//    state to feed to the _gaussian for the initial angle.
