@@ -8,6 +8,8 @@
 //      trained model provided.
 // * --targetName=name: Only tests on targets/training/name.png
 //   [Optional] If omitted, will test on all target images
+// * --sampler=[smc|mh]: Which sampling algorithm to use
+//   [Optional] Defaults to smc
 
 
 var _ = require('underscore');
@@ -19,6 +21,7 @@ var present = require('present');
 var lsysUtils = require('../utils.js');
 var render = require('../render.js');
 var nnarch = require('../nnarch');
+var Canvas = require('canvas');
 
 
 // Parse options
@@ -26,7 +29,8 @@ var opts = require('minimist')(process.argv.slice(2), {
 	default: {
 		start: 1,
 		end: 10,
-		incr: 1
+		incr: 1,
+		sampler: 'smc'
 	}
 });
 var trainedModel = opts.trainedModel;
@@ -82,6 +86,7 @@ var outfilename = performance_eval + '/' + outputName + '.csv';
 var outfile = fs.openSync(outfilename, 'w');
 fs.writeSync(outfile, 'numParticles,sim,time,avgTime,length,normTime,avgNormTime\n');
 var img = new lsysUtils.ImageData2D();
+var canvas = new Canvas(50, 50);
 var warmUp = true;
 for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	var np = i;
@@ -105,13 +110,22 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		globalStore.target = targetDB.getTargetByIndex(targetIdx);	
 		var t0 = present();
 		var retval;
-		utils.runwebppl(ParticleFilter, [generate, np, true, false, true], globalStore, '', function(s, ret) {
-			retval = ret.MAPparticle.value;
-		});
+		if (opts.sampler === 'smc') {
+			utils.runwebppl(ParticleFilter, [generate, np, true, false, true], globalStore, '', function(s, ret) {
+				retval = ret.MAPparticle.value;
+			});
+		} else if (opts.sampler === 'mh') {
+			var mhOpts = { justSample: true, onlyMAP: true };
+			utils.runwebppl(HashMH, [generate, np, mhOpts], globalStore, '', function(s, ret) {
+				retval = ret.MAP;
+			});
+		} else {
+			throw 'Unrecognized sampler ' + opts.sampler;
+		}
 		var t1 = present();
 		var time = (t1 - t0)/1000;
-		render.renderLineSegs(globalStore.target.canvas, viewport, retval);
-		img.loadFromCanvas(globalStore.target.canvas);
+		render.renderLineSegs(canvas, viewport, retval);
+		img.loadFromCanvas(canvas);
 		var sim = lsysUtils.normalizedSimilarity(img, globalStore.target);
 		times.push(time);
 		sims.push(sim);
@@ -136,7 +150,7 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	}
 	if (warmUp === true) {
 		warmUp = false;
-		i--;
+		i -= opts.incr;
 	}
 }
 fs.closeSync(outfile);
