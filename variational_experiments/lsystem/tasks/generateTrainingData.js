@@ -2,6 +2,7 @@
 // You can run multiple instances of this task in parallel to generate
 //    data faster.
 // Command line arguments:
+// * --program=name: Runs the WebPPL program in programs/name.wppl
 // * --outputName=name: Writes output traces to gen_traces/name.txt
 // * --targetName=name: Only generates traces for targets/training/name.png
 //   [Optional] If omitted, will generate for all target images
@@ -16,6 +17,8 @@ var opts = require('minimist')(process.argv.slice(2), {
 		numParticles: 300
 	}
 });
+var program = opts.program;
+assert(program, 'Must define --program option');
 var outputName = opts.outputName;
 assert(outputName, 'Must define --outputName option');
 console.log(opts);
@@ -23,7 +26,7 @@ console.log(opts);
 var gen_traces = __dirname + '/../gen_traces';
 
 // Initialize
-var file = __dirname + '/../lsystem.wppl';
+var file = __dirname + '/../programs/' + program = '.wppl';
 var rootdir = __dirname + '/..';
 var rets = utils.execWebpplFileWithRoot(file, rootdir);
 var globalStore = rets.globalStore;

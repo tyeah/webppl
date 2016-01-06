@@ -1,6 +1,7 @@
 // Process generated data into a form suitable for use by an external
 //    neural net library.
 // Command line arguments:
+// * --program=name: Runs the WebPPL program in programs/name.wppl
 // * --trainingTraces=name: Trains on traces in gen_traces/name.txt
 // * --arch=name: Name of neural guide architecture, looks in nnarch/architectures
 // * --outputName=name: Writes output neural nets to saved_params/name.txt
@@ -16,6 +17,8 @@ var nnarch = require('../nnarch');
 
 // Parse options
 var opts = require('minimist')(process.argv.slice(2));
+var program = opts.program;
+assert(program, 'Must define --program option');
 var trainingTraces = opts.trainingTraces;
 assert(trainingTraces, 'Must define --trainingTraces option');
 var arch = opts.arch;
@@ -30,7 +33,7 @@ var saved_params = __dirname + '/../saved_params';
 
 
 // Initialize
-var file = __dirname + '/../lsystem.wppl';
+var file = __dirname + '/../programs/' + program + '.wppl';
 var rootdir = __dirname + '/..';
 var rets = utils.execWebpplFileWithRoot(file, rootdir);
 var globalStore = rets.globalStore;

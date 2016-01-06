@@ -1,6 +1,7 @@
 // Start up an instance of a server that allows interactive exploration of
 //    program outputs.
 // Command line arguments:
+// * --program=name: Runs the WebPPL program in programs/name.wppl
 // * --port=number: To use the UI, point your browser at localhost:number
 //   [Optional] Defaults to 8000
 // * --target=name: Uses target image named 'name'
@@ -35,6 +36,8 @@ var opts = require('minimist')(process.argv.slice(2), {
 		sampler: 'smc'
 	}
 });
+var program = opts.program;
+assert(program, 'Must define --program option');
 var nnGuide;
 if (opts.trainedModel) {
 	var saved_params = __dirname + '/../saved_params';
@@ -46,7 +49,7 @@ console.log(opts);
 function generateResult() {
 	// Initialize
 	console.log('   Compiling code...');
-	var file = __dirname + '/../lsystem.wppl';
+	var file = __dirname + '/../programs/' + program + '.wppl';
 	var rootdir = __dirname + '/..';
 	var rets = utils.execWebpplFileWithRoot(file, rootdir);
 	var globalStore = rets.globalStore;

@@ -1,8 +1,9 @@
 // Evaluate the performance of particle filters using either the prior or a
 //    trained guide program
 // Command line arguments:
-// * --trainedModel=name: Looks for saved_params/name.txt. Otherwise, uses
-//      the prior.
+// * --program=name: Runs the WebPPL program in programs/name.wppl
+// * --trainedModel=name: Looks for saved_params/name.txt.
+//   [Optional] If omitted, will use the prior.
 // * --outputName=name: Writes output .csv to performance_eval/name.txt.
 //   [Optional] Defaults to the value of --trainedModel, or 'prior' if there
 //      trained model provided.
@@ -33,6 +34,8 @@ var opts = require('minimist')(process.argv.slice(2), {
 		sampler: 'smc'
 	}
 });
+var program = opts.program;
+assert(program, 'Must define --program option');
 var trainedModel = opts.trainedModel;
 var outputName = opts.outputName || trainedModel || 'prior';
 console.log(opts);
@@ -46,7 +49,7 @@ if (!fs.existsSync(performance_eval)) {
 
 
 // Initialize
-var file = __dirname + '/../lsystem.wppl';
+var file = __dirname + '/../programs/' + program + '.wppl';
 var rootdir = __dirname + '/..';
 var rets = utils.execWebpplFileWithRoot(file, rootdir);
 var globalStore = rets.globalStore;
