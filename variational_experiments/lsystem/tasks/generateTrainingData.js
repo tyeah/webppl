@@ -36,7 +36,9 @@ if (!fs.existsSync(gen_traces)) {
 var filename = gen_traces + '/' + outputName + '.txt';
 
 //Add line at the top with target dataset name
-fs.appendFileSync(filename, targetDB.directory);
+var toks = targetDB.directory.split('/');
+var dataset = toks[toks.length-1];
+fs.appendFileSync(filename, dataset);
 fs.appendFileSync(filename, '\n');
 
 var t0 = present();
