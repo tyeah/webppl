@@ -82,6 +82,62 @@ ImageData2D.prototype = {
 		var sim = this.numSameBinary(other);
 		return sim / (this.height*this.width);
 	},
+	numFilled: function() {
+		var count = 0;
+		var n = this.data.length | 0;
+		for (var i = 0; i < n; i += 4) {
+			count += (this.data[i] !== 255);
+		}
+		return count;
+	},
+	percentFilled: function() {
+		var n = this.numFilled();
+		return n / (this.height*this.width);
+	},
+	binaryBilateralSymmetryScore: function() {
+		var dist = 0;
+		var w = this.width | 0;
+		var h = this.height | 0;
+		var whalf = Math.floor(w / 2) | 0;
+		for (var y = 0; y < h; y++) {
+			for (var x = 0; x < whalf; x++) {
+				var xmirr = w - 1 - x;
+				var i = y*w + x;
+				var imirr = y*w + xmirr;
+				// Stride of 4 for RGBA
+				// var d = Math.abs(this.data[4*i] - this.data[4*imirr]) / 255;
+				var d = (this.data[4*i] === 255) !== (this.data[4*imirr] === 255);
+				dist += d;
+			}
+		}
+		return 1 - dist/(whalf*h);
+	},
+	binaryFilledBilateralSymmetryScore: function() {
+		var dist = 0;
+		var n = 0;
+		var w = this.width;
+		var h = this.height;
+		var whalf = Math.floor(w / 2);
+		for (var y = 0; y < h; y++) {
+			for (var x = 0; x < whalf; x++) {
+				var xmirr = w - 1 - x;
+				var i = y*w + x;
+				var imirr = y*w + xmirr;
+				// Stride of 4 for RGBA
+				var v = this.data[4*i];
+				var vmirr = this.data[4*imirr];
+				if (v !== 255) {
+					n++;
+					dist += vmirr === 255;
+				}
+				if (vmirr !== 255) {
+					n++;
+					dist += v === 255;
+				}
+			}
+		}
+		return 1 - dist/n;
+	},
 	toBinaryByteArray: function() {
 		var numPixels = this.width*this.height;
 		var numBytes = Math.ceil(numPixels/8);
