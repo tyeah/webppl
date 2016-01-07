@@ -64,22 +64,24 @@ if (trainedModel) {
 }
 
 
-// Define list of target images we will test on
+var numReps = 49;
+// If there is a targetDB, define list of target images we will test on
+// Else, just leave this blank
 var testlist = [];
-if (opts.targetName) {
-	// The same target, 49 times
-	for (var i = 0; i < 49; i++) {
-		testlist.push(targetDB.getTargetByName(opts.targetName).index);
-	}
-} else {
-	// Every other image in our 98-image training set
-	// TODO: Evaluate each multiple times? (but that's so expensive...)
-	for (var i = 0; i < 49; i++) {
-		testlist.push(2*i);
+if (targetDB) {
+	if (opts.targetName) {
+		// The same target, numReps times
+		for (var i = 0; i < numReps; i++) {
+			testlist.push(targetDB.getTargetByName(opts.targetName).index);
+		}
+	} else {
+		// Every other image in our 98-image training set
+		// TODO: A proper, separate test set
+		for (var i = 0; i < numReps; i++) {
+			testlist.push(2*i);
+		}
 	}
 }
-// TODO: A proper, separate test set
-// TODO: Old, random target behavior?
 
 
 // Run evaluation, generate CSV
@@ -101,12 +103,14 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	var sims = [];
 	var lengths = [];
 	var normTimes = [];
-	for (var j = 0; j < testlist.length; j++) {
+	for (var j = 0; j < numReps; j++) {
 		if (!warmUp) {
 			console.log('  test ' + (j+1));
 		}
-		var targetIdx = testlist[j];
-		globalStore.target = targetDB.getTargetByIndex(targetIdx);	
+		if (targetDB) {
+			var targetIdx = testlist[j];
+			globalStore.target = targetDB.getTargetByIndex(targetIdx);	
+		}
 		var t0 = present();
 		var retval;
 		var sim;
@@ -138,7 +142,7 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		var avgTime = sortedTimes[Math.floor(sortedTimes.length/2)];
 		var sortedNormTimes = normTimes.slice(); sortedNormTimes.sort();
 		var avgNormTime = sortedNormTimes[Math.floor(sortedNormTimes.length/2)];
-		for (var j = 0; j < testlist.length; j++) {
+		for (var j = 0; j < numReps; j++) {
 			var sim = sims[j];
 			var time = times[j];
 			var length = lengths[j];
@@ -147,7 +151,7 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 				np, sim, time, avgTime, length, normTime, avgNormTime));
 		}
 	}
-	if (warmUp === true) {
+	if (warmUp) {
 		warmUp = false;
 		i -= opts.incr;
 	}
