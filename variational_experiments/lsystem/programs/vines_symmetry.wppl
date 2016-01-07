@@ -56,20 +56,24 @@ var makescore = function(val, target, tightness) {
 	return - (diff * diff) / (tightness * tightness);
 }
 
+var targetFill = 0.25;
+var fillTightness = 0.01;
+var symmTightness = 0.01;
 var boundsTightness = 0.001;
 var symmFactor = function() {
 	renderUpdate(globalStore.branches);
 
 	// Filled-ness factor
 	var pfilled = globalStore.genImg.percentFilled();
-	// globalStore.sim = pfilled;
-	var filledf = makescore(pfilled, 0.25, 0.01);
+	var filledf = makescore(pfilled, targetFill, fillTightness);
 
 	// Symmetry factor
 	var sym = globalStore.genImg.binaryBilateralSymmetryScore();
-	// var sym = globalStore.genImg.binaryFilledBilateralSymmetryScore();
-	globalStore.sim = sym;
-	var symf = makescore(sym, 1, 0.01);
+	var symf = makescore(sym, 1, symmTightness);
+
+	var fillerr = Math.min(1, Math.abs(pfilled - targetFill)/targetFill);
+	var fillsim = 1 - fillerr;
+	globalStore.sim = sym * fillsim;
 
 	// Bounds factors
 	var bbox = globalStore.bbox;
