@@ -55,6 +55,7 @@ function generateResult() {
 	var globalStore = rets.globalStore;
 	var generate = opts.trainedModel ? rets.generateGuided : rets.generate;
 	var targetDB = rets.targetDB;
+	var renderSize = rets.renderSize || targetDB.targetSize();
 	var viewport = rets.viewport;
 	if (opts.trainedModel) {
 		globalStore.nnGuide = nnGuide;
@@ -63,8 +64,9 @@ function generateResult() {
 	// Run
 	console.log('   Running program...');
 	var saveHistory = lsysUtils.deleteStoredImages;
-	globalStore.target = targetDB.getTargetByName(opts.target);
-	var targetSize = targetDB.targetSize();
+	if (targetDB) {
+		globalStore.target = targetDB.getTargetByName(opts.target);
+	}
 	var particleHistory;
 	var t0 = present();
 	if (opts.sampler === 'smc') {
@@ -86,8 +88,8 @@ function generateResult() {
 		throw 'Unrecognized sampler ' + opts.sampler;
 	}
 	var result = {
-		targetName: opts.target,
-		targetSize: targetSize,
+		targetName: targetDB ? opts.target : undefined,
+		targetSize: renderSize,
 		viewport: viewport,
 		history: particleHistoryUtils.compress(particleHistory)
 	};

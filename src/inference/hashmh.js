@@ -185,6 +185,7 @@ module.exports = function(env) {
                 value: val,
                 score: this.currScore,
                 logpost: this.currScore,
+                // TODO: Keep track of these, too?
                 logprior: 0,
                 loglike: 0,
                 active: false,
@@ -203,6 +204,7 @@ module.exports = function(env) {
           if (this.currScore > this.MAP.score) {
             this.MAP.score = this.currScore;
             this.MAP.value = val;
+            this.MAP.trace = this.varlist.map(function(entry) { return entry.val; });
           }
         }
 
@@ -239,7 +241,7 @@ module.exports = function(env) {
           this.returnSamps.push(this.MAP);
         dist.samples = this.returnSamps;
       }
-      dist.MAP = this.MAP.value;
+      dist.MAP = this.MAP;
 
       // Reinstate previous coroutine:
       var k = this.k;

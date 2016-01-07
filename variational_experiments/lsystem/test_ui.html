@@ -21,8 +21,8 @@
 			var propDisplays;
 
 			var targetImg;
+			var fullTargetSize;
 			var smallTargetSize;
-			var smallTargetImg;
 
 			var gl;
 
@@ -115,11 +115,11 @@
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
 					var glCanvas = $('#canvas-gl');
-					glCanvas.prop({width: targetImg.width, height: targetImg.height});
+					glCanvas.prop(fullTargetSize);
 					// renderParticle(canvas, particle, targetImg, renderParticleAsLineSegs, function() {
 					renderParticle(canvas, particle, targetImg, renderParticleAsVines, function() {
 						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-						glCanvas.prop({width: smallTargetSize.width, height: smallTargetSize.height});
+						glCanvas.prop(smallTargetSize);
 						renderParticle(canvas_small, particle, undefined, renderParticleAsLineSegs, function() {
 						// renderParticle(canvas_small, particle, undefined, renderParticleAsVines, function() {
 							particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
@@ -214,29 +214,39 @@
 				}
 			}
 
+			// basename may be undefined, in which case there is no target image
 			function loadTargetImage(basename, callback) {
-				var targetImgFile = '../targets/source/' + basename + '.png';
-				var smallTargetImgFile = '../targets/training/' + basename + '.png';
-				targetImg = new Image();
-				targetImg.addEventListener('load', function() {
+
+				function createCanvases() {
 					// Large canvas
 					var bigCanvas = $('#canvas').length ? $('#canvas') : $('<canvas/>', {id: 'canvas'}).appendTo('body');
-					bigCanvas.prop({width: targetImg.width, height: targetImg.height});
+					bigCanvas.prop(fullTargetSize);
 
 					// Small canvas
 					var smallCanvas = $('#canvas-small').length ? $('#canvas-small') : $('<canvas/>', {id: 'canvas-small'}).appendTo('body');
-					smallCanvas.prop({width: smallTargetSize.width, height: smallTargetSize.height});
+					smallCanvas.prop(smallTargetSize);
 
 					// Hidden WebGL canvas
 					var glCanvas = $('#canvas-gl').length ? $('#canvas-gl') : $('<canvas/>', {id: 'canvas-gl'}).appendTo('body');
-					glCanvas.prop({width: targetImg.width, height: targetImg.height});
+					glCanvas.prop(fullTargetSize);
 					glCanvas.css('display', 'none');
-					// gl = glCanvas[0].getContext('webgl', {antialias: false});
 					gl = glCanvas[0].getContext('webgl');
+				}
 
+				if (!basename) {
+					fullTargetSize = {width: 600, height: 600};
+					createCanvases();
 					callback();
-				}, false);
-				targetImg.src = targetImgFile;
+				} else {
+					var targetImgFile = '../targets/source/' + basename + '.png';
+					targetImg = new Image();
+					targetImg.addEventListener('load', function() {
+						fullTargetSize = {width: targetImg.width, height: targetImg.height};
+						createCanvases();
+						callback();
+					}, false);
+					targetImg.src = targetImgFile;
+				}
 			}
 
 			function computePropRange(history, prop) {

@@ -120,7 +120,7 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		} else if (opts.sampler === 'mh') {
 			var mhOpts = { justSample: true, onlyMAP: true };
 			utils.runwebppl(HashMH, [generate, np, mhOpts], globalStore, '', function(s, ret) {
-				retval = ret.MAP;
+				retval = ret.MAP.value;
 			});
 		} else {
 			throw 'Unrecognized sampler ' + opts.sampler;
