@@ -306,10 +306,10 @@ var canvasRendering = {
 		this.canvas = new Canvas(w, h);
 	},
 	renderStart: function(branches, viewport) {
-		render.renderLineSegs(this.canvas, viewport, branches);
+		render.renderCanvasProxy(this.canvas, viewport, branches);
 	},
 	renderIncr: function(branches, viewport) {
-		render.renderLineSegs(this.canvas, viewport, branches, true, false);
+		render.renderCanvasProxy(this.canvas, viewport, branches, true, false);
 	},
 	drawImgToRenderContext: function(img) {
 		img.copyToCanvas(this.canvas);
@@ -328,10 +328,10 @@ var glRendering = {
 		this.gl = require('gl')(50, 50);
 	},
 	renderStart: function(branches, viewport) {
-		render.renderLineSegsGL(this.gl, viewport, branches);
+		render.renderGLDetailed(this.gl, viewport, branches);
 	},
 	renderIncr: function(branches, viewport) {
-		render.renderLineSegsGL(this.gl, viewport, branches, true, false);
+		render.renderGLDetailed(this.gl, viewport, branches, true, false);
 	},
 	drawImgToRenderContext: function(img) {
 		img.copyToFramebuffer(this.gl);

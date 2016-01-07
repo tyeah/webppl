@@ -48,11 +48,11 @@
 				ctx.putImageData(imgData, 0, 0);
 			}
 
-			function renderParticleAsVines(canvas, particle, callback) {
+			function renderParticleGLDetailed(canvas, particle, callback) {
 				// Render
 				gl.clearColor(0, 0, 0, 0);
 				gl.clear(gl.COLOR_BUFFER_BIT);
-				render.renderVines(gl, viewport, particle.branches, function() {
+				render.renderGLDetailed(gl, viewport, particle.branches, function() {
 					// Read back pixels
 					var pixelData = new Uint8Array(canvas.width*canvas.height*4);
 					gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
@@ -64,21 +64,9 @@
 
 			// ----------------------------------------------------------------
 
-			function renderParticleAsLineSegs(canvas, particle, callback) {
-				render.renderLineSegs(canvas, viewport, particle.branches, false, false);
+			function renderParticleCanvasProxy(canvas, particle, callback) {
+				render.renderCanvasProxy(canvas, viewport, particle.branches, false, false);
 				callback();
-
-				// // Render
-				// gl.clearColor(0, 0, 0, 0);
-				// gl.clear(gl.COLOR_BUFFER_BIT);
-				// render.renderLineSegsGL(gl, viewport, particle.branches, false, false, function() {
-				// 	// Read back pixels
-				// 	var pixelData = new Uint8Array(canvas.width*canvas.height*4);
-				// 	gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
-				// 	// Draw image to canvas
-				// 	compositeGLPixelsToCanvas(canvas, pixelData);
-				// 	callback();
-				// });
 			}
 
 			function renderParticle(canvas, particle, tgtimage, renderFn, callback) {
@@ -116,12 +104,11 @@
 				} else {
 					var glCanvas = $('#canvas-gl');
 					glCanvas.prop(fullTargetSize);
-					// renderParticle(canvas, particle, targetImg, renderParticleAsLineSegs, function() {
-					renderParticle(canvas, particle, targetImg, renderParticleAsVines, function() {
+					// renderParticle(canvas, particle, targetImg, renderParticleCanvasProxy, function() {
+					renderParticle(canvas, particle, targetImg, renderParticleGLDetailed, function() {
 						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 						glCanvas.prop(smallTargetSize);
-						renderParticle(canvas_small, particle, undefined, renderParticleAsLineSegs, function() {
-						// renderParticle(canvas_small, particle, undefined, renderParticleAsVines, function() {
+						renderParticle(canvas_small, particle, undefined, renderParticleCanvasProxy, function() {
 							particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
 						});
 					});
