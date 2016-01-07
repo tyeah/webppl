@@ -205,6 +205,7 @@ module.exports = function(env) {
             this.MAP.score = this.currScore;
             this.MAP.value = val;
             this.MAP.trace = this.varlist.map(function(entry) { return entry.val; });
+            this.MAP.store = this.lastAcceptedStore;
           }
         }
 

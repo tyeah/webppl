@@ -20,9 +20,7 @@ var utils = require('../../utils.js');
 var util = require('util');
 var present = require('present');
 var lsysUtils = require('../utils.js');
-var render = require('../render.js');
 var nnarch = require('../nnarch');
-var Canvas = require('canvas');
 
 
 // Parse options
@@ -88,8 +86,6 @@ if (opts.targetName) {
 var outfilename = performance_eval + '/' + outputName + '.csv';
 var outfile = fs.openSync(outfilename, 'w');
 fs.writeSync(outfile, 'numParticles,sim,time,avgTime,length,normTime,avgNormTime\n');
-var img = new lsysUtils.ImageData2D();
-var canvas = new Canvas(50, 50);
 var warmUp = true;
 for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	var np = i;
@@ -113,23 +109,23 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		globalStore.target = targetDB.getTargetByIndex(targetIdx);	
 		var t0 = present();
 		var retval;
+		var sim;
 		if (opts.sampler === 'smc') {
 			utils.runwebppl(ParticleFilter, [generate, np, true, false, true], globalStore, '', function(s, ret) {
 				retval = ret.MAPparticle.value;
+				sim = ret.MAPparticle.store.sim;
 			});
 		} else if (opts.sampler === 'mh') {
 			var mhOpts = { justSample: true, onlyMAP: true };
 			utils.runwebppl(HashMH, [generate, np, mhOpts], globalStore, '', function(s, ret) {
 				retval = ret.MAP.value;
+				sim = ret.MAPparticle.store.sim;
 			});
 		} else {
 			throw 'Unrecognized sampler ' + opts.sampler;
 		}
 		var t1 = present();
 		var time = (t1 - t0)/1000;
-		render.renderLineSegs(canvas, viewport, retval);
-		img.loadFromCanvas(canvas);
-		var sim = lsysUtils.normalizedSimilarity(img, globalStore.target);
 		times.push(time);
 		sims.push(sim);
 		lengths.push(retval.n);
