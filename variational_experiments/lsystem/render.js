@@ -233,7 +233,7 @@ Mesh2D.prototype.draw = function(gl, prog) {
 // Rendering lo-res proxy geometry via canvas
 
 
-render.renderCanvasProxy = function(canvas, viewport, branches, isIncremental, fillBackground) {
+render.renderCanvasProxy = function(canvas, viewport, geo, isIncremental, fillBackground) {
 	fillBackground = fillBackground === undefined ? true : fillBackground;
 
 	var ctx = canvas.getContext('2d');
@@ -267,73 +267,13 @@ render.renderCanvasProxy = function(canvas, viewport, branches, isIncremental, f
 	ctx.lineCap = 'round';
 	// ctx.lineCap = 'butt';
 	if (isIncremental) {
-		renderBranch(branches.branch);
+		renderBranch(geo.branch);
 	} else {
-		for (var brObj = branches; brObj; brObj = brObj.next) {
+		for (var brObj = geo; brObj; brObj = brObj.next) {
 			renderBranch(brObj.branch);
 		}
 	}
 }
-
-
-// // OpenGL version of the same thing above (almost the same - minus the round line caps)
-// var lineSegShaders = {
-// 	vertShader: 'shaders/vine_smooth.vert',
-// 	fragShader: 'shaders/vine_black.frag',
-// 	prog: undefined
-// };
-// function lineseg(start, end, width) {
-// 	start = new THREE.Vector2(start.x, start.y);
-// 	end = new THREE.Vector2(end.x, end.y);
-
-// 	var mesh = new Mesh2D();
-// 	var dir = end.clone().sub(start).normalize();
-// 	var normal = new THREE.Vector2(-dir.y, dir.x);
-// 	normal.multiplyScalar(0.5*width);
-
-// 	mesh.vertices.push(start.clone().add(normal));
-// 	mesh.vertices.push(start.clone().sub(normal));
-// 	mesh.vertices.push(end.clone().sub(normal));
-// 	mesh.vertices.push(end.clone().add(normal));
-
-// 	mesh.indices.push(0); mesh.indices.push(1); mesh.indices.push(2);
-// 	mesh.indices.push(2); mesh.indices.push(3); mesh.indices.push(0);
-
-// 	return mesh;
-// }
-// render.renderGLProxy = function(gl, viewport, branches, isIncremental, fillBackground, asyncCallback) {
-// 	ensureShadersLoaded(gl, lineSegShaders, asyncCallback !== undefined, function() {
-// 		fillBackground = fillBackground === undefined ? true : fillBackground;
-// 		var lineSegProg = lineSegShaders.prog;
-// 		gl.useProgram(lineSegProg);
-
-// 		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
-// 		var viewportMat = viewportMatrix(viewport);
-// 		gl.uniformMatrix3fv(gl.getUniformLocation(lineSegProg, 'viewMat'), false, viewportMat);
-
-// 		if (fillBackground) {
-// 			gl.clearColor(1, 1, 1, 1);
-// 			gl.clear(gl.COLOR_BUFFER_BIT);
-// 		}
-
-// 		var mesh;
-// 		if (isIncremental) {
-// 			mesh = lineseg(branches.branch.start, branches.branch.end, branches.branch.width);
-// 		} else {
-// 			mesh = new Mesh2D();
-// 			for (var brObj = branches; brObj; brObj = brObj.next) {
-// 				var tmpMesh = lineseg(brObj.branch.start, brObj.branch.end, brObj.branch.width);
-// 				mesh.append(tmpMesh);
-// 			}
-// 		}
-// 		mesh.draw(gl, lineSegProg);
-// 		gl.flush();
-// 		mesh.destroyBuffers(gl);
-
-// 		if (asyncCallback) asyncCallback();
-// 	});
-// }
 
 
 // ----------------------------------------------------------------------------
@@ -534,7 +474,7 @@ var vineShaders = {
 	fragShader: 'shaders/vine_textured.frag',
 	prog: undefined
 };
-render.renderGLDetailed = function(gl, viewport, branches, asyncCallback) {
+render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 	ensureShadersLoaded(gl, vineShaders, asyncCallback !== undefined, function() {
 		var vineProg = vineShaders.prog;
 		gl.useProgram(vineProg);
@@ -544,7 +484,7 @@ render.renderGLDetailed = function(gl, viewport, branches, asyncCallback) {
 		var viewportMat = viewportMatrix(viewport);
 		gl.uniformMatrix3fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
 
-		var tree = branchListToPointTree(branches);
+		var tree = branchListToPointTree(geo);
 		var mesh = vineTree(tree, bezFn);
 		mesh.draw(gl, vineProg);
 		gl.flush();

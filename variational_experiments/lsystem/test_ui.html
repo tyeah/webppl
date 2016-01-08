@@ -52,7 +52,7 @@
 				// Render
 				gl.clearColor(0, 0, 0, 0);
 				gl.clear(gl.COLOR_BUFFER_BIT);
-				render.renderGLDetailed(gl, viewport, particle.branches, function() {
+				render.renderGLDetailed(gl, viewport, particle.geo, function() {
 					// Read back pixels
 					var pixelData = new Uint8Array(canvas.width*canvas.height*4);
 					gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
@@ -65,7 +65,7 @@
 			// ----------------------------------------------------------------
 
 			function renderParticleCanvasProxy(canvas, particle, callback) {
-				render.renderCanvasProxy(canvas, viewport, particle.branches, false, false);
+				render.renderCanvasProxy(canvas, viewport, particle.geo, false, false);
 				callback();
 			}
 
@@ -85,7 +85,7 @@
 					ctx.fillStyle = 'white';
 					ctx.fill();
 				}
-				// Draw branches
+				// Draw geometry
 				renderFn(canvas, particle, callback);
 			}
 
@@ -288,7 +288,7 @@
 
 						// Particle properties that we want to display.
 						var particleProps = [
-							{name: 'num_branches'},
+							{name: 'num_geo'},
 							{name: 'log_prior'},
 							{name: 'log_like'},
 							{name: 'log_post'},

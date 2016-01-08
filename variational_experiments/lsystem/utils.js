@@ -298,18 +298,17 @@ TargetImageDatabase.prototype = {
 
 var render = require('./render.js');
 
-// Canvas version
-var canvasRendering = {
+var rendering = {
 	canvas: undefined,
 	init: function(rootdir, w, h) {
 		render.setRootDir(rootdir);
 		this.canvas = new Canvas(w, h);
 	},
-	renderStart: function(branches, viewport) {
-		render.renderCanvasProxy(this.canvas, viewport, branches);
+	renderStart: function(geo, viewport) {
+		render.renderCanvasProxy(this.canvas, viewport, geo);
 	},
-	renderIncr: function(branches, viewport) {
-		render.renderCanvasProxy(this.canvas, viewport, branches, true, false);
+	renderIncr: function(geo, viewport) {
+		render.renderCanvasProxy(this.canvas, viewport, geo, true, false);
 	},
 	drawImgToRenderContext: function(img) {
 		img.copyToCanvas(this.canvas);
@@ -318,31 +317,22 @@ var canvasRendering = {
 		return new ImageData2D().loadFromCanvas(this.canvas);
 	}
 };
-// canvasRendering.canvas.getContext('2d').antialias = 'none';
 
-// GL Version
-var glRendering = {
-	gl: undefined,
-	init: function(rootdir, w, h) {
-		render.setRootDir(rootdir);
-		this.gl = require('gl')(50, 50);
+
+// ----------------------------------------------------------------------------
+// Bounds for various geomtries
+
+var bboxes = {
+	branch: function(branch) {
+		var bbox = new THREE.Box2();
+		bbox.expandByPoint(branch.start);
+		bbox.expandByPoint(branch.end);
+		return bbox;
 	},
-	renderStart: function(branches, viewport) {
-		render.renderGLDetailed(this.gl, viewport, branches);
-	},
-	renderIncr: function(branches, viewport) {
-		render.renderGLDetailed(this.gl, viewport, branches, true, false);
-	},
-	drawImgToRenderContext: function(img) {
-		img.copyToFramebuffer(this.gl);
-	},
-	copyImgFromRenderContext: function() {
-		return new ImageData2D().loadFromFramebuffer(this.gl);
+	leaf: function(leaf, branch) {
+		//
 	}
 };
-
-var rendering = canvasRendering;
-// var rendering = glRendering;
 
 
 // ----------------------------------------------------------------------------
@@ -361,6 +351,7 @@ module.exports = {
 	TargetImageDatabase: TargetImageDatabase,
 	normalizedSimilarity: normalizedSimilarity,
 	rendering: rendering,
+	bboxes: bboxes,
 	deleteStoredImages: deleteStoredImages
 };
 
