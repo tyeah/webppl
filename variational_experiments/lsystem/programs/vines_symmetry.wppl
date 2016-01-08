@@ -63,18 +63,6 @@ var boundsTightness = 0.001;
 var symmFactor = function() {
 	renderUpdate(globalStore.branches);
 
-	// Filled-ness factor
-	var pfilled = globalStore.genImg.percentFilled();
-	var filledf = makescore(pfilled, targetFill, fillTightness);
-
-	// Symmetry factor
-	var sym = globalStore.genImg.binaryBilateralSymmetryScore();
-	var symf = makescore(sym, 1, symmTightness);
-
-	var fillerr = Math.min(1, Math.abs(pfilled - targetFill)/targetFill);
-	var fillsim = 1 - fillerr;
-	globalStore.sim = sym * fillsim;
-
 	// Bounds factors
 	var bbox = globalStore.bbox;
 	var extraX = (Math.max(viewport.xmin - bbox.min.x, 0) + Math.max(bbox.max.x - viewport.xmax, 0)) / (viewport.xmax - viewport.xmin);
@@ -82,7 +70,30 @@ var symmFactor = function() {
 	var boundsfx = makescore(extraX, 0, boundsTightness);
 	var boundsfy = makescore(extraY, 0, boundsTightness);
 
-	var f = filledf + symf + boundsfx + boundsfy;
+
+	// // Filled-ness factor
+	// var pfilled = globalStore.genImg.percentFilled();
+	// var filledf = makescore(pfilled, targetFill, fillTightness);
+	// // Symmetry factor
+	// var sym = globalStore.genImg.binaryBilateralSymmetryScore();
+	// var symf = makescore(sym, 1, symmTightness);
+	// // Sim measure that gets reported to external code
+	// var fillerr = Math.min(1, Math.abs(pfilled - targetFill)/targetFill);
+	// var fillsim = 1 - fillerr;
+	// globalStore.sim = fillsim * globalStore.genImg.binaryFilledBilateralSymmetryScore();
+	// // Final factor
+	// var f = filledf + symf + boundsfx + boundsfy;
+
+
+	var pfilled = globalStore.genImg.percentFilled();
+	var fillerr = Math.min(1, Math.abs(pfilled - targetFill)/targetFill);
+	var fillsim = 1 - fillerr;
+	var symm = globalStore.genImg.binaryFilledBilateralSymmetryScore();
+	var allsim = fillsim * symm;
+	globalStore.sim = allsim;
+	var simf = makescore(allsim, 1, 0.01);
+	var f = simf + boundsfx + boundsfy;
+
 
 	if (globalStore.prevFactor) {
 		factor(f - globalStore.prevFactor);
