@@ -171,7 +171,7 @@ var makeProgram = function(neurallyGuided) {
 			start: currState.pos,
 			angle: newang,
 			width: width,
-			end: currState.pos.clone().add(polar2rect(length, newang))
+			end: polar2rect(length, newang).add(currState.pos)
 		};
 
 		// Update model state
@@ -182,9 +182,7 @@ var makeProgram = function(neurallyGuided) {
 			parent: currState.prevGeo,
 			n: globalStore.geo ? globalStore.geo.n + 1 : 1
 		};
-		globalStore.bbox = globalStore.bbox.clone();
-		globalStore.bbox.expandByPoint(newbranch.start);
-		globalStore.bbox.expandByPoint(newbranch.end);
+		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.branch(newbranch));
 
 		// Add new heuristic factor
 		targetFactor();

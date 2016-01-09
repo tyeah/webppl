@@ -104,8 +104,8 @@
 				} else {
 					var glCanvas = $('#canvas-gl');
 					glCanvas.prop(fullTargetSize);
-					// renderParticle(canvas, particle, targetImg, renderParticleCanvasProxy, function() {
-					renderParticle(canvas, particle, targetImg, renderParticleGLDetailed, function() {
+					renderParticle(canvas, particle, targetImg, renderParticleCanvasProxy, function() {
+					// renderParticle(canvas, particle, targetImg, renderParticleGLDetailed, function() {
 						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 						glCanvas.prop(smallTargetSize);
 						renderParticle(canvas_small, particle, undefined, renderParticleCanvasProxy, function() {

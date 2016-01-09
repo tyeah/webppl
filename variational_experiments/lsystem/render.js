@@ -233,46 +233,65 @@ Mesh2D.prototype.draw = function(gl, prog) {
 // Rendering lo-res proxy geometry via canvas
 
 
+function renderBranch(context, branch) {
+	context.beginPath();
+	context.lineWidth = branch.width;
+	context.moveTo(branch.start.x, branch.start.y);
+	context.lineTo(branch.end.x, branch.end.y);
+	context.stroke();
+}
+
+function renderLeaf(context, leaf) {
+	context.save();
+	context.translate(leaf.center.x, leaf.center.y);
+	context.rotate(leaf.angle);
+	context.scale(leaf.length, leaf.width);
+	context.beginPath();
+	context.arc(0, 0, 0.5, 0, Math.PI*2);
+	context.fill();
+	context.restore();
+}
+
+function renderGeo(context, geo) {
+	switch (geo.type) {
+		case 'branch':
+			renderBranch(context, geo.branch); break;
+		case 'leaf':
+			renderLeaf(context, geo.leaf); break;
+		default:
+			throw 'Unrecognized geo type';
+	}
+}
+
 render.renderCanvasProxy = function(canvas, viewport, geo, isIncremental, fillBackground) {
 	fillBackground = fillBackground === undefined ? true : fillBackground;
 
-	var ctx = canvas.getContext('2d');
-
-	function world2img(p) {
-		return new THREE.Vector2(
-			canvas.width * (p.x - viewport.xmin) / (viewport.xmax - viewport.xmin),
-			canvas.height * (p.y - viewport.ymin) / (viewport.ymax - viewport.ymin)
-		);
-	}
-
-	function renderBranch(branch) {
-		var istart = world2img(branch.start);
-		var iend = world2img(branch.end);
-		var iwidth = branch.width / (viewport.xmax - viewport.xmin) * canvas.width;
-		ctx.beginPath();
-		ctx.lineWidth = iwidth;
-		ctx.moveTo(istart.x, istart.y);
-		ctx.lineTo(iend.x, iend.y);
-		ctx.stroke();
-	}
+	var context = canvas.getContext('2d');
+	context.save();
 
 	if (fillBackground) {
-		ctx.rect(0, 0, canvas.width, canvas.height);
-		ctx.fillStyle = 'white';
-		ctx.fill();
+		context.rect(0, 0, canvas.width, canvas.height);
+		context.fillStyle = 'white';
+		context.fill();
 	}
 
 	// Draw
-	ctx.strokeStyle = 'black';
-	ctx.lineCap = 'round';
-	// ctx.lineCap = 'butt';
+	context.strokeStyle = 'black';
+	context.fillStyle = 'black';
+	context.lineCap = 'round';
+	var vwidth = viewport.xmax - viewport.xmin;
+	var vheight = viewport.ymax - viewport.ymin;
+	context.scale(canvas.width/vwidth, canvas.height/vheight);
+	context.translate(-viewport.xmin, -viewport.ymin);
 	if (isIncremental) {
-		renderBranch(geo.branch);
+		renderGeo(context, geo);
 	} else {
-		for (var brObj = geo; brObj; brObj = brObj.next) {
-			renderBranch(brObj.branch);
+		for (var g = geo; g; g = g.next) {
+			renderGeo(context, g);
 		}
 	}
+
+	context.restore();
 }
 
 

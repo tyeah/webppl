@@ -320,7 +320,7 @@ var rendering = {
 
 
 // ----------------------------------------------------------------------------
-// Bounds for various geomtries
+// Bounds for various geometries
 
 var bboxes = {
 	branch: function(branch) {
@@ -329,9 +329,39 @@ var bboxes = {
 		bbox.expandByPoint(branch.end);
 		return bbox;
 	},
-	leaf: function(leaf, branch) {
-		//
-	}
+	leaf: (function() {
+		function pivot(p, sin, cos, c) {
+			return new THREE.Vector2(
+				cos*p.x + sin*p.y + c.x,
+				sin*p.x - cos*p.y + c.y
+			);
+		}
+		// Conservative:
+		// Compute corners of object-space ellipse,
+		//    transform them into world-space, then
+		//    compute the BBox of those points.
+		return function(leaf) {
+			var w2 = leaf.width/2;
+			var l2 = leaf.length/2;
+			var p0 = new THREE.Vector2(-w2, -l2);
+			var p1 = new THREE.Vector2(w2, -l2);
+			var p2 = new THREE.Vector2(-w2, l2);
+			var p3 = new THREE.Vector2(w2, l2);
+			var sin = Math.sin(leaf.angle);
+			var cos = Math.cos(leaf.angle);
+			var center = leaf.center;
+			p0 = pivot(p0, sin, cos, center);
+			p1 = pivot(p0, sin, cos, center);
+			p2 = pivot(p0, sin, cos, center);
+			p3 = pivot(p0, sin, cos, center);
+			var box = new THREE.Box2();
+			box.expandByPoint(p0);
+			box.expandByPoint(p1);
+			box.expandByPoint(p2);
+			box.expandByPoint(p3);
+			return box;
+		}
+	})()
 };
 
 
