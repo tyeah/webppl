@@ -175,7 +175,7 @@ var makeProgram = function(neurallyGuided) {
 	var widthDecay = 0.975;
 	var minWidthPercent = 0.2;
 	var minWidth = minWidthPercent*initialWidth;
-	var leafAspect = 2.3;
+	var leafAspect = 2.09859154929577;
 	var leafWidthMul = 1.25;
 
 	var state = function(obj) {

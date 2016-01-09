@@ -87,6 +87,38 @@ function loadAndCompileProgram(gl, vertFilename, fragFilename, async, callback) 
 	});
 }
 
+function loadImage_node(filename, async, callback) {
+	assert(!async, 'Node image loads must be synchronous');
+	var Canvas = require('canvas');
+	var img = new Canvas.Image;
+	img.src = filename;
+	callback(img);
+}
+
+function loadImage_browser(filename, async, callback) {
+	assert(async, 'Browser image loads must be asynchronous');
+	var img = new Image;
+	img.addEventListener('load', function() {
+		callback(img);
+	});
+	img.src = filename;
+}
+
+var loadImage = (client === 'node') ? loadImage_node : loadImage_browser;
+
+function loadTexture(gl, filename, async, callback) {
+	var img = loadImage(filename, async, function() {
+		var texture = gl.createTexture();
+		gl.bindTexture(gl.TEXTURE_2D, texture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+		gl.generateMipmap(gl.TEXTURE_2D);
+		gl.bindTexture(gl.TEXTURE_2D, null);
+		callback(texture);
+	});
+}
+
 function ensureShadersLoaded(gl, shaderObj, async, callback) {
 	if (shaderObj.prog === undefined) {
 		var vs = ROOT + '/' + shaderObj.vertShader;
@@ -489,8 +521,8 @@ function branchListToPointTree(branches) {
 
 var bezFn = makeBezierUniform(20);
 var vineShaders = {
-	vertShader: 'shaders/vine_bumpy.vert',
-	fragShader: 'shaders/vine_textured.frag',
+	vertShader: 'assets/shaders/vine_bumpy.vert',
+	fragShader: 'assets/shaders/vine_textured.frag',
 	prog: undefined
 };
 render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
@@ -518,8 +550,8 @@ render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 // Pixel drawing
 
 var drawPixelsShaders = {
-	vertShader: 'shaders/drawPixels.vert',
-	fragShader: 'shaders/drawPixels.frag',
+	vertShader: 'assets/shaders/drawPixels.vert',
+	fragShader: 'assets/shaders/drawPixels.frag',
 	prog: undefined
 };
 var vertBufferCache = {};
