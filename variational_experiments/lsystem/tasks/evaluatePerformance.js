@@ -29,6 +29,7 @@ var opts = require('minimist')(process.argv.slice(2), {
 		start: 1,
 		end: 10,
 		incr: 1,
+		numReps: 49,
 		sampler: 'smc'
 	}
 });
@@ -64,7 +65,7 @@ if (trainedModel) {
 }
 
 
-var numReps = 49;
+var numReps = opts.numReps;
 // If there is a targetDB, define list of target images we will test on
 // Else, just leave this blank
 var testlist = [];
@@ -123,7 +124,7 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 			var mhOpts = { justSample: true, onlyMAP: true };
 			utils.runwebppl(HashMH, [generate, np, mhOpts], globalStore, '', function(s, ret) {
 				retval = ret.MAP.value;
-				sim = ret.MAPparticle.store.sim;
+				sim = ret.MAP.store.sim;
 			});
 		} else {
 			throw 'Unrecognized sampler ' + opts.sampler;
