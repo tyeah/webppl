@@ -39,7 +39,7 @@ if (images[images.length-1] === '') images.pop();
 
 function saveDownsampledAndFlipped(imageName, sourceLoc, outputLoc, outputLocFlipped) {
 	// Save resized + flipped images
-	syscall(util.format('convert %s -resize %dx%d %s',
+	syscall(util.format('convert %s -resize %dx%d\! %s',
 		sourceLoc, newWidth, newHeight, outputLoc));
 	syscall(util.format('convert %s -flop %s',
 		outputLoc, outputLocFlipped));
