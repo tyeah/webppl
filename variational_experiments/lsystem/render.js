@@ -44,7 +44,7 @@ function compileProgram(gl, vertSrc, fragSrc) {
 	return prog;
 }
 
-function loadShader_node(filename, async, callback) {
+function loadTextFile_node(filename, async, callback) {
 	var fs = require('fs');
 	if (async) {
 		fs.readFile(filename, function(err, data) {
@@ -55,7 +55,7 @@ function loadShader_node(filename, async, callback) {
 		callback(text); 
 	}
 }
-function loadShader_browser(filename, async, callback) {
+function loadTextFile_browser(filename, async, callback) {
 	$.ajax({
 		async: async,
 		dataType: 'text',
@@ -65,26 +65,15 @@ function loadShader_browser(filename, async, callback) {
 	    }
 	});
 }
-var loadShader = (client === 'node') ? loadShader_node : loadShader_browser;
+var loadTextFile = (client === 'node') ? loadTextFile_node : loadTextFile_browser;
 
-function loadShaders(shaders, async, callback) {
-	loadShader(shaders[0], async, function(text) {
-		if (shaders.length === 1) {
-			callback([text]);
-		} else {
-			loadShaders(shaders.slice(1), async, function(textList) {
-				var fullList = [text].concat(textList);
-				callback(fullList);
-			});
-		}
-	});
-}
-
-function loadAndCompileProgram(gl, vertFilename, fragFilename, async, callback) {
-	loadShaders([vertFilename, fragFilename], async, function(sources) {
-		var prog = compileProgram(gl, sources[0], sources[1]);
-		callback(prog);
-	});
+function loadShaderProgram(gl, vertFilename, fragFilename, async, callback) {
+	loadTextFile(vertFilename, async, function(vertSrc) {
+		loadTextFile(fragFilename, async, function(fragSrc) {
+			var prog = compileProgram(gl, vertSrc, fragSrc);
+			callback(prog);
+		});
+	})
 }
 
 function loadImage_node(filename, async, callback) {
@@ -119,16 +108,44 @@ function loadTexture(gl, filename, async, callback) {
 	});
 }
 
-function ensureShadersLoaded(gl, shaderObj, async, callback) {
-	if (shaderObj.prog === undefined) {
-		var vs = ROOT + '/' + shaderObj.vertShader;
-		var fs = ROOT + '/' + shaderObj.fragShader;
-		loadAndCompileProgram(gl, vs, fs, async, function(prog) {
-			shaderObj.prog = prog;
+// TODO: Will need a bit more sophistication if an asset can be present in multiple asset lists (so as not
+//    to double-load)
+function ensureAssetsLoaded(gl, assets, async, callback) {
+
+	function FULLPATH(path) {
+		return ROOT + '/' + path;
+	}
+
+	function loadAssets(asslist, cb) {
+		var asset = asslist[0];
+		var remainingAssets = asslist.slice(1);
+		var k;	// continuation
+		if (remainingAssets.length === 0) {
+			k = callback;
+		} else {
+			k = function() {
+				loadAssets(gl, remainingAssets, async, callback);
+			};
+		}
+		if (asset.type === 'shaderProgram') {
+			loadShaderProgram(gl, FULLPATH(asset.vertShader), FULLPATH(asset.fragShader), async, function(prog) {
+				asset.prog = prog;
+				k();
+			});
+		} else {
+			throw 'Unrecognized asset type ' + asset.type;
+		}
+	}
+
+	if (assets.__loaded) {
+		callback();
+	} else {
+		var asslist = [];
+		for (var prop in assets) asslist.push(assets[prop]);
+		loadAssets(asslist, function() {
+			assets.__loaded = true;
 			callback();
 		});
-	} else {
-		callback();
 	}
 }
 
@@ -458,9 +475,9 @@ function geo2objdata(geo) {
 				width: g.branch.width,
 				children: []
 			});
-			depth -= 1e-6;
 			branchListNodes.push(g);
 		}
+		depth -= 1e-6;
 	}
 
 	// Sweep through tree nodes a second time to create child pointers
@@ -524,13 +541,16 @@ function viewportMatrix(v) {
 	return m.elements;
 }
 
-var vineShaders = {
-	vertShader: 'assets/shaders/vine_bumpy.vert',
-	fragShader: 'assets/shaders/vine_textured.frag',
-	prog: undefined
+var vineAssets = {
+	vineProgram: {
+		type: 'shaderProgram',
+		vertShader: 'assets/shaders/vine_bumpy.vert',
+		fragShader: 'assets/shaders/vine_textured.frag',
+		prog: undefined
+	}
 };
 render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
-	ensureShadersLoaded(gl, vineShaders, asyncCallback !== undefined, function() {
+	ensureAssetsLoaded(gl, vineAssets, asyncCallback !== undefined, function() {
 
 		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
@@ -546,7 +566,7 @@ render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 
 		var objdata = geo2objdata(geo);
 		var mesh = vineTreeMesh(geo, objdata.vineTree);
-		var vineProg = vineShaders.prog;
+		var vineProg = vineAssets.vineProgram.prog;
 		gl.useProgram(vineProg);
 		gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
 		mesh.draw(gl, vineProg);
@@ -561,17 +581,20 @@ render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 // ----------------------------------------------------------------------------
 // Pixel drawing
 
-var drawPixelsShaders = {
-	vertShader: 'assets/shaders/drawPixels.vert',
-	fragShader: 'assets/shaders/drawPixels.frag',
-	prog: undefined
+var drawPixelsAssets = {
+	shaderProgram: {
+		type: 'shaderProgram',
+		vertShader: 'assets/shaders/drawPixels.vert',
+		fragShader: 'assets/shaders/drawPixels.frag',
+		prog: undefined
+	}
 };
 var vertBufferCache = {};
 var colorBufferCache = {};
 // Pixels come in as bytes
 render.drawPixels = function(gl, pixelData, asyncCallback) {
-	ensureShadersLoaded(gl, drawPixelsShaders, asyncCallback !== undefined, function() {
-		var drawPixelsProg = drawPixelsShaders.prog;
+	ensureAssetsLoaded(gl, drawPixelsAssets, asyncCallback !== undefined, function() {
+		var drawPixelsProg = drawPixelsAssets.shaderProgram.prog;
 		gl.useProgram(drawPixelsProg);
 
 		var h = gl.drawingBufferHeight;
