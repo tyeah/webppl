@@ -133,21 +133,11 @@ function ensureShadersLoaded(gl, shaderObj, async, callback) {
 }
 
 
-function viewportMatrix(v) {
-	// Column-major nonsense
-	return [
-		2 /(v.xmax - v.xmin), 0, 0,
-		0, 2 / (v.ymax - v.ymin), 0,
-		-(v.xmin + v.xmax) / (v.xmax - v.xmin), -(v.ymin + v.ymax) / (v.ymax - v.ymin), 1
-	];
-}
-
-
 // ----------------------------------------------------------------------------
-// 2D Mesh class
+// Mesh class
 
 
-function Mesh2D() {
+function Mesh() {
 	this.vertices = [];
 	this.uvs = [];
 	this.normals = [];
@@ -155,7 +145,7 @@ function Mesh2D() {
 
 	this.buffers = undefined;
 };
-Mesh2D.prototype.append = function(other) {
+Mesh.prototype.append = function(other) {
 	var n = this.vertices.length;
 	this.vertices = this.vertices.concat(other.vertices);
 	this.uvs = this.uvs.concat(other.uvs);
@@ -165,18 +155,19 @@ Mesh2D.prototype.append = function(other) {
 		this.indices.push(other.indices[i] + n);
 	}
 };
-Mesh2D.prototype.recomputeBuffers = function(gl) {
+Mesh.prototype.recomputeBuffers = function(gl) {
 
 	this.destroyBuffers(gl);	// get rid of existing buffers (if any)
 	this.buffers = {};
 
 	var n = this.vertices.length;
 
-	var vertices = new Float32Array(n*2);
+	var vertices = new Float32Array(n*3);
 	for (var i = 0; i < n; i++) {
 		var v = this.vertices[i];
-		vertices[2*i] = v.x;
-		vertices[2*i+1] = v.y;
+		vertices[3*i] = v.x;
+		vertices[3*i+1] = v.y;
+		vertices[3*i+2] = v.z;
 	}
 	this.buffers.vertices = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
@@ -195,11 +186,12 @@ Mesh2D.prototype.recomputeBuffers = function(gl) {
 	}
 
 	if (this.normals.length > 0) {
-		var normals = new Float32Array(n*2);
+		var normals = new Float32Array(n*3);
 		for (var i = 0; i < n; i++) {
 			var nrm = this.normals[i];
-			normals[2*i] = nrm.x;
-			normals[2*i+1] = nrm.y;
+			normals[3*i] = nrm.x;
+			normals[3*i+1] = nrm.y;
+			normals[3*i+2] = nrm.z;
 		}
 		this.buffers.normals = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
@@ -212,7 +204,7 @@ Mesh2D.prototype.recomputeBuffers = function(gl) {
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 	this.buffers.numIndices = indices.length;
 };
-Mesh2D.prototype.destroyBuffers = function(gl) {
+Mesh.prototype.destroyBuffers = function(gl) {
 	if (this.buffers !== undefined) {
 		gl.deleteBuffer(this.buffers.vertices);
 		if (this.buffers.uvs)
@@ -223,7 +215,7 @@ Mesh2D.prototype.destroyBuffers = function(gl) {
 		this.buffers = undefined;
 	}
 };
-Mesh2D.prototype.draw = function(gl, prog) {
+Mesh.prototype.draw = function(gl, prog) {
 	if (this.buffers === undefined) {
 		this.recomputeBuffers(gl);
 	}
@@ -234,7 +226,7 @@ Mesh2D.prototype.draw = function(gl, prog) {
 
 	gl.enableVertexAttribArray(vertLoc);
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
-	gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
+	gl.vertexAttribPointer(vertLoc, 3, gl.FLOAT, false, 0, 0);
 
 	if (uvLoc !== -1) {
 		gl.enableVertexAttribArray(uvLoc);
@@ -245,7 +237,7 @@ Mesh2D.prototype.draw = function(gl, prog) {
 	if (normLoc !== -1) {
 		gl.enableVertexAttribArray(normLoc);
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
-		gl.vertexAttribPointer(normLoc, 2, gl.FLOAT, false, 0, 0);
+		gl.vertexAttribPointer(normLoc, 3, gl.FLOAT, false, 0, 0);
 	}
 
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
@@ -385,9 +377,9 @@ function controlPoints(p0, p1, prev, next) {
 	return [p0, p01, p11, p1];
 }
 
-function vine(cps, curveFn, width0, width1, v0, v1) {
+function vine(cps, curveFn, width0, width1, v0, v1, depth) {
 
-	var mesh = new Mesh2D();
+	var mesh = new Mesh();
 
 	var points = curveFn(cps);
 	var n = points.length;
@@ -421,10 +413,10 @@ function vine(cps, curveFn, width0, width1, v0, v1) {
 		normal.multiplyScalar(w2);
 		var p0 = center.clone().sub(normal);
 		var p1 = center.clone().add(normal);
-		mesh.vertices.push(p0);
-		mesh.vertices.push(p1);
-		mesh.normals.push(normal.clone().negate());
-		mesh.normals.push(normal);
+		mesh.vertices.push(new THREE.Vector3(p0.x, p0.y, depth));
+		mesh.vertices.push(new THREE.Vector3(p1.x, p1.y, depth));
+		mesh.normals.push(new THREE.Vector3(-normal.x, -normal.y, 0));
+		mesh.normals.push(new THREE.Vector3(normal.x, normal.y, 0));
 	}
 
 	var idx = 0;
@@ -439,7 +431,7 @@ function vine(cps, curveFn, width0, width1, v0, v1) {
 
 function vineTree(tree, bezFn) {
 
-	var mesh = new Mesh2D();
+	var mesh = new Mesh();
 
 	function buildVineTreeRec(tree, v, prevs) {
 		// Handle this point
@@ -454,13 +446,13 @@ function vineTree(tree, bezFn) {
 				// next = tree.children[0].point.clone().add(
 				// 	tree.children[1].point
 				// ).multiplyScalar(0.5);
-				// next = tree.children[0].point;
-				next = tree.children[1].point;
+				next = tree.children[0].point;
+				// next = tree.children[1].point;
 			}
 			var cps = controlPoints(p0, p1, prev, next);
 			var w0 = prevs[prevs.length - 1].width;
 			var w1 = tree.width;
-			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1);
+			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1, tree.depth);
 			mesh.append(vineMesh);
 		}
 
@@ -486,6 +478,8 @@ function branchListToPointTree(branches) {
 	var treeNodes = [];
 
 	// Sweep through once to create the nodes, but not the child pointers
+	var depth = 1;
+	var depthEps = 1e-6;
 	for (var br = branches; br; br = br.next) {
 		// Store the tree root specially (since it doesn't map to anything
 		//    in the linked list)
@@ -493,15 +487,18 @@ function branchListToPointTree(branches) {
 			treeNodes.root = {
 				// Needed b/c JSON loses prototype information
 				point: new THREE.Vector2().copy(br.branch.start),
+				depth: undefined,
 				width: br.branch.width,
 				children: []
 			};
 		}
 		treeNodes.push({
 			point: new THREE.Vector2().copy(br.branch.end),
+			depth: depth,
 			width: br.branch.width,
 			children: []
 		});
+		depth -= 1e-6;
 		linkedListNodes.push(br);
 	}
 
@@ -515,8 +512,16 @@ function branchListToPointTree(branches) {
 		parentNode.children.push(treeNode);
 	}
 
+	return {
+		treeRoot: treeNodes.root,
+		minDepth: -1,
+		maxDepth: 1
+	}
+}
 
-	return treeNodes.root;
+function viewportMatrix(v) {
+	var m = new THREE.Matrix4().makeOrthographic(v.xmin, v.xmax, v.ymax, v.ymin, v.zmin, v.zmax);
+	return m.elements;
 }
 
 var bezFn = makeBezierUniform(20);
@@ -532,11 +537,21 @@ render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 
 		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-		var viewportMat = viewportMatrix(viewport);
-		gl.uniformMatrix3fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
-
-		var tree = branchListToPointTree(geo);
+		var rets = branchListToPointTree(geo);
+		var tree = rets.treeRoot;
 		var mesh = vineTree(tree, bezFn);
+
+		var viewport3d = {
+			xmin: viewport.xmin,
+			xmax: viewport.xmax,
+			ymin: viewport.ymin,
+			ymax: viewport.ymax,
+			zmin: rets.minDepth,
+			zmax: rets.maxDepth
+		}
+		var viewportMat = viewportMatrix(viewport3d);
+		gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
+
 		mesh.draw(gl, vineProg);
 		gl.flush();
 		mesh.destroyBuffers(gl);

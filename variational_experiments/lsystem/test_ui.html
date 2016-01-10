@@ -51,7 +51,9 @@
 			function renderParticleGLDetailed(canvas, particle, callback) {
 				// Render
 				gl.clearColor(0, 0, 0, 0);
-				gl.clear(gl.COLOR_BUFFER_BIT);
+				gl.depthFunc(gl.LEQUAL); 
+			    gl.enable(gl.DEPTH_TEST);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 				render.renderGLDetailed(gl, viewport, particle.geo, function() {
 					// Read back pixels
 					var pixelData = new Uint8Array(canvas.width*canvas.height*4);
@@ -104,8 +106,8 @@
 				} else {
 					var glCanvas = $('#canvas-gl');
 					glCanvas.prop(fullTargetSize);
-					renderParticle(canvas, particle, targetImg, renderParticleCanvasProxy, function() {
-					// renderParticle(canvas, particle, targetImg, renderParticleGLDetailed, function() {
+					// renderParticle(canvas, particle, targetImg, renderParticleCanvasProxy, function() {
+					renderParticle(canvas, particle, targetImg, renderParticleGLDetailed, function() {
 						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 						glCanvas.prop(smallTargetSize);
 						renderParticle(canvas_small, particle, undefined, renderParticleCanvasProxy, function() {
