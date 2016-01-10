@@ -170,13 +170,28 @@ var makeProgram = function(neurallyGuided) {
 		targetFactor();
 	};
 
+	var addFlower = function(newflower) {
+		// Update model state
+		globalStore.geo = {
+			type: 'flower',
+			flower: newflower,
+			next: globalStore.geo,
+			n: globalStore.geo ? globalStore.geo.n + 1 : 1
+		};
+		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.flower(newflower));
+
+		// Add new heuristic factor
+		targetFactor();
+	}
+
 
 	var initialWidth = 0.75;
 	var widthDecay = 0.975;
 	var minWidthPercent = 0.2;
 	var minWidth = minWidthPercent*initialWidth;
 	var leafAspect = 2.09859154929577;
-	var leafWidthMul = 1.25;
+	var leafWidthMul = 1.3;
+	var flowerRadMul = 1;
 
 	var state = function(obj) {
 		return {
@@ -245,7 +260,8 @@ var makeProgram = function(neurallyGuided) {
 			var terminateProb = 0.5;
 			if (_flip(terminateProb, newState, 'terminate')) {
 				globalStore.terminated = true;
-			} else {
+			}
+			// } else {
 				// Generate no further branches w/ prob 1/3
 				// Generate one further branch w/ prob 1/3
 				// Generate two further branches w/ prob 1/3
@@ -258,10 +274,21 @@ var makeProgram = function(neurallyGuided) {
 							}
 							// else factor(0);
 						});
+					} else {
+						// We decided not to generate any further branches.
+						// Should we generate a flower at the end of this branch?
+						// TODO: Make this choice neurally-guided
+						if (flip(0.5)) {
+							addFlower({
+								center: newbranch.end,
+								radius: flowerRadMul * newbranch.width,
+								angle: newbranch.angle
+							});
+						}
 					}
 					// else factor(0);
 				});
-			}
+			// }
 		});
 	};
 

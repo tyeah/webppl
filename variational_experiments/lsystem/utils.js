@@ -361,7 +361,18 @@ var bboxes = {
 			box.expandByPoint(p3);
 			return box;
 		}
-	})()
+	})(),
+	flower: function(flower) {
+		var min = new THREE.Vector2(
+			flower.center.x - flower.radius,
+			flower.center.y - flower.radius
+		);
+		var max = new THREE.Vector2(
+			flower.center.x + flower.radius,
+			flower.center.y + flower.radius
+		);
+		return new THREE.Box2(min, max);
+	}
 };
 
 

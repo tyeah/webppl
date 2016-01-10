@@ -339,12 +339,20 @@ function renderLeaf(context, leaf) {
 	context.restore();
 }
 
+function renderFlower(context, flower) {
+	context.beginPath();
+	context.arc(flower.center.x, flower.center.y, flower.radius, 0, Math.PI*2);
+	context.fill();
+}
+
 function renderGeo(context, geo) {
 	switch (geo.type) {
 		case 'branch':
 			renderBranch(context, geo.branch); break;
 		case 'leaf':
 			renderLeaf(context, geo.leaf); break;
+		case 'flower':
+			renderFlower(context, geo.flower); break;
 		default:
 			throw 'Unrecognized geo type';
 	}
@@ -509,13 +517,13 @@ function billboard() {
 }
 
 // Convert geo linked list to a top-down point tree for branches, plus
-//    arrays for other geo types.
+//    arrays for billboard geo
 function geo2objdata(geo) {
 	// Kept in correspondence to map one to the other
 	var branchListNodes = [];
 	var branchTreeNodes = [];
 
-	var leaves = [];
+	var billboards = [];
 
 	// Sweep through geo once to create tree nodes, leaves, etc.
 	var depth = 1;
@@ -541,9 +549,20 @@ function geo2objdata(geo) {
 			});
 			branchListNodes.push(g);
 		} else if (g.type === 'leaf') {
-			leaves.push({
-				leaf: g.leaf,
+			billboards.push({
+				type: 'leaf',
+				center: g.leaf.center,
+				scale: g.leaf.length,
+				angle: g.leaf.angle,
 				depth: depth - (1.5 + 0.1*Math.random())*depthEps
+			});
+		} else if (g.type === 'flower') {
+			billboards.push({
+				type: 'flower',
+				center: g.flower.center,
+				scale: g.flower.radius*2,
+				angle: g.flower.angle,
+				depth: depth
 			});
 		} else {
 			throw 'Unrecognized geo type ' + g.type;
@@ -563,7 +582,7 @@ function geo2objdata(geo) {
 
 	return {
 		vineTree: branchTreeNodes.root,
-		leaves: leaves.length > 0 ? leaves : undefined
+		billboards: billboards.length > 0 ? billboards: undefined
 	};
 }
 
@@ -625,9 +644,14 @@ var vineAssets = {
 		fragShader: 'shaders/billboard.frag',
 		prog: undefined
 	},
-	leafTexture: {
+	leaf: {
 		type: 'texture',
 		image: 'textures/leaf.png',
+		tex: undefined
+	},
+	flower: {
+		type: 'texture',
+		image: 'textures/flower.png',
 		tex: undefined
 	}
 };
@@ -657,25 +681,31 @@ render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 		vmesh.draw(gl, vineProg);
 		vmesh.destroyBuffers(gl);
 		//
-		if (objdata.leaves) {
+		if (objdata.billboards) {
+			// Sort all billboard objects (leaves and flowers) by depth,
+			//    storing which texture to use for each
+			objdata.billboards.sort(function(a, b) {
+				if (a.depth > b.depth) return 1;
+				if (a.depth < b.depth) return -1;
+				return 0;
+			});
+			// Then render them back-to-front
 			var bbProg = vineAssets.billboardProgram.prog;
 			gl.useProgram(bbProg);
 			var matLoc = gl.getUniformLocation(bbProg, 'viewMat');
 			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, vineAssets.leafTexture.tex);
 			gl.uniform1i(gl.getUniformLocation(bbProg, "tex"), 0);
-			// Sort by depth (back to front)
-			objdata.leaves.sort(function(a, b) { return a.depth > b.depth; });
 			var scalemat = new THREE.Matrix4();
 			var rotmat = new THREE.Matrix4();
 			var transmat = new THREE.Matrix4();
 			var fullmat = new THREE.Matrix4();
-			for (var i = 0; i < objdata.leaves.length; i++) {
-				var l = objdata.leaves[i];
-				scalemat.makeScale(l.leaf.length, l.leaf.length, 1);
-				rotmat.makeRotationZ(l.leaf.angle);
-				var c = l.leaf.center;
-				transmat.makeTranslation(c.x, c.y, l.depth);
+			for (var i = 0; i < objdata.billboards.length; i++) {
+				var obj = objdata.billboards[i];
+				gl.bindTexture(gl.TEXTURE_2D, vineAssets[obj.type].tex);
+				scalemat.makeScale(obj.scale, obj.scale, 1);
+				rotmat.makeRotationZ(obj.angle);
+				var c = obj.center;
+				transmat.makeTranslation(c.x, c.y, obj.depth);
 				fullmat.copy(viewportMat).multiply(transmat).multiply(rotmat).multiply(scalemat);
 				gl.uniformMatrix4fv(matLoc, false, fullmat.elements);
 				bboard.draw(gl, bbProg);

@@ -49,6 +49,8 @@
 			}
 
 			function renderParticleGLDetailed(canvas, particle, callback) {
+				var glCanvas = $('#canvas-gl');
+				glCanvas.prop({width: canvas.width, height: canvas.height});
 				// Render
 				gl.clearColor(0, 0, 0, 0);
 				gl.depthFunc(gl.LEQUAL); 
@@ -106,12 +108,9 @@
 					ctx.putImageData(particle.imageData, 0, 0);
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
-					var glCanvas = $('#canvas-gl');
-					glCanvas.prop(fullTargetSize);
 					// renderParticle(canvas, particle, targetImg, renderParticleCanvasProxy, function() {
 					renderParticle(canvas, particle, targetImg, renderParticleGLDetailed, function() {
 						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-						glCanvas.prop(smallTargetSize);
 						renderParticle(canvas_small, particle, undefined, renderParticleCanvasProxy, function() {
 							particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
 						});
