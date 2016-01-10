@@ -1,5 +1,4 @@
-// Process generated data into a form suitable for use by an external
-//    neural net library.
+// Train neurally-guided model
 // Command line arguments:
 // * --program=name: Runs the WebPPL program in programs/name.wppl
 // * --trainingTraces=name: Trains on traces in gen_traces/name.txt
