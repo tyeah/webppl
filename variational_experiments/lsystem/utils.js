@@ -68,8 +68,12 @@ ImageData2D.prototype = {
 		return this.loadFromCanvas(canv);
 	},
 	numSameBinary: function(other) {
-		assert(this.width === other.width && this.height === other.height,
-			'numSameBinary: image dimensions do not match!');
+		// assert(this.width === other.width && this.height === other.height,
+		// 	'numSameBinary: image dimensions do not match!');
+		if (this.width !== other.width || this.height !== other.height) {
+			assert(false, 'numSameBinary: image dimensions do not match (' +
+				this.width + 'x' + this.height + ' vs. ' + other.width + 'x' + other.height + ')');
+		}
 		var sim = 0;
 		var n = this.data.length | 0;
 		for (var i = 0; i < n; i += 4) {  // stride of 4 for RGBA pixels
@@ -247,7 +251,7 @@ function TargetImageDatabase(directory) {
 			var startPos = new THREE.Vector2(parseFloat(coords[0]), parseFloat(coords[1]));
 
 			var target = {
-				index: i,
+				index: this.targetsByIndex.length,
 				shortname: shortname,
 				filename: fullname,
 				image: undefined,
