@@ -429,11 +429,59 @@ function vine(cps, curveFn, width0, width1, v0, v1, depth) {
 	return mesh;
 }
 
-function vineTree(tree, bezFn) {
+// Convert geo linked list to a top-down point tree for branches, plus
+//    arrays for other geo types.
+function geo2objdata(geo) {
+	// Kept in correspondence to map one to the other
+	var branchListNodes = [];
+	var branchTreeNodes = [];
 
-	var mesh = new Mesh();
+	// Sweep through geo once to create tree nodes, leaves, etc.
+	var depth = 1;
+	var depthEps = 1e-6;
+	for (var g = geo; g; g = g.next) {
+		if (g.type === 'branch') {
+			// Store the tree root specially (since it doesn't map to anything
+			//    in the linked list)
+			if (g.parent === undefined) {
+				branchTreeNodes.root = {
+					// Needed b/c JSON loses prototype information
+					point: new THREE.Vector2().copy(g.branch.start),
+					depth: undefined,
+					width: g.branch.width,
+					children: []
+				};
+			}
+			branchTreeNodes.push({
+				point: new THREE.Vector2().copy(g.branch.end),
+				depth: depth,
+				width: g.branch.width,
+				children: []
+			});
+			depth -= 1e-6;
+			branchListNodes.push(g);
+		}
+	}
 
-	function buildVineTreeRec(tree, v, prevs) {
+	// Sweep through tree nodes a second time to create child pointers
+	for (var i = 0; i < branchListNodes.length; i++) {
+		var branch = branchListNodes[i];
+		var treeNode = branchTreeNodes[i];
+		var parentBranch = branch.parent;
+		var parentIdx = parentBranch === undefined ? 'root' : branchListNodes.indexOf(parentBranch);
+		var parentNode = branchTreeNodes[parentIdx];
+		parentNode.children.push(treeNode);
+	}
+
+	return {
+		vineTree: branchTreeNodes.root
+	};
+}
+
+// Given a point tree, build a vine mesh for that tree
+var bezFn = makeBezierUniform(20);
+function vineTreeMesh(mesh, tree) {
+	function buildVineTreeMesh(mesh, tree, v, prevs) {
 		// Handle this point
 		if (prevs.length > 0) {
 			var p0 = prevs[prevs.length - 1].point;
@@ -462,61 +510,13 @@ function vineTree(tree, bezFn) {
 			prevs.shift();
 		}
 		for (var i = 0; i < tree.children.length; i++) {
-			buildVineTreeRec(tree.children[i], v + 1, prevs.slice());
+			buildVineTreeMesh(mesh, tree.children[i], v + 1, prevs.slice());
 		}
 	}
 
-	buildVineTreeRec(tree, 0, []);
+	var mesh = new Mesh();
+	buildVineTreeMesh(mesh, tree, 0, []);
 	return mesh;
-}
-
-// Convert branch linked list (w/ parent pointers) to a top-down point tree
-//    (for WebGL vine rendering)
-function branchListToPointTree(branches) {
-	// Kept in correspondence to map one to the other
-	var linkedListNodes = [];
-	var treeNodes = [];
-
-	// Sweep through once to create the nodes, but not the child pointers
-	var depth = 1;
-	var depthEps = 1e-6;
-	for (var br = branches; br; br = br.next) {
-		// Store the tree root specially (since it doesn't map to anything
-		//    in the linked list)
-		if (br.parent === undefined) {
-			treeNodes.root = {
-				// Needed b/c JSON loses prototype information
-				point: new THREE.Vector2().copy(br.branch.start),
-				depth: undefined,
-				width: br.branch.width,
-				children: []
-			};
-		}
-		treeNodes.push({
-			point: new THREE.Vector2().copy(br.branch.end),
-			depth: depth,
-			width: br.branch.width,
-			children: []
-		});
-		depth -= 1e-6;
-		linkedListNodes.push(br);
-	}
-
-	// Sweep through a second time to create child pointers
-	for (var br = branches; br; br = br.next) {
-		var idx = linkedListNodes.indexOf(br);
-		var treeNode = treeNodes[idx];
-		var parentBr = br.parent;
-		var parentIdx = parentBr === undefined ? 'root' : linkedListNodes.indexOf(parentBr);
-		var parentNode = treeNodes[parentIdx];
-		parentNode.children.push(treeNode);
-	}
-
-	return {
-		treeRoot: treeNodes.root,
-		minDepth: -1,
-		maxDepth: 1
-	}
 }
 
 function viewportMatrix(v) {
@@ -524,7 +524,6 @@ function viewportMatrix(v) {
 	return m.elements;
 }
 
-var bezFn = makeBezierUniform(20);
 var vineShaders = {
 	vertShader: 'assets/shaders/vine_bumpy.vert',
 	fragShader: 'assets/shaders/vine_textured.frag',
@@ -532,26 +531,24 @@ var vineShaders = {
 };
 render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 	ensureShadersLoaded(gl, vineShaders, asyncCallback !== undefined, function() {
-		var vineProg = vineShaders.prog;
-		gl.useProgram(vineProg);
 
 		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
-		var rets = branchListToPointTree(geo);
-		var tree = rets.treeRoot;
-		var mesh = vineTree(tree, bezFn);
 
 		var viewport3d = {
 			xmin: viewport.xmin,
 			xmax: viewport.xmax,
 			ymin: viewport.ymin,
 			ymax: viewport.ymax,
-			zmin: rets.minDepth,
-			zmax: rets.maxDepth
+			zmin: -1,
+			zmax: 1
 		}
 		var viewportMat = viewportMatrix(viewport3d);
-		gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
 
+		var objdata = geo2objdata(geo);
+		var mesh = vineTreeMesh(geo, objdata.vineTree);
+		var vineProg = vineShaders.prog;
+		gl.useProgram(vineProg);
+		gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
 		mesh.draw(gl, vineProg);
 		gl.flush();
 		mesh.destroyBuffers(gl);
