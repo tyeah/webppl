@@ -7,8 +7,13 @@
 // * --outputName=name: Writes output .csv to performance_eval/name.txt.
 //   [Optional] Defaults to the value of --trainedModel, or 'prior' if there
 //      trained model provided.
+// * --testDir=name: Tests on targets/datasets/testDir/*.png 
+//	[Optional] Defaults to every other image in targetDB specified in the .wppl file. 
 // * --targetName=name: Only tests on targets/training/name.png
 //   [Optional] If omitted, will test on all target images
+// * --numReps=num: Tests on num images. 
+//	[Optional] If separate test database specified, defaults to the size of the test image database. 
+// Otherwise, default is 49.  
 // * --sampler=[smc|mh]: Which sampling algorithm to use
 //   [Optional] Defaults to smc
 
@@ -36,6 +41,7 @@ var opts = require('minimist')(process.argv.slice(2), {
 var program = opts.program;
 assert(program, 'Must define --program option');
 var trainedModel = opts.trainedModel;
+var testDir = opts.testDir;
 var outputName = opts.outputName || trainedModel || 'prior';
 console.log(opts);
 
@@ -53,7 +59,12 @@ var rootdir = __dirname + '/..';
 var rets = utils.execWebpplFileWithRoot(file, rootdir);
 var globalStore = rets.globalStore;
 var viewport = rets.viewport;
-var targetDB = rets.targetDB;
+var testDB = rets.targetDB;
+
+if (testDir) {
+	testDB = utils.new(lsysUtils.TargetImageDatabase, __dirname + '/../targets/datasets/' + testDir);
+}
+
 var generate = trainedModel ? rets.generateGuided : rets.generate;
 
 
@@ -69,19 +80,26 @@ var numReps = opts.numReps;
 // If there is a targetDB, define list of target images we will test on
 // Else, just leave this blank
 var testlist = [];
-if (targetDB) {
+if (testDB) {
 	if (opts.targetName) {
 		// The same target, numReps times
 		for (var i = 0; i < numReps; i++) {
-			testlist.push(targetDB.getTargetByName(opts.targetName).index);
+			testlist.push(testDB.getTargetByName(opts.targetName).index);
 		}
-	} else {
+	} else if (!testDir) { //no separate test directory
 		// Every other image in our 98-image training set
 		// TODO: A proper, separate test set
 		for (var i = 0; i < numReps; i++) {
 			testlist.push(2*i);
 		}
 	}
+	else { //separate test directory has been specified
+		numReps = testDB.numTargets();
+		for (var i = 0; i < numReps; i++) {
+			testlist.push(i);
+		}		
+	}
+
 }
 
 
@@ -108,9 +126,9 @@ for (var i = opts.start; i <= opts.end; i += opts.incr) {
 		if (!warmUp) {
 			console.log('  test ' + (j+1));
 		}
-		if (targetDB) {
+		if (testDB) {
 			var targetIdx = testlist[j];
-			globalStore.target = targetDB.getTargetByIndex(targetIdx);	
+			globalStore.target = testDB.getTargetByIndex(targetIdx);	
 		}
 		var t0 = present();
 		var retval;
