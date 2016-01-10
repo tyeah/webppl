@@ -141,13 +141,13 @@ var makeProgram = function(neurallyGuided) {
 	var _flip = makeSampler('bernoulli', [ad.scalar.sigmoid]);
 
 
-	var addBranch = function(newbranch, prevGeo) {
+	var addBranch = function(newbranch, prevBranch) {
 		// Update model state
 		globalStore.geo = {
 			type: 'branch',
 			branch: newbranch,
 			next: globalStore.geo,
-			parent: prevGeo,
+			parent: prevBranch,
 			n: globalStore.geo ? globalStore.geo.n + 1 : 1
 		};
 		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.branch(newbranch));
@@ -184,7 +184,7 @@ var makeProgram = function(neurallyGuided) {
 			pos: obj.pos,
 			angle: obj.angle,
 			width: obj.width,
-			prevGeo: obj.prevGeo,
+			prevBranch: obj.prevBranch,
 			features: neurallyGuided ? globalStore.nnGuide.localFeatures(obj) : undefined
 		};
 	};
@@ -194,7 +194,7 @@ var makeProgram = function(neurallyGuided) {
 	};
 
 	var leafOpts = ['none', 'left', 'right'];
-	var leafProbs = [1/3, 1/3, 1/3];
+	var leafProbs = [1, 1, 1];
 	var branch = function(currState) {
 
 		// Generate new branch
@@ -207,7 +207,15 @@ var makeProgram = function(neurallyGuided) {
 			width: width,
 			end: polar2rect(length, newang).add(currState.pos)
 		};
-		addBranch(newbranch, currState.prevGeo);
+		addBranch(newbranch, currState.prevBranch);
+
+		var newState = state({
+			depth: currState.depth + 1,
+			pos: newbranch.end,
+			angle: newbranch.angle,
+			width: newbranch.width,
+			prevBranch: globalStore.geo
+		});
 
 		// Generate leaf?
 		// TODO: Make these ERPs neurally-guided(?)
@@ -227,14 +235,6 @@ var makeProgram = function(neurallyGuided) {
 				center: lcenter
 			});
 		}
-
-		var newState = state({
-			depth: currState.depth + 1,
-			pos: newbranch.end,
-			angle: newbranch.angle,
-			width: newbranch.width,
-			prevGeo: globalStore.geo
-		});
 
 		if (neurallyGuided) {
 			globalStore.nnGuide.step(globalStore, newState);
@@ -300,14 +300,14 @@ var makeProgram = function(neurallyGuided) {
 			// pos: utils.new(THREE.Vector2, 0, 0),
 			angle: 0,
 			width: initialWidth,
-			prevGeo: undefined
+			prevBranch: undefined
 		});
 		var startState = state({
 			depth: initState.depth,
 			pos: initState.pos,
 			angle: _gaussian(-Math.PI/2, Math.PI/6, initState, 'startAngle'),
 			width: initState.width,
-			prevGeo: initState.prevGeo
+			prevBranch: initState.prevBranch
 		});
 
 		future(function() { branch(startState); });

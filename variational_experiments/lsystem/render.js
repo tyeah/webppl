@@ -85,7 +85,9 @@ function loadImage_node(filename, async, callback) {
 }
 
 function loadImage_browser(filename, async, callback) {
-	assert(async, 'Browser image loads must be asynchronous');
+	if (!async) {
+		throw 'Browser image loads must be asynchronous';
+	}
 	var img = new Image;
 	img.addEventListener('load', function() {
 		callback(img);
@@ -96,7 +98,7 @@ function loadImage_browser(filename, async, callback) {
 var loadImage = (client === 'node') ? loadImage_node : loadImage_browser;
 
 function loadTexture(gl, filename, async, callback) {
-	var img = loadImage(filename, async, function() {
+	loadImage(filename, async, function(img) {
 		var texture = gl.createTexture();
 		gl.bindTexture(gl.TEXTURE_2D, texture);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
@@ -113,7 +115,7 @@ function loadTexture(gl, filename, async, callback) {
 function ensureAssetsLoaded(gl, assets, async, callback) {
 
 	function FULLPATH(path) {
-		return ROOT + '/' + path;
+		return ROOT + '/assets/' + path;
 	}
 
 	function loadAssets(asslist, cb) {
@@ -124,12 +126,17 @@ function ensureAssetsLoaded(gl, assets, async, callback) {
 			k = callback;
 		} else {
 			k = function() {
-				loadAssets(gl, remainingAssets, async, callback);
+				loadAssets(remainingAssets, callback);
 			};
 		}
 		if (asset.type === 'shaderProgram') {
 			loadShaderProgram(gl, FULLPATH(asset.vertShader), FULLPATH(asset.fragShader), async, function(prog) {
 				asset.prog = prog;
+				k();
+			});
+		} else if (asset.type === 'texture') {
+			loadTexture(gl, FULLPATH(asset.image), async, function(texture) {
+				asset.tex = texture;
 				k();
 			});
 		} else {
@@ -162,6 +169,41 @@ function Mesh() {
 
 	this.buffers = undefined;
 };
+
+Mesh.prototype.copy = (function() {
+	function copyvecs(dst, src) {
+		var n = src.length;
+		for (var i = 0; i < n; i++) {
+			dst.push(src[i].clone());
+		}
+	};
+	return function(other) {
+		this.indices = other.indices.slice();
+		copyvecs(this.vertices, other.vertices);
+		copyvecs(this.uvs, other.uvs);
+		copyvecs(this.normals, other.normals);
+		return this;
+	};
+})();
+
+Mesh.prototype.clone = function() {
+	return new Mesh().copy(this);
+};
+
+Mesh.prototype.transform = function(mat) {
+	var n = this.vertices.length;
+	for (var i = 0; i < n; i++) {
+		this.vertices[i].applyMatrix4(mat);
+	}
+	if (this.normals.length > 0) {
+		var nmat = new THREE.Matrix4().getInverse(mat).transpose();
+		for (var i = 0; i < n; i++) {
+			this.normals[i].applyMatrix4(nmat);
+		}
+	}
+	return this;
+};
+
 Mesh.prototype.append = function(other) {
 	var n = this.vertices.length;
 	this.vertices = this.vertices.concat(other.vertices);
@@ -171,7 +213,9 @@ Mesh.prototype.append = function(other) {
 	for (var i = 0; i < m; i++) {
 		this.indices.push(other.indices[i] + n);
 	}
+	return this;
 };
+
 Mesh.prototype.recomputeBuffers = function(gl) {
 
 	this.destroyBuffers(gl);	// get rid of existing buffers (if any)
@@ -221,6 +265,7 @@ Mesh.prototype.recomputeBuffers = function(gl) {
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 	this.buffers.numIndices = indices.length;
 };
+
 Mesh.prototype.destroyBuffers = function(gl) {
 	if (this.buffers !== undefined) {
 		gl.deleteBuffer(this.buffers.vertices);
@@ -232,6 +277,7 @@ Mesh.prototype.destroyBuffers = function(gl) {
 		this.buffers = undefined;
 	}
 };
+
 Mesh.prototype.draw = function(gl, prog) {
 	if (this.buffers === undefined) {
 		this.recomputeBuffers(gl);
@@ -446,12 +492,30 @@ function vine(cps, curveFn, width0, width1, v0, v1, depth) {
 	return mesh;
 }
 
+// Just a unit quad, centered at the origin, with UVs from [-1, 1];
+function billboard() {
+	var mesh = new Mesh();
+	mesh.vertices.push(new THREE.Vector3(-.5, -.5, 0));
+	mesh.vertices.push(new THREE.Vector3(.5, -.5, 0));
+	mesh.vertices.push(new THREE.Vector3(.5, .5, 0));
+	mesh.vertices.push(new THREE.Vector3(-.5, .5, 0));
+	mesh.uvs.push(new THREE.Vector2(0, 0));
+	mesh.uvs.push(new THREE.Vector2(1, 0));
+	mesh.uvs.push(new THREE.Vector2(1, 1));
+	mesh.uvs.push(new THREE.Vector2(0, 1));
+	mesh.indices.push(0); mesh.indices.push(1); mesh.indices.push(2);
+	mesh.indices.push(2); mesh.indices.push(3); mesh.indices.push(0);
+	return mesh;
+}
+
 // Convert geo linked list to a top-down point tree for branches, plus
 //    arrays for other geo types.
 function geo2objdata(geo) {
 	// Kept in correspondence to map one to the other
 	var branchListNodes = [];
 	var branchTreeNodes = [];
+
+	var leaves = [];
 
 	// Sweep through geo once to create tree nodes, leaves, etc.
 	var depth = 1;
@@ -476,8 +540,15 @@ function geo2objdata(geo) {
 				children: []
 			});
 			branchListNodes.push(g);
+		} else if (g.type === 'leaf') {
+			leaves.push({
+				leaf: g.leaf,
+				depth: depth - (1.5 + 0.1*Math.random())*depthEps
+			});
+		} else {
+			throw 'Unrecognized geo type ' + g.type;
 		}
-		depth -= 1e-6;
+		depth -= depthEps
 	}
 
 	// Sweep through tree nodes a second time to create child pointers
@@ -491,13 +562,14 @@ function geo2objdata(geo) {
 	}
 
 	return {
-		vineTree: branchTreeNodes.root
+		vineTree: branchTreeNodes.root,
+		leaves: leaves.length > 0 ? leaves : undefined
 	};
 }
 
 // Given a point tree, build a vine mesh for that tree
 var bezFn = makeBezierUniform(20);
-function vineTreeMesh(mesh, tree) {
+function vineTreeMesh(tree) {
 	function buildVineTreeMesh(mesh, tree, v, prevs) {
 		// Handle this point
 		if (prevs.length > 0) {
@@ -537,18 +609,29 @@ function vineTreeMesh(mesh, tree) {
 }
 
 function viewportMatrix(v) {
-	var m = new THREE.Matrix4().makeOrthographic(v.xmin, v.xmax, v.ymax, v.ymin, v.zmin, v.zmax);
-	return m.elements;
+	return new THREE.Matrix4().makeOrthographic(v.xmin, v.xmax, v.ymax, v.ymin, v.zmin, v.zmax);
 }
 
 var vineAssets = {
 	vineProgram: {
 		type: 'shaderProgram',
-		vertShader: 'assets/shaders/vine_bumpy.vert',
-		fragShader: 'assets/shaders/vine_textured.frag',
+		vertShader: 'shaders/vine_bumpy.vert',
+		fragShader: 'shaders/vine_textured.frag',
 		prog: undefined
+	},
+	billboardProgram: {
+		type: 'shaderProgram',
+		vertShader: 'shaders/billboard.vert',
+		fragShader: 'shaders/billboard.frag',
+		prog: undefined
+	},
+	leafTexture: {
+		type: 'texture',
+		image: 'textures/leaf.png',
+		tex: undefined
 	}
 };
+var bboard = billboard();
 render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 	ensureAssetsLoaded(gl, vineAssets, asyncCallback !== undefined, function() {
 
@@ -565,13 +648,42 @@ render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 		var viewportMat = viewportMatrix(viewport3d);
 
 		var objdata = geo2objdata(geo);
-		var mesh = vineTreeMesh(geo, objdata.vineTree);
+
+		//
+		var vmesh = vineTreeMesh(objdata.vineTree);
 		var vineProg = vineAssets.vineProgram.prog;
 		gl.useProgram(vineProg);
-		gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
-		mesh.draw(gl, vineProg);
+		gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat.elements);
+		vmesh.draw(gl, vineProg);
+		vmesh.destroyBuffers(gl);
+		//
+		if (objdata.leaves) {
+			var bbProg = vineAssets.billboardProgram.prog;
+			gl.useProgram(bbProg);
+			var matLoc = gl.getUniformLocation(bbProg, 'viewMat');
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, vineAssets.leafTexture.tex);
+			gl.uniform1i(gl.getUniformLocation(bbProg, "tex"), 0);
+			// Sort by depth (back to front)
+			objdata.leaves.sort(function(a, b) { return a.depth > b.depth; });
+			var scalemat = new THREE.Matrix4();
+			var rotmat = new THREE.Matrix4();
+			var transmat = new THREE.Matrix4();
+			var fullmat = new THREE.Matrix4();
+			for (var i = 0; i < objdata.leaves.length; i++) {
+				var l = objdata.leaves[i];
+				scalemat.makeScale(l.leaf.length, l.leaf.length, 1);
+				rotmat.makeRotationZ(l.leaf.angle);
+				var c = l.leaf.center;
+				transmat.makeTranslation(c.x, c.y, l.depth);
+				fullmat.copy(viewportMat).multiply(transmat).multiply(rotmat).multiply(scalemat);
+				gl.uniformMatrix4fv(matLoc, false, fullmat.elements);
+				bboard.draw(gl, bbProg);
+			}
+		}
+		//
+
 		gl.flush();
-		mesh.destroyBuffers(gl);
 
 		if (asyncCallback) asyncCallback();
 	});
@@ -584,8 +696,8 @@ render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
 var drawPixelsAssets = {
 	shaderProgram: {
 		type: 'shaderProgram',
-		vertShader: 'assets/shaders/drawPixels.vert',
-		fragShader: 'assets/shaders/drawPixels.frag',
+		vertShader: 'shaders/drawPixels.vert',
+		fragShader: 'shaders/drawPixels.frag',
 		prog: undefined
 	}
 };

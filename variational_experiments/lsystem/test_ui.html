@@ -53,6 +53,8 @@
 				gl.clearColor(0, 0, 0, 0);
 				gl.depthFunc(gl.LEQUAL); 
 			    gl.enable(gl.DEPTH_TEST);
+			    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+			    gl.enable (gl.BLEND);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 				render.renderGLDetailed(gl, viewport, particle.geo, function() {
 					// Read back pixels

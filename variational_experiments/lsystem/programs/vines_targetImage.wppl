@@ -152,7 +152,7 @@ var makeProgram = function(neurallyGuided) {
 			pos: obj.pos,
 			angle: obj.angle,
 			width: obj.width,
-			prevGeo: obj.prevGeo,
+			prevBranch: obj.prevBranch,
 			features: neurallyGuided ? globalStore.nnGuide.localFeatures(obj) : undefined
 		};
 	};
@@ -179,7 +179,7 @@ var makeProgram = function(neurallyGuided) {
 			type: 'branch',
 			branch: newbranch,
 			next: globalStore.geo,
-			parent: currState.prevGeo,
+			parent: currState.prevBranch,
 			n: globalStore.geo ? globalStore.geo.n + 1 : 1
 		};
 		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.branch(newbranch));
@@ -192,7 +192,7 @@ var makeProgram = function(neurallyGuided) {
 			pos: newbranch.end,
 			angle: newbranch.angle,
 			width: newbranch.width,
-			prevGeo: globalStore.geo
+			prevBranch: globalStore.geo
 		});
 
 		if (neurallyGuided) {
@@ -259,14 +259,14 @@ var makeProgram = function(neurallyGuided) {
 			// pos: utils.new(THREE.Vector2, 0, 0),
 			angle: 0,
 			width: initialWidth,
-			prevGeo: undefined
+			prevBranch: undefined
 		});
 		var startState = state({
 			depth: initState.depth,
 			pos: initState.pos,
 			angle: _gaussian(-Math.PI/2, Math.PI/6, initState, 'startAngle'),
 			width: initState.width,
-			prevGeo: initState.prevGeo
+			prevBranch: initState.prevBranch
 		});
 
 		future(function() { branch(startState); });
