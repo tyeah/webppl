@@ -44,7 +44,7 @@ function compileProgram(gl, vertSrc, fragSrc) {
 	return prog;
 }
 
-function loadShader_node(filename, async, callback) {
+function loadTextFile_node(filename, async, callback) {
 	var fs = require('fs');
 	if (async) {
 		fs.readFile(filename, function(err, data) {
@@ -55,7 +55,7 @@ function loadShader_node(filename, async, callback) {
 		callback(text); 
 	}
 }
-function loadShader_browser(filename, async, callback) {
+function loadTextFile_browser(filename, async, callback) {
 	$.ajax({
 		async: async,
 		dataType: 'text',
@@ -65,57 +65,102 @@ function loadShader_browser(filename, async, callback) {
 	    }
 	});
 }
-var loadShader = (client === 'node') ? loadShader_node : loadShader_browser;
+var loadTextFile = (client === 'node') ? loadTextFile_node : loadTextFile_browser;
 
-function loadShaders(shaders, async, callback) {
-	loadShader(shaders[0], async, function(text) {
-		if (shaders.length === 1) {
-			callback([text]);
-		} else {
-			loadShaders(shaders.slice(1), async, function(textList) {
-				var fullList = [text].concat(textList);
-				callback(fullList);
-			});
-		}
-	});
-}
-
-function loadAndCompileProgram(gl, vertFilename, fragFilename, async, callback) {
-	loadShaders([vertFilename, fragFilename], async, function(sources) {
-		var prog = compileProgram(gl, sources[0], sources[1]);
-		callback(prog);
-	});
-}
-
-function ensureShadersLoaded(gl, shaderObj, async, callback) {
-	if (shaderObj.prog === undefined) {
-		var vs = ROOT + '/' + shaderObj.vertShader;
-		var fs = ROOT + '/' + shaderObj.fragShader;
-		loadAndCompileProgram(gl, vs, fs, async, function(prog) {
-			shaderObj.prog = prog;
-			callback();
+function loadShaderProgram(gl, vertFilename, fragFilename, async, callback) {
+	loadTextFile(vertFilename, async, function(vertSrc) {
+		loadTextFile(fragFilename, async, function(fragSrc) {
+			var prog = compileProgram(gl, vertSrc, fragSrc);
+			callback(prog);
 		});
-	} else {
-		callback();
+	})
+}
+
+function loadImage_node(filename, async, callback) {
+	assert(!async, 'Node image loads must be synchronous');
+	var Canvas = require('canvas');
+	var img = new Canvas.Image;
+	img.src = filename;
+	callback(img);
+}
+
+function loadImage_browser(filename, async, callback) {
+	if (!async) {
+		throw 'Browser image loads must be asynchronous';
+	}
+	var img = new Image;
+	img.addEventListener('load', function() {
+		callback(img);
+	});
+	img.src = filename;
+}
+
+var loadImage = (client === 'node') ? loadImage_node : loadImage_browser;
+
+function loadTexture(gl, filename, async, callback) {
+	loadImage(filename, async, function(img) {
+		var texture = gl.createTexture();
+		gl.bindTexture(gl.TEXTURE_2D, texture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+		gl.generateMipmap(gl.TEXTURE_2D);
+		gl.bindTexture(gl.TEXTURE_2D, null);
+		callback(texture);
+	});
+}
+
+var ASSETS = {};
+
+function registerAssets(obj) {
+	for (var prop in obj) {
+		ASSETS[prop] = obj[prop];
 	}
 }
 
+render.loadAssets = function(gl, async, callback) {
 
-function viewportMatrix(v) {
-	// Column-major nonsense
-	return [
-		2 /(v.xmax - v.xmin), 0, 0,
-		0, 2 / (v.ymax - v.ymin), 0,
-		-(v.xmin + v.xmax) / (v.xmax - v.xmin), -(v.ymin + v.ymax) / (v.ymax - v.ymin), 1
-	];
+	function FULLPATH(path) {
+		return ROOT + '/assets/' + path;
+	}
+
+	function loadAssets(asslist, cb) {
+		var asset = asslist[0];
+		var remainingAssets = asslist.slice(1);
+		var k;	// continuation
+		if (remainingAssets.length === 0) {
+			k = callback;
+		} else {
+			k = function() {
+				loadAssets(remainingAssets, callback);
+			};
+		}
+		if (asset.type === 'shaderProgram') {
+			loadShaderProgram(gl, FULLPATH(asset.vertShader), FULLPATH(asset.fragShader), async, function(prog) {
+				asset.prog = prog;
+				k();
+			});
+		} else if (asset.type === 'texture') {
+			loadTexture(gl, FULLPATH(asset.image), async, function(texture) {
+				asset.tex = texture;
+				k();
+			});
+		} else {
+			throw 'Unrecognized asset type ' + asset.type;
+		}
+	}
+
+	var asslist = [];
+	for (var prop in ASSETS) asslist.push(ASSETS[prop]);
+	loadAssets(asslist, callback);
 }
 
 
 // ----------------------------------------------------------------------------
-// 2D Mesh class
+// Mesh class
 
 
-function Mesh2D() {
+function Mesh() {
 	this.vertices = [];
 	this.uvs = [];
 	this.normals = [];
@@ -123,7 +168,42 @@ function Mesh2D() {
 
 	this.buffers = undefined;
 };
-Mesh2D.prototype.append = function(other) {
+
+Mesh.prototype.copy = (function() {
+	function copyvecs(dst, src) {
+		var n = src.length;
+		for (var i = 0; i < n; i++) {
+			dst.push(src[i].clone());
+		}
+	};
+	return function(other) {
+		this.indices = other.indices.slice();
+		copyvecs(this.vertices, other.vertices);
+		copyvecs(this.uvs, other.uvs);
+		copyvecs(this.normals, other.normals);
+		return this;
+	};
+})();
+
+Mesh.prototype.clone = function() {
+	return new Mesh().copy(this);
+};
+
+Mesh.prototype.transform = function(mat) {
+	var n = this.vertices.length;
+	for (var i = 0; i < n; i++) {
+		this.vertices[i].applyMatrix4(mat);
+	}
+	if (this.normals.length > 0) {
+		var nmat = new THREE.Matrix4().getInverse(mat).transpose();
+		for (var i = 0; i < n; i++) {
+			this.normals[i].applyMatrix4(nmat);
+		}
+	}
+	return this;
+};
+
+Mesh.prototype.append = function(other) {
 	var n = this.vertices.length;
 	this.vertices = this.vertices.concat(other.vertices);
 	this.uvs = this.uvs.concat(other.uvs);
@@ -132,19 +212,22 @@ Mesh2D.prototype.append = function(other) {
 	for (var i = 0; i < m; i++) {
 		this.indices.push(other.indices[i] + n);
 	}
+	return this;
 };
-Mesh2D.prototype.recomputeBuffers = function(gl) {
+
+Mesh.prototype.recomputeBuffers = function(gl) {
 
 	this.destroyBuffers(gl);	// get rid of existing buffers (if any)
 	this.buffers = {};
 
 	var n = this.vertices.length;
 
-	var vertices = new Float32Array(n*2);
+	var vertices = new Float32Array(n*3);
 	for (var i = 0; i < n; i++) {
 		var v = this.vertices[i];
-		vertices[2*i] = v.x;
-		vertices[2*i+1] = v.y;
+		vertices[3*i] = v.x;
+		vertices[3*i+1] = v.y;
+		vertices[3*i+2] = v.z;
 	}
 	this.buffers.vertices = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
@@ -163,11 +246,12 @@ Mesh2D.prototype.recomputeBuffers = function(gl) {
 	}
 
 	if (this.normals.length > 0) {
-		var normals = new Float32Array(n*2);
+		var normals = new Float32Array(n*3);
 		for (var i = 0; i < n; i++) {
 			var nrm = this.normals[i];
-			normals[2*i] = nrm.x;
-			normals[2*i+1] = nrm.y;
+			normals[3*i] = nrm.x;
+			normals[3*i+1] = nrm.y;
+			normals[3*i+2] = nrm.z;
 		}
 		this.buffers.normals = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
@@ -180,7 +264,8 @@ Mesh2D.prototype.recomputeBuffers = function(gl) {
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 	this.buffers.numIndices = indices.length;
 };
-Mesh2D.prototype.destroyBuffers = function(gl) {
+
+Mesh.prototype.destroyBuffers = function(gl) {
 	if (this.buffers !== undefined) {
 		gl.deleteBuffer(this.buffers.vertices);
 		if (this.buffers.uvs)
@@ -191,7 +276,8 @@ Mesh2D.prototype.destroyBuffers = function(gl) {
 		this.buffers = undefined;
 	}
 };
-Mesh2D.prototype.draw = function(gl, prog) {
+
+Mesh.prototype.draw = function(gl, prog) {
 	if (this.buffers === undefined) {
 		this.recomputeBuffers(gl);
 	}
@@ -202,7 +288,7 @@ Mesh2D.prototype.draw = function(gl, prog) {
 
 	gl.enableVertexAttribArray(vertLoc);
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
-	gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
+	gl.vertexAttribPointer(vertLoc, 3, gl.FLOAT, false, 0, 0);
 
 	if (uvLoc !== -1) {
 		gl.enableVertexAttribArray(uvLoc);
@@ -213,7 +299,7 @@ Mesh2D.prototype.draw = function(gl, prog) {
 	if (normLoc !== -1) {
 		gl.enableVertexAttribArray(normLoc);
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.normals);
-		gl.vertexAttribPointer(normLoc, 2, gl.FLOAT, false, 0, 0);
+		gl.vertexAttribPointer(normLoc, 3, gl.FLOAT, false, 0, 0);
 	}
 
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
@@ -230,114 +316,81 @@ Mesh2D.prototype.draw = function(gl, prog) {
 
 
 // ----------------------------------------------------------------------------
-// Line segment rendering
+// Rendering lo-res proxy geometry via canvas
 
 
-render.renderLineSegs = function(canvas, viewport, branches, isIncremental, fillBackground) {
+function renderBranch(context, branch) {
+	context.beginPath();
+	context.lineWidth = branch.width;
+	context.moveTo(branch.start.x, branch.start.y);
+	context.lineTo(branch.end.x, branch.end.y);
+	context.stroke();
+}
+
+function renderLeaf(context, leaf) {
+	context.save();
+	context.translate(leaf.center.x, leaf.center.y);
+	context.rotate(leaf.angle);
+	context.scale(leaf.length, leaf.width);
+	context.beginPath();
+	context.arc(0, 0, 0.5, 0, Math.PI*2);
+	context.fill();
+	context.restore();
+}
+
+function renderFlower(context, flower) {
+	context.beginPath();
+	context.arc(flower.center.x, flower.center.y, flower.radius, 0, Math.PI*2);
+	context.fill();
+}
+
+function renderGeo(context, geo) {
+	switch (geo.type) {
+		case 'branch':
+			renderBranch(context, geo.branch); break;
+		case 'leaf':
+			renderLeaf(context, geo.leaf); break;
+		case 'flower':
+			renderFlower(context, geo.flower); break;
+		default:
+			throw 'Unrecognized geo type';
+	}
+}
+
+render.renderCanvasProxy = function(canvas, viewport, geo, isIncremental, fillBackground) {
 	fillBackground = fillBackground === undefined ? true : fillBackground;
 
-	var ctx = canvas.getContext('2d');
-
-	function world2img(p) {
-		return new THREE.Vector2(
-			canvas.width * (p.x - viewport.xmin) / (viewport.xmax - viewport.xmin),
-			canvas.height * (p.y - viewport.ymin) / (viewport.ymax - viewport.ymin)
-		);
-	}
-
-	function renderBranch(branch) {
-		var istart = world2img(branch.start);
-		var iend = world2img(branch.end);
-		var iwidth = branch.width / (viewport.xmax - viewport.xmin) * canvas.width;
-		ctx.beginPath();
-		ctx.lineWidth = iwidth;
-		ctx.moveTo(istart.x, istart.y);
-		ctx.lineTo(iend.x, iend.y);
-		ctx.stroke();
-	}
+	var context = canvas.getContext('2d');
+	context.save();
 
 	if (fillBackground) {
-		ctx.rect(0, 0, canvas.width, canvas.height);
-		ctx.fillStyle = 'white';
-		ctx.fill();
+		context.rect(0, 0, canvas.width, canvas.height);
+		context.fillStyle = 'white';
+		context.fill();
 	}
 
 	// Draw
-	ctx.strokeStyle = 'black';
-	ctx.lineCap = 'round';
-	// ctx.lineCap = 'butt';
+	context.strokeStyle = 'black';
+	context.fillStyle = 'black';
+	context.lineCap = 'round';
+	var vwidth = viewport.xmax - viewport.xmin;
+	var vheight = viewport.ymax - viewport.ymin;
+	context.scale(canvas.width/vwidth, canvas.height/vheight);
+	context.translate(-viewport.xmin, -viewport.ymin);
 	if (isIncremental) {
-		renderBranch(branches.branch);
+		renderGeo(context, geo);
 	} else {
-		for (var brObj = branches; brObj; brObj = brObj.next) {
-			renderBranch(brObj.branch);
+		for (var g = geo; g; g = g.next) {
+			renderGeo(context, g);
 		}
 	}
-}
 
-
-// OpenGL version of the same thing above (almost the same - minus the round line caps)
-var lineSegShaders = {
-	vertShader: 'shaders/vine_smooth.vert',
-	fragShader: 'shaders/vine_black.frag',
-	prog: undefined
-};
-function lineseg(start, end, width) {
-	start = new THREE.Vector2(start.x, start.y);
-	end = new THREE.Vector2(end.x, end.y);
-
-	var mesh = new Mesh2D();
-	var dir = end.clone().sub(start).normalize();
-	var normal = new THREE.Vector2(-dir.y, dir.x);
-	normal.multiplyScalar(0.5*width);
-
-	mesh.vertices.push(start.clone().add(normal));
-	mesh.vertices.push(start.clone().sub(normal));
-	mesh.vertices.push(end.clone().sub(normal));
-	mesh.vertices.push(end.clone().add(normal));
-
-	mesh.indices.push(0); mesh.indices.push(1); mesh.indices.push(2);
-	mesh.indices.push(2); mesh.indices.push(3); mesh.indices.push(0);
-
-	return mesh;
-}
-render.renderLineSegsGL = function(gl, viewport, branches, isIncremental, fillBackground, asyncCallback) {
-	ensureShadersLoaded(gl, lineSegShaders, asyncCallback !== undefined, function() {
-		fillBackground = fillBackground === undefined ? true : fillBackground;
-		var lineSegProg = lineSegShaders.prog;
-		gl.useProgram(lineSegProg);
-
-		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
-		var viewportMat = viewportMatrix(viewport);
-		gl.uniformMatrix3fv(gl.getUniformLocation(lineSegProg, 'viewMat'), false, viewportMat);
-
-		if (fillBackground) {
-			gl.clearColor(1, 1, 1, 1);
-			gl.clear(gl.COLOR_BUFFER_BIT);
-		}
-
-		var mesh;
-		if (isIncremental) {
-			mesh = lineseg(branches.branch.start, branches.branch.end, branches.branch.width);
-		} else {
-			mesh = new Mesh2D();
-			for (var brObj = branches; brObj; brObj = brObj.next) {
-				var tmpMesh = lineseg(brObj.branch.start, brObj.branch.end, brObj.branch.width);
-				mesh.append(tmpMesh);
-			}
-		}
-		mesh.draw(gl, lineSegProg);
-		gl.flush();
-		mesh.destroyBuffers(gl);
-
-		if (asyncCallback) asyncCallback();
-	});
+	context.restore();
 }
 
 
 // ----------------------------------------------------------------------------
-// Vine/beanstalk rendering
+// Nice-looking, hi-res OpenGL rendering
 
 
 function makeBezierUniform(n) {
@@ -394,9 +447,9 @@ function controlPoints(p0, p1, prev, next) {
 	return [p0, p01, p11, p1];
 }
 
-function vine(cps, curveFn, width0, width1, v0, v1) {
+function vine(cps, curveFn, width0, width1, v0, v1, depth) {
 
-	var mesh = new Mesh2D();
+	var mesh = new Mesh();
 
 	var points = curveFn(cps);
 	var n = points.length;
@@ -430,10 +483,10 @@ function vine(cps, curveFn, width0, width1, v0, v1) {
 		normal.multiplyScalar(w2);
 		var p0 = center.clone().sub(normal);
 		var p1 = center.clone().add(normal);
-		mesh.vertices.push(p0);
-		mesh.vertices.push(p1);
-		mesh.normals.push(normal.clone().negate());
-		mesh.normals.push(normal);
+		mesh.vertices.push(new THREE.Vector3(p0.x, p0.y, depth));
+		mesh.vertices.push(new THREE.Vector3(p1.x, p1.y, depth));
+		mesh.normals.push(new THREE.Vector3(-normal.x, -normal.y, 0));
+		mesh.normals.push(new THREE.Vector3(normal.x, normal.y, 0));
 	}
 
 	var idx = 0;
@@ -446,11 +499,112 @@ function vine(cps, curveFn, width0, width1, v0, v1) {
 	return mesh;
 }
 
-function vineTree(tree, bezFn) {
+// Just a unit quad, centered at the origin, with UVs from [-1, 1];
+function billboard() {
+	var mesh = new Mesh();
+	mesh.vertices.push(new THREE.Vector3(-.5, -.5, 0));
+	mesh.vertices.push(new THREE.Vector3(.5, -.5, 0));
+	mesh.vertices.push(new THREE.Vector3(.5, .5, 0));
+	mesh.vertices.push(new THREE.Vector3(-.5, .5, 0));
+	mesh.uvs.push(new THREE.Vector2(0, 0));
+	mesh.uvs.push(new THREE.Vector2(1, 0));
+	mesh.uvs.push(new THREE.Vector2(1, 1));
+	mesh.uvs.push(new THREE.Vector2(0, 1));
+	mesh.indices.push(0); mesh.indices.push(1); mesh.indices.push(2);
+	mesh.indices.push(2); mesh.indices.push(3); mesh.indices.push(0);
+	return mesh;
+}
 
-	var mesh = new Mesh2D();
+// Convert geo linked list to a top-down point tree for branches, plus
+//    arrays for billboard geo
+function geo2objdata(geo) {
+	// Kept in correspondence to map one to the other
+	var branchListNodes = [];
+	var branchTreeNodes = [];
 
-	function buildVineTreeRec(tree, v, prevs) {
+	var billboards = [];
+
+	// Preliminary sweep to compute range of depths
+	var nbranches = 0;
+	for (var g = geo; g; g = g.next) {
+		if (g.type === 'branch') {
+			g.depthLayer = nbranches;
+			nbranches++;
+		}
+	}
+	// Padded
+	minDepth = -2;
+	maxDepth = nbranches+ 2;
+
+	// Map depth values to -1 (far), 1 (near)
+	function mapdepth(d) {
+		var t = (d - minDepth) / (maxDepth - minDepth);
+		// t += 1e-5*Math.random();
+		return 2*t - 1;
+	}
+
+	// Sweep through geo once to create tree nodes, leaves, etc.
+	for (var g = geo; g; g = g.next) {
+		if (g.type === 'branch') {
+			// Store the tree root specially (since it doesn't map to anything
+			//    in the linked list)
+			if (g.parent === undefined) {
+				branchTreeNodes.root = {
+					// Needed b/c JSON loses prototype information
+					point: new THREE.Vector2().copy(g.branch.start),
+					width: g.branch.width,
+					children: [],
+					depth: undefined
+				};
+			}
+			branchTreeNodes.push({
+				point: new THREE.Vector2().copy(g.branch.end),
+				width: g.branch.width,
+				children: [],
+				depth: mapdepth(g.depthLayer)
+			});
+			branchListNodes.push(g);
+		} else if (g.type === 'leaf') {
+			billboards.push({
+				type: 'leaf',
+				center: g.leaf.center,
+				scale: g.leaf.length,
+				angle: g.leaf.angle,
+				depth: mapdepth(g.parent.depthLayer - 1.5)
+			});
+		} else if (g.type === 'flower') {
+			billboards.push({
+				type: 'flower',
+				center: g.flower.center,
+				scale: g.flower.radius*2,
+				angle: g.flower.angle,
+				depth: mapdepth(g.parent.depthLayer + 2)
+			});
+		} else {
+			throw 'Unrecognized geo type ' + g.type;
+		}
+	}
+
+	// Sweep through tree nodes a second time to create child pointers
+	for (var i = 0; i < branchListNodes.length; i++) {
+		var branch = branchListNodes[i];
+		var treeNode = branchTreeNodes[i];
+		var parentBranch = branch.parent;
+		var parentIdx = parentBranch === undefined ? 'root' : branchListNodes.indexOf(parentBranch);
+		var parentNode = branchTreeNodes[parentIdx];
+		parentNode.children.push(treeNode);
+	}
+
+	return {
+		vineTree: branchTreeNodes.root,
+		billboards: billboards.length > 0 ? billboards: undefined
+	};
+}
+
+// Given a point tree, build a vine mesh for that tree
+var bezFn = makeBezierUniform(20);
+function vineTreeMesh(tree) {
+	function buildVineTreeMesh(mesh, tree, v, prevs) {
 		// Handle this point
 		if (prevs.length > 0) {
 			var p0 = prevs[prevs.length - 1].point;
@@ -469,7 +623,7 @@ function vineTree(tree, bezFn) {
 			var cps = controlPoints(p0, p1, prev, next);
 			var w0 = prevs[prevs.length - 1].width;
 			var w1 = tree.width;
-			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1);
+			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1, tree.depth);
 			mesh.append(vineMesh);
 		}
 
@@ -479,153 +633,174 @@ function vineTree(tree, bezFn) {
 			prevs.shift();
 		}
 		for (var i = 0; i < tree.children.length; i++) {
-			buildVineTreeRec(tree.children[i], v + 1, prevs.slice());
+			buildVineTreeMesh(mesh, tree.children[i], v + 1, prevs.slice());
 		}
 	}
 
-	buildVineTreeRec(tree, 0, []);
+	var mesh = new Mesh();
+	buildVineTreeMesh(mesh, tree, 0, []);
 	return mesh;
 }
 
-// Convert branch linked list (w/ parent pointers) to a top-down point tree
-//    (for WebGL vine rendering)
-function branchListToPointTree(branches) {
-	// Kept in correspondence to map one to the other
-	var linkedListNodes = [];
-	var treeNodes = [];
-
-	// Sweep through once to create the nodes, but not the child pointers
-	for (var br = branches; br; br = br.next) {
-		// Store the tree root specially (since it doesn't map to anything
-		//    in the linked list)
-		if (br.parent === undefined) {
-			treeNodes.root = {
-				// Needed b/c JSON loses prototype information
-				point: new THREE.Vector2().copy(br.branch.start),
-				width: br.branch.width,
-				children: []
-			};
-		}
-		treeNodes.push({
-			point: new THREE.Vector2().copy(br.branch.end),
-			width: br.branch.width,
-			children: []
-		});
-		linkedListNodes.push(br);
-	}
-
-	// Sweep through a second time to create child pointers
-	for (var br = branches; br; br = br.next) {
-		var idx = linkedListNodes.indexOf(br);
-		var treeNode = treeNodes[idx];
-		var parentBr = br.parent;
-		var parentIdx = parentBr === undefined ? 'root' : linkedListNodes.indexOf(parentBr);
-		var parentNode = treeNodes[parentIdx];
-		parentNode.children.push(treeNode);
-	}
-
-
-	return treeNodes.root;
+function viewportMatrix(v) {
+	return new THREE.Matrix4().makeOrthographic(v.xmin, v.xmax, v.ymax, v.ymin, v.zmin, v.zmax);
 }
 
-var bezFn = makeBezierUniform(20);
-var vineShaders = {
-	vertShader: 'shaders/vine_bumpy.vert',
-	fragShader: 'shaders/vine_textured.frag',
-	prog: undefined
+var vineAssets = {
+	vineProgram: {
+		type: 'shaderProgram',
+		vertShader: 'shaders/vine_bumpy.vert',
+		fragShader: 'shaders/vine_textured.frag',
+		prog: undefined
+	},
+	billboardProgram: {
+		type: 'shaderProgram',
+		vertShader: 'shaders/billboard.vert',
+		fragShader: 'shaders/billboard.frag',
+		prog: undefined
+	},
+	leaf: {
+		type: 'texture',
+		image: 'textures/leaf.png',
+		tex: undefined
+	},
+	flower: {
+		type: 'texture',
+		image: 'textures/flower.png',
+		tex: undefined
+	}
 };
-render.renderVines = function(gl, viewport, branches, asyncCallback) {
-	ensureShadersLoaded(gl, vineShaders, asyncCallback !== undefined, function() {
-		var vineProg = vineShaders.prog;
-		gl.useProgram(vineProg);
+registerAssets(vineAssets);
+var bboard = billboard();
+render.renderGLDetailed = function(gl, viewport, geo) {
 
-		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-		var viewportMat = viewportMatrix(viewport);
-		gl.uniformMatrix3fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat);
+	var viewport3d = {
+		xmin: viewport.xmin,
+		xmax: viewport.xmax,
+		ymin: viewport.ymin,
+		ymax: viewport.ymax,
+		zmin: -1,
+		zmax: 1
+	}
+	var viewportMat = viewportMatrix(viewport3d);
 
-		var tree = branchListToPointTree(branches);
-		var mesh = vineTree(tree, bezFn);
-		mesh.draw(gl, vineProg);
-		gl.flush();
-		mesh.destroyBuffers(gl);
+	var objdata = geo2objdata(geo);
 
-		if (asyncCallback) asyncCallback();
-	});
+	var vmesh = vineTreeMesh(objdata.vineTree);
+	var vineProg = vineAssets.vineProgram.prog;
+	gl.useProgram(vineProg);
+	gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat.elements);
+	vmesh.draw(gl, vineProg);
+	vmesh.destroyBuffers(gl);
+
+	if (objdata.billboards) {
+		// Sort all billboard objects (leaves and flowers) by depth,
+		//    storing which texture to use for each
+		objdata.billboards.sort(function(a, b) {
+			if (a.depth > b.depth) return 1;
+			if (a.depth < b.depth) return -1;
+			return 0;
+		});
+		// Then render them back-to-front
+		var bbProg = vineAssets.billboardProgram.prog;
+		gl.useProgram(bbProg);
+		var matLoc = gl.getUniformLocation(bbProg, 'viewMat');
+		gl.activeTexture(gl.TEXTURE0);
+		gl.uniform1i(gl.getUniformLocation(bbProg, "tex"), 0);
+		var scalemat = new THREE.Matrix4();
+		var rotmat = new THREE.Matrix4();
+		var transmat = new THREE.Matrix4();
+		var fullmat = new THREE.Matrix4();
+		for (var i = 0; i < objdata.billboards.length; i++) {
+			var obj = objdata.billboards[i];
+			gl.bindTexture(gl.TEXTURE_2D, vineAssets[obj.type].tex);
+			scalemat.makeScale(obj.scale, obj.scale, 1);
+			rotmat.makeRotationZ(obj.angle);
+			var c = obj.center;
+			transmat.makeTranslation(c.x, c.y, obj.depth);
+			fullmat.copy(viewportMat).multiply(transmat).multiply(rotmat).multiply(scalemat);
+			gl.uniformMatrix4fv(matLoc, false, fullmat.elements);
+			bboard.draw(gl, bbProg);
+		}
+	}
+
+	gl.flush();
 }
 
 
 // ----------------------------------------------------------------------------
 // Pixel drawing
 
-var drawPixelsShaders = {
-	vertShader: 'shaders/drawPixels.vert',
-	fragShader: 'shaders/drawPixels.frag',
-	prog: undefined
+var drawPixelsAssets = {
+	shaderProgram: {
+		type: 'shaderProgram',
+		vertShader: 'shaders/drawPixels.vert',
+		fragShader: 'shaders/drawPixels.frag',
+		prog: undefined
+	}
 };
+registerAssets(drawPixelsAssets);
 var vertBufferCache = {};
 var colorBufferCache = {};
 // Pixels come in as bytes
-render.drawPixels = function(gl, pixelData, asyncCallback) {
-	ensureShadersLoaded(gl, drawPixelsShaders, asyncCallback !== undefined, function() {
-		var drawPixelsProg = drawPixelsShaders.prog;
-		gl.useProgram(drawPixelsProg);
+render.drawPixels = function(gl, pixelData) {
+	var drawPixelsProg = drawPixelsAssets.shaderProgram.prog;
+	gl.useProgram(drawPixelsProg);
 
-		var h = gl.drawingBufferHeight;
-		var w = gl.drawingBufferWidth;
-		var size = w + 'x' + h;
-		gl.viewport(0, 0, w, h);
+	var h = gl.drawingBufferHeight;
+	var w = gl.drawingBufferWidth;
+	var size = w + 'x' + h;
+	gl.viewport(0, 0, w, h);
 
-		// Build vertex buffer
-		var vertBuf = vertBufferCache[size];
-		if (vertBuf === undefined) {
-			vertBuf = gl.createBuffer();
-			vertBufferCache[size] = vertBuf;
+	// Build vertex buffer
+	var vertBuf = vertBufferCache[size];
+	if (vertBuf === undefined) {
+		vertBuf = gl.createBuffer();
+		vertBufferCache[size] = vertBuf;
 
-			var verts = [];
-			for (var y = 0; y < h; y++) {
-				var ty = (y + 0.5) / h;
-				var ny = (1-ty)*-1 + ty*1;
-				for (var x = 0; x < w; x++) {
-					var tx = (x + 0.5) / w;
-					var nx = (1-tx)*-1 + tx*1;
-					verts.push(nx); verts.push(ny);
-				}
+		var verts = [];
+		for (var y = 0; y < h; y++) {
+			var ty = (y + 0.5) / h;
+			var ny = (1-ty)*-1 + ty*1;
+			for (var x = 0; x < w; x++) {
+				var tx = (x + 0.5) / w;
+				var nx = (1-tx)*-1 + tx*1;
+				verts.push(nx); verts.push(ny);
 			}
-			verts = new Float32Array(verts);
-
-			gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
-			gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
 		}
+		verts = new Float32Array(verts);
 
-		// Build color buffer
-		pixelData = new Float32Array(pixelData);	// Shader will do 1/255 division
-		var colorBuf = colorBufferCache[size];
-		if (colorBuf === undefined) {
-			colorBuf = gl.createBuffer();
-			colorBufferCache[size] = colorBuf;
-		}
-		gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-		gl.bufferData(gl.ARRAY_BUFFER, pixelData, gl.STATIC_DRAW);
-
-		// Bind
-		var vertLoc = gl.getAttribLocation(drawPixelsProg, "inPos");
-		gl.enableVertexAttribArray(vertLoc);
 		gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
-		gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
-		var colorLoc = gl.getAttribLocation(drawPixelsProg, "inColor");
-		gl.enableVertexAttribArray(colorLoc);
-		gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-		gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, 0, 0);
+		gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+	}
 
-		// Render
-		gl.drawArrays(gl.POINTS, 0, pixelData.length/4);
-		gl.flush();
-		gl.disableVertexAttribArray(vertLoc);
-		gl.disableVertexAttribArray(colorLoc);
+	// Build color buffer
+	pixelData = new Float32Array(pixelData);	// Shader will do 1/255 division
+	var colorBuf = colorBufferCache[size];
+	if (colorBuf === undefined) {
+		colorBuf = gl.createBuffer();
+		colorBufferCache[size] = colorBuf;
+	}
+	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+	gl.bufferData(gl.ARRAY_BUFFER, pixelData, gl.STATIC_DRAW);
 
-		if (asyncCallback) asyncCallback();
-	});
+	// Bind
+	var vertLoc = gl.getAttribLocation(drawPixelsProg, "inPos");
+	gl.enableVertexAttribArray(vertLoc);
+	gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+	gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
+	var colorLoc = gl.getAttribLocation(drawPixelsProg, "inColor");
+	gl.enableVertexAttribArray(colorLoc);
+	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+	gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, 0, 0);
+
+	// Render
+	gl.drawArrays(gl.POINTS, 0, pixelData.length/4);
+	gl.flush();
+	gl.disableVertexAttribArray(vertLoc);
+	gl.disableVertexAttribArray(colorLoc);
 }
 
 

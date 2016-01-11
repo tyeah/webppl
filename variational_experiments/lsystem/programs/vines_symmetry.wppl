@@ -12,17 +12,14 @@ var ad = require.call(null, 'adnn/ad');
 var renderSize = {width: 50, height: 50}
 lsysUtils.rendering.init(__ROOT, renderSize.width, renderSize.height);
 
-// var futurePolicy = 'immediate';
+var futurePolicy = 'immediate';
 // var futurePolicy = 'lifo';
 // var futurePolicy = 'fifo';
 // var futurePolicy = 'uniformFromAll';
-var futurePolicy = 'uniformFromDeepest';
+// var futurePolicy = 'uniformFromDeepest';
 // var futurePolicy = 'depthWeighted';
 setFuturePolicy(futurePolicy);
 
-// Uncomment these if you want to generate samples from the prior
-// globalStore.noFactors = true;
-// globalStore.sim = 0;
 
 var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
 var norm2world = function(p) {
@@ -40,13 +37,13 @@ var norm2world = function(p) {
 var saveImageSoFar = false;
 
 // Render update
-var renderUpdate = function(branches) {
+var renderUpdate = function(geo) {
 	lsysUtils.rendering.drawImgToRenderContext(globalStore.genImg);
-	lsysUtils.rendering.renderIncr(branches, viewport);
+	lsysUtils.rendering.renderIncr(geo, viewport);
 	globalStore.genImg = lsysUtils.rendering.copyImgFromRenderContext();
 	// Save?
 	if (saveImageSoFar) {
-		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.branches.n).toString() + '.png');
+		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.geo.n).toString() + '.png');
 	}
 };
 
@@ -61,7 +58,7 @@ var fillTightness = 0.01;
 var symmTightness = 0.01;
 var boundsTightness = 0.001;
 var symmFactor = function() {
-	renderUpdate(globalStore.branches);
+	renderUpdate(globalStore.geo);
 
 	// Bounds factors
 	var bbox = globalStore.bbox;
@@ -172,7 +169,7 @@ var makeProgram = function(neurallyGuided) {
 			pos: obj.pos,
 			angle: obj.angle,
 			width: obj.width,
-			prevBranches: obj.prevBranches,
+			prevBranch: obj.prevBranch,
 			features: neurallyGuided ? globalStore.nnGuide.localFeatures(obj) : undefined
 		};
 	};
@@ -191,29 +188,28 @@ var makeProgram = function(neurallyGuided) {
 			start: currState.pos,
 			angle: newang,
 			width: width,
-			end: currState.pos.clone().add(polar2rect(length, newang))
+			end: polar2rect(length, newang).add(currState.pos)
 		};
 
 		// Update model state
-		globalStore.branches = {
+		globalStore.geo = {
+			type: 'branch',
 			branch: newbranch,
-			next: globalStore.branches,
-			parent: currState.prevBranches,
-			n: globalStore.branches ? globalStore.branches.n + 1 : 1
+			next: globalStore.geo,
+			parent: currState.prevBranch,
+			n: globalStore.geo ? globalStore.geo.n + 1 : 1
 		};
-		globalStore.bbox = globalStore.bbox.clone();
-		globalStore.bbox.expandByPoint(newbranch.start);
-		globalStore.bbox.expandByPoint(newbranch.end);
+		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.branch(newbranch));
 
 		// Add new heuristic factor
-		if (!globalStore.noFactors) symmFactor();
+		symmFactor();
 
 		var newState = state({
 			depth: currState.depth + 1,
 			pos: newbranch.end,
 			angle: newbranch.angle,
 			width: newbranch.width,
-			prevBranches: globalStore.branches
+			prevBranch: globalStore.geo
 		});
 
 		if (neurallyGuided) {
@@ -233,7 +229,7 @@ var makeProgram = function(neurallyGuided) {
 					if (!globalStore.terminated && newState.width > minWidth && _flip(0.66, newState, 'branch1')) {
 						branch(newState);
 						future(function() {
-								if (!globalStore.terminated && newState.width > minWidth && _flip(0.5, newState, 'branch2')) {
+							if (!globalStore.terminated && newState.width > minWidth && _flip(0.5, newState, 'branch2')) {
 								branch(newState);
 							}
 							// else factor(0);
@@ -259,7 +255,7 @@ var makeProgram = function(neurallyGuided) {
 			globalStore.nnGuide.init(globalStore);
 		}
 		
-		globalStore.branches = undefined;
+		globalStore.geo = undefined;
 		globalStore.bbox = utils.new(THREE.Box2);
 
 		// These are separated like this so that we can have an initial local
@@ -269,20 +265,20 @@ var makeProgram = function(neurallyGuided) {
 			pos: utils.new(THREE.Vector2, 0, 0),
 			angle: 0,
 			width: initialWidth,
-			prevBranches: undefined
+			prevBranch: undefined
 		});
 		var startState = state({
 			depth: initState.depth,
 			pos: initState.pos,
 			angle: _gaussian(-Math.PI/2, Math.PI/6, initState, 'startAngle'),
 			width: initState.width,
-			prevBranches: initState.prevBranches
+			prevBranch: initState.prevBranch
 		});
 
 		future(function() { branch(startState); });
 		finishAllFutures();
 
-		return globalStore.branches;
+		return globalStore.geo;
 	};
 
 	return generate;

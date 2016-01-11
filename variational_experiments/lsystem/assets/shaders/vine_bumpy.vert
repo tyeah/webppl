@@ -66,11 +66,11 @@ float snoise(vec2 v)
 
 // ----------------------------------------------------------------
 
-uniform mat3 viewMat;
+uniform mat4 viewMat;
 
-attribute vec2 inPos;
+attribute vec3 inPos;
 attribute vec2 inUV;
-attribute vec2 inNorm;
+attribute vec3 inNorm;
 varying vec2 outUV;
 
 float freq = 2.;
@@ -79,6 +79,7 @@ float amp = 0.01;
 
 void main(void) {
 	outUV = inUV;
-	vec2 ndcpos = (viewMat * vec3(inPos, 1.)).xy;
-	gl_Position = vec4(ndcpos + amp*snoise(freq*inUV)*inNorm, 0., 1.);
+	vec4 ndcpos = viewMat * vec4(inPos, 1.);
+	gl_Position = vec4(ndcpos.xy + amp*snoise(freq*inUV)*inNorm.xy, ndcpos.z, 1.);
 }
+

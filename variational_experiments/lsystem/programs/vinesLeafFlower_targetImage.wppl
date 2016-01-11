@@ -141,10 +141,59 @@ var makeProgram = function(neurallyGuided) {
 	var _flip = makeSampler('bernoulli', [ad.scalar.sigmoid]);
 
 
+	var addBranch = function(newbranch, currState) {
+		// Update model state
+		globalStore.geo = {
+			type: 'branch',
+			branch: newbranch,
+			next: globalStore.geo,
+			parent: currState.prevBranch,
+			n: globalStore.geo ? globalStore.geo.n + 1 : 1
+		};
+		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.branch(newbranch));
+
+		// Add new heuristic factor
+		targetFactor();
+	};
+
+	var addLeaf = function(newleaf, currState) {
+		// Update model state
+		globalStore.geo = {
+			type: 'leaf',
+			leaf: newleaf,
+			next: globalStore.geo,
+			parent: currState.prevBranch,
+			n: globalStore.geo ? globalStore.geo.n + 1 : 1
+		};
+		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.leaf(newleaf));
+
+		// Add new heuristic factor
+		targetFactor();
+	};
+
+	var addFlower = function(newflower, currState) {
+		// Update model state
+		globalStore.geo = {
+			type: 'flower',
+			flower: newflower,
+			next: globalStore.geo,
+			parent: currState.prevBranch,
+			n: globalStore.geo ? globalStore.geo.n + 1 : 1
+		};
+		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.flower(newflower));
+
+		// Add new heuristic factor
+		targetFactor();
+	}
+
+
 	var initialWidth = 0.75;
 	var widthDecay = 0.975;
 	var minWidthPercent = 0.2;
 	var minWidth = minWidthPercent*initialWidth;
+	var leafAspect = 2.09859154929577;
+	var leafWidthMul = 1.3;
+	var flowerRadMul = 1;
 
 	var state = function(obj) {
 		return {
@@ -161,6 +210,8 @@ var makeProgram = function(neurallyGuided) {
 		return utils.new(THREE.Vector2, r*Math.cos(theta), r*Math.sin(theta));
 	};
 
+	var leafOpts = ['none', 'left', 'right'];
+	var leafProbs = [1, 1, 1];
 	var branch = function(currState) {
 
 		// Generate new branch
@@ -173,19 +224,7 @@ var makeProgram = function(neurallyGuided) {
 			width: width,
 			end: polar2rect(length, newang).add(currState.pos)
 		};
-
-		// Update model state
-		globalStore.geo = {
-			type: 'branch',
-			branch: newbranch,
-			next: globalStore.geo,
-			parent: currState.prevBranch,
-			n: globalStore.geo ? globalStore.geo.n + 1 : 1
-		};
-		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.branch(newbranch));
-
-		// Add new heuristic factor
-		targetFactor();
+		addBranch(newbranch, currState);
 
 		var newState = state({
 			depth: currState.depth + 1,
@@ -193,6 +232,39 @@ var makeProgram = function(neurallyGuided) {
 			angle: newbranch.angle,
 			width: newbranch.width,
 			prevBranch: globalStore.geo
+		});
+
+		// Generate leaf?
+		// TODO: Make these ERPs neurally-guided(?)
+		future(function() {
+			var leafOpt = leafOpts[discrete(leafProbs)];
+			if (leafOpt !== 'none') {
+				var lwidth = leafWidthMul * initialWidth;
+				var llength = lwidth * leafAspect;
+				var angmean = (leafOpt === 'left') ? Math.PI/4 : -Math.PI/4;
+				var langle = newbranch.angle + gaussian(angmean, Math.PI/12);
+				var lstart = newbranch.start.clone().lerp(newbranch.end, 0.5);
+				var lend = polar2rect(llength, langle).add(lstart);
+				var lcenter = lstart.clone().add(lend).multiplyScalar(0.5);
+				addLeaf({
+					length: llength,
+					width: lwidth,
+					angle: langle,
+					center: lcenter
+				}, newState);
+			}
+		});
+
+		// Generate flower?
+		// TODO: Make these ERPs neurally-guided(?)
+		future(function() {
+			if (flip(0.5)) {
+				addFlower({
+					center: newbranch.end,
+					radius: flowerRadMul * initialWidth,
+					angle: newbranch.angle
+				}, newState);
+			}
 		});
 
 		if (neurallyGuided) {

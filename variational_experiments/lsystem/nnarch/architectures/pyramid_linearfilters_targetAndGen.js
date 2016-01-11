@@ -70,12 +70,8 @@ module.exports = NNArch.subclass(require('./localFeatures'), archname, {
 	},
 
 	step: function(globalStore, localState) {
-		// if (globalStore.branches.n % 2 === 0) {
-		// if (globalStore.branches.n % 3 === 0) {
-		// if (globalStore.branches.n % 4 === 0) {
-			// Construct image so far pyramid 
-			this.constructImageSoFarPyramid(globalStore);
-		// }
+		// Construct image so far pyramid 
+		this.constructImageSoFarPyramid(globalStore);
 	},
 
 	paramPredictMLP: NNArch.nnFunction(function(name, nOut) {

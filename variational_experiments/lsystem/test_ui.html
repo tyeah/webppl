@@ -48,40 +48,31 @@
 				ctx.putImageData(imgData, 0, 0);
 			}
 
-			function renderParticleAsVines(canvas, particle, callback) {
+			function renderParticleGLDetailed(canvas, particle) {
+				var glCanvas = $('#canvas-gl');
+				glCanvas.prop({width: canvas.width, height: canvas.height});
 				// Render
 				gl.clearColor(0, 0, 0, 0);
-				gl.clear(gl.COLOR_BUFFER_BIT);
-				render.renderVines(gl, viewport, particle.branches, function() {
-					// Read back pixels
-					var pixelData = new Uint8Array(canvas.width*canvas.height*4);
-					gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
-					// Draw image to canvas
-					compositeGLPixelsToCanvas(canvas, pixelData);
-					callback();
-				});
+				gl.depthFunc(gl.LEQUAL); 
+			    gl.enable(gl.DEPTH_TEST);
+			    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+			    gl.enable (gl.BLEND);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+				render.renderGLDetailed(gl, viewport, particle.geo);
+				// Read back pixels
+				var pixelData = new Uint8Array(canvas.width*canvas.height*4);
+				gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+				// Draw image to canvas
+				compositeGLPixelsToCanvas(canvas, pixelData);
 			}
 
 			// ----------------------------------------------------------------
 
-			function renderParticleAsLineSegs(canvas, particle, callback) {
-				render.renderLineSegs(canvas, viewport, particle.branches, false, false);
-				callback();
-
-				// // Render
-				// gl.clearColor(0, 0, 0, 0);
-				// gl.clear(gl.COLOR_BUFFER_BIT);
-				// render.renderLineSegsGL(gl, viewport, particle.branches, false, false, function() {
-				// 	// Read back pixels
-				// 	var pixelData = new Uint8Array(canvas.width*canvas.height*4);
-				// 	gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
-				// 	// Draw image to canvas
-				// 	compositeGLPixelsToCanvas(canvas, pixelData);
-				// 	callback();
-				// });
+			function renderParticleCanvasProxy(canvas, particle) {
+				render.renderCanvasProxy(canvas, viewport, particle.geo, false, false);
 			}
 
-			function renderParticle(canvas, particle, tgtimage, renderFn, callback) {
+			function renderParticle(canvas, particle, tgtimage, renderFn) {
 				var ctx = canvas.getContext('2d');
 				if (tgtimage) {
 					// Draw gray-ed out target as background
@@ -97,8 +88,8 @@
 					ctx.fillStyle = 'white';
 					ctx.fill();
 				}
-				// Draw branches
-				renderFn(canvas, particle, callback);
+				// Draw geometry
+				renderFn(canvas, particle);
 			}
 
 			function showCurrentParticle() {
@@ -114,17 +105,10 @@
 					ctx.putImageData(particle.imageData, 0, 0);
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
-					var glCanvas = $('#canvas-gl');
-					glCanvas.prop(fullTargetSize);
-					// renderParticle(canvas, particle, targetImg, renderParticleAsLineSegs, function() {
-					renderParticle(canvas, particle, targetImg, renderParticleAsVines, function() {
-						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-						glCanvas.prop(smallTargetSize);
-						renderParticle(canvas_small, particle, undefined, renderParticleAsLineSegs, function() {
-						// renderParticle(canvas_small, particle, undefined, renderParticleAsVines, function() {
-							particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
-						});
-					});
+					renderParticle(canvas, particle, targetImg, renderParticleGLDetailed);
+					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+					renderParticle(canvas_small, particle, undefined, renderParticleCanvasProxy);
+					particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
 				}
 
 				// Update UI
@@ -215,7 +199,7 @@
 			}
 
 			// basename may be undefined, in which case there is no target image
-			function loadTargetImage(basename, callback) {
+			function loadTargetImageAndAssets(basename, callback) {
 
 				function createCanvases() {
 					// Large canvas
@@ -231,19 +215,20 @@
 					glCanvas.prop(fullTargetSize);
 					glCanvas.css('display', 'none');
 					gl = glCanvas[0].getContext('webgl');
+
+					// Load GL rendering assets
+					render.loadAssets(gl, true, callback);
 				}
 
 				if (!basename) {
 					fullTargetSize = {width: 600, height: 600};
 					createCanvases();
-					callback();
 				} else {
 					var targetImgFile = '../targets/source/' + basename + '.png';
 					targetImg = new Image();
 					targetImg.addEventListener('load', function() {
 						fullTargetSize = {width: targetImg.width, height: targetImg.height};
 						createCanvases();
-						callback();
 					}, false);
 					targetImg.src = targetImgFile;
 				}
@@ -273,7 +258,7 @@
 					numParticles = particleHistory[0].length;
 					viewport = data.viewport;
 					smallTargetSize = data.targetSize;
-					loadTargetImage(data.targetName, function() {
+					loadTargetImageAndAssets(data.targetName, function() {
 						// GUI init
 						if (!gui) {
 							gui = new dat.GUI();
@@ -301,7 +286,7 @@
 
 						// Particle properties that we want to display.
 						var particleProps = [
-							{name: 'num_branches'},
+							{name: 'num_geo'},
 							{name: 'log_prior'},
 							{name: 'log_like'},
 							{name: 'log_post'},

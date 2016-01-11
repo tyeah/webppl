@@ -15,32 +15,35 @@ particleHistoryUtils.compress = function(history) {
 			}
 		}
 	}
-	// Next, build a map of unique branches (for deduplication).
-	var branchIdToIndex = {};
-	var uniqueBranches = [];
-	var nextBranchID = 0;
-	function registerBranches(branches) {
-		if (branches && !branches.hasOwnProperty('__id')) {
-			branches.__id = nextBranchID++;
-			branchIdToIndex[branches.__id] = uniqueBranches.length;
-			uniqueBranches.push(branches);
-			registerBranches(branches.next);
+	// Next, build a map of unique geos (for deduplication).
+	var geoIdToIndex = {};
+	var uniqueGeos = [];
+	var nextGeoID = 0;
+	function registerGeo(geo) {
+		if (geo && !geo.hasOwnProperty('__id')) {
+			geo.__id = nextGeoID++;
+			geoIdToIndex[geo.__id] = uniqueGeos.length;
+			uniqueGeos.push(geo);
+			registerGeo(geo.next);
 		}
 	}
 	for (var i = 0; i < uniqueParticlesList.length; i++) {
-		var branches = uniqueParticlesList[i].store.branches;
-		registerBranches(branches);
+		var geo = uniqueParticlesList[i].store.geo;
+		registerGeo(geo);
 	}
-	// Convert branches 'next' and 'parent' pointers to indices, get rid of __id tags.
-	uniqueBranches = uniqueBranches.map(function(branches) {
-		var b = { branch: branches.branch, next: null };
-		if (branches.next) {
-			b.next = branchIdToIndex[branches.next.__id];
+	// Convert geo 'next' and 'parent' pointers to indices, get rid of __id tags.
+	uniqueGeos = uniqueGeos.map(function(geo) {
+		var g = {};
+		for (var prop in geo) { g[prop] = geo[prop]; }
+		delete g.__id;
+		g.next = undefined;
+		if (geo.next) {
+			g.next = geoIdToIndex[geo.next.__id];
 		}
-		if (branches.parent) {
-			b.parent = branchIdToIndex[branches.parent.__id];
+		if (geo.parent) {
+			g.parent = geoIdToIndex[geo.parent.__id];
 		}
-		return b;
+		return g;
 	})
 	// Process the particles to prepare them for consumption by the UI.
 	uniqueParticlesList = uniqueParticlesList.map(function(p) {
@@ -50,14 +53,14 @@ particleHistoryUtils.compress = function(history) {
 			log_post: p.logpost,
 			active: p.active,
 			similarity: p.store.sim,
-			num_branches: p.store.branches.n,
-			branches: branchIdToIndex[p.store.branches.__id]
+			num_geo: p.store.geo.n,
+			geo: geoIdToIndex[p.store.geo.__id]
 		}
 	});
 	// Finally, return deduplicated history object.
 	return {
 		particles: uniqueParticlesList,
-		branches: uniqueBranches,
+		geo: uniqueGeos,
 		generationIndices: history.map(function(particles) {
 			return particles.map(function(p) {
 				return particleIdToIndex[p.id];
@@ -67,20 +70,20 @@ particleHistoryUtils.compress = function(history) {
 }
 
 particleHistoryUtils.decompress = function(compressedHistory) {
-	// Reconstruct the branches lists by converting indices back to pointers.
-	for (var i = 0; i < compressedHistory.branches.length; i++) {
-		var branches = compressedHistory.branches[i];
-		if (branches.next !== null) {
-			branches.next = compressedHistory.branches[branches.next];
+	// Reconstruct the geo lists by converting indices back to pointers.
+	for (var i = 0; i < compressedHistory.geo.length; i++) {
+		var geo = compressedHistory.geo[i];
+		if (geo.next !== null) {
+			geo.next = compressedHistory.geo[geo.next];
 		}
-		if (branches.parent !== null) {
-			branches.parent = compressedHistory.branches[branches.parent];
+		if (geo.parent !== null) {
+			geo.parent = compressedHistory.geo[geo.parent];
 		}
 	}
-	// Convert particle branch ids to pointers as well.
+	// Convert particle geo ids to pointers as well.
 	for (var i = 0; i < compressedHistory.particles.length; i++) {
 		var p = compressedHistory.particles[i];
-		p.branches = compressedHistory.branches[p.branches];
+		p.geo = compressedHistory.geo[p.geo];
 	}
 	// Dereference the particle indices to product a list of list of particles.
 	return compressedHistory.generationIndices.map(function(indices) {

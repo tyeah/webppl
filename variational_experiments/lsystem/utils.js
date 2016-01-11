@@ -392,18 +392,17 @@ TargetImageDatabase.prototype = {
 
 var render = require('./render.js');
 
-// Canvas version
-var canvasRendering = {
+var rendering = {
 	canvas: undefined,
 	init: function(rootdir, w, h) {
 		render.setRootDir(rootdir);
 		this.canvas = new Canvas(w, h);
 	},
-	renderStart: function(branches, viewport) {
-		render.renderLineSegs(this.canvas, viewport, branches);
+	renderStart: function(geo, viewport) {
+		render.renderCanvasProxy(this.canvas, viewport, geo);
 	},
-	renderIncr: function(branches, viewport) {
-		render.renderLineSegs(this.canvas, viewport, branches, true, false);
+	renderIncr: function(geo, viewport) {
+		render.renderCanvasProxy(this.canvas, viewport, geo, true, false);
 	},
 	drawImgToRenderContext: function(img) {
 		img.copyToCanvas(this.canvas);
@@ -412,31 +411,63 @@ var canvasRendering = {
 		return new ImageData2D().loadFromCanvas(this.canvas);
 	}
 };
-// canvasRendering.canvas.getContext('2d').antialias = 'none';
 
-// GL Version
-var glRendering = {
-	gl: undefined,
-	init: function(rootdir, w, h) {
-		render.setRootDir(rootdir);
-		this.gl = require('gl')(50, 50);
+
+// ----------------------------------------------------------------------------
+// Bounds for various geometries
+
+var bboxes = {
+	branch: function(branch) {
+		var bbox = new THREE.Box2();
+		bbox.expandByPoint(branch.start);
+		bbox.expandByPoint(branch.end);
+		return bbox;
 	},
-	renderStart: function(branches, viewport) {
-		render.renderLineSegsGL(this.gl, viewport, branches);
-	},
-	renderIncr: function(branches, viewport) {
-		render.renderLineSegsGL(this.gl, viewport, branches, true, false);
-	},
-	drawImgToRenderContext: function(img) {
-		img.copyToFramebuffer(this.gl);
-	},
-	copyImgFromRenderContext: function() {
-		return new ImageData2D().loadFromFramebuffer(this.gl);
+	leaf: (function() {
+		function pivot(p, sin, cos, c) {
+			return new THREE.Vector2(
+				cos*p.x + sin*p.y + c.x,
+				sin*p.x - cos*p.y + c.y
+			);
+		}
+		// Conservative:
+		// Compute corners of object-space ellipse,
+		//    transform them into world-space, then
+		//    compute the BBox of those points.
+		return function(leaf) {
+			var w2 = leaf.width/2;
+			var l2 = leaf.length/2;
+			var p0 = new THREE.Vector2(-w2, -l2);
+			var p1 = new THREE.Vector2(w2, -l2);
+			var p2 = new THREE.Vector2(-w2, l2);
+			var p3 = new THREE.Vector2(w2, l2);
+			var sin = Math.sin(leaf.angle);
+			var cos = Math.cos(leaf.angle);
+			var center = leaf.center;
+			p0 = pivot(p0, sin, cos, center);
+			p1 = pivot(p0, sin, cos, center);
+			p2 = pivot(p0, sin, cos, center);
+			p3 = pivot(p0, sin, cos, center);
+			var box = new THREE.Box2();
+			box.expandByPoint(p0);
+			box.expandByPoint(p1);
+			box.expandByPoint(p2);
+			box.expandByPoint(p3);
+			return box;
+		}
+	})(),
+	flower: function(flower) {
+		var min = new THREE.Vector2(
+			flower.center.x - flower.radius,
+			flower.center.y - flower.radius
+		);
+		var max = new THREE.Vector2(
+			flower.center.x + flower.radius,
+			flower.center.y + flower.radius
+		);
+		return new THREE.Box2(min, max);
 	}
 };
-
-var rendering = canvasRendering;
-// var rendering = glRendering;
 
 
 // ----------------------------------------------------------------------------
@@ -458,6 +489,7 @@ module.exports = {
 	normalizedGradientWeightedSimilarity:normalizedGradientWeightedSimilarity,
 	combinedSimilarity: combinedSimilarity,
 	rendering: rendering,
+	bboxes: bboxes,
 	deleteStoredImages: deleteStoredImages
 };
 
