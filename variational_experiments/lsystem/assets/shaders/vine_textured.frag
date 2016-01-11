@@ -65,7 +65,7 @@ vec3 green0 = vec3(10./255., 70./255., 0./255.);
 vec3 green1 = vec3(100./255., 175./255., 12./255.);
 
 void main(void) {
-	vec3 green = mix(0.5*green0, 2.*green1, outUV[0]);;
+	vec3 green = mix(1.*green0, 2.*green1, outUV[0]);;
 	vec2 F = cellular(vec2(ufreq*outUV.x, vfreq*outUV.y));
 	float f = F.y - F.x;
 	float s = mix(1., f, amt);
