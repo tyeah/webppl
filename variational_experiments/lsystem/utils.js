@@ -225,9 +225,67 @@ ImageData2D.prototype = {
 
 
 // Similarity function between target image and another image
-function similarity(img, targetImg) {
+function binarySimilarity(img, targetImg) {
 	return img.percentSameBinary(targetImg);
 }
+
+// Gradient (of target) weighted binary similarity
+function gradientWeightedSimilarity(img, targetImg) {
+	var sobelTarget;
+	if (targetImg.__sobel === undefined) {
+		targetImg.__sobel = Sobel.sobel(targetImg.toTensor());
+		sobelTarget = targetImg.__sobel;
+	}
+	return img.weightedPercentSameBinary(targetImg, sobelTarget);
+}
+
+// Sobel similarity
+function sobelSimilarity(img, targetImg) {
+	var sobelTarget;
+	if (targetImg.__sobel === undefined) {
+		targetImg.__sobel = Sobel.sobel(targetImg.toTensor());
+		sobelTarget = targetImg.__sobel;
+	}
+	var sobelImg = Sobel.sobel(img.toTensor());
+	var numEntries = sobelImg.dims[1]*sobelImg.dims[2];
+
+	// Compute L2 distance between gradient images
+	var l2 = 0;
+	for (var i = 0; i < numEntries; i++) {
+		var diff = (sobelImg.data[i] - sobelTarget.data[i]);
+		l2 += (sobelImg.data[i] - sobelTarget.data[i]);
+	}
+
+	l2 = Math.sqrt(l2);
+
+	// Convert distance to similarity
+	sim = 1.0/(1.0+l2);
+	return sim; 
+}
+
+// Linear combination of Sobel and binary similarity, normalized against the baseline
+function makeCombinedSimilarity(weight) {
+	if (weight == 0) {
+		return  sobelSimilarity;
+	} else if (weight === 1) {
+		return binarySimilarity;
+	} else {
+		return function(img, targetImg) {
+			var sobelSim = sobelSimilarity(img, target);
+			var binarySim = binarySimilarity(img, target);
+			return weight*binarySim + (1 - weight)*sobelSim;
+		};
+	}
+}
+
+///////////////////////////
+// Which similarity measure should we use?
+var similarity = binarySimilarity;
+// var similarity = gradientWeightedSimilarity;
+// var similarity = sobelSimilarity;
+// var similarity = makeCombinedSimilarity(0.5);
+///////////////////////////
+
 
 // Baseline similarity of a blank image to a target image
 function baselineSimilarity(targetImg) {
@@ -237,79 +295,11 @@ function baselineSimilarity(targetImg) {
 	return similarity(img, targetImg);
 }
 
-// Baseline Sobel similarity
-function baselineSobelSimilarity(targetImg) {
-	var w = targetImg.width;
-	var h = targetImg.height;
-	var img = new ImageData2D().fillWhite(w, h);
-	return sobelSimilarity(img, targetImg);	
-}
-
-// Baseline gradient weighted binary similarity
-function baselineGradientWeightedSimilarity(targetImg) {
-	var w = targetImg.width;
-	var h = targetImg.height;
-	var img = new ImageData2D().fillWhite(w, h);
-	return gradientWeightedSimilarity(img, targetImg);	
-}
-
 // Similarity normalized against the baseline
 // 'target' is a target object from the TargetImageDatabase
 function normalizedSimilarity(img, target) {
 	var sim = similarity(img, target.image);
 	return (sim - target.baseline) / (1 - target.baseline);
-}
-
-// Gradient (of target) weighted binary similarity
-function gradientWeightedSimilarity(img, targetImg) {
-	var sobelTarget = Sobel.sobel(targetImg.toTensor());
-	return img.weightedPercentSameBinary(targetImg, sobelTarget);
-}
-
-// Gradient weighted binary similarity, normalized against the baseline
-function normalizedGradientWeightedSimilarity(img, target) {
-	var sim = gradientWeightedSimilarity(img, target.image);
-	return (sim - target.gradientWeightedBaseline) / (1 - target.gradientWeightedBaseline);
-}
-
-// Sobel similarity
-function sobelSimilarity(img, targetImg) {
-	var sobelImg = Sobel.sobel(img.toTensor());
-	var sobelTarget = Sobel.sobel(targetImg.toTensor());
-	var numEntries = sobelImg.dims[1]*sobelImg.dims[2];
-
-	//Compute L2 distance between gradient images
-	var l2 = 0;
-	for (var i = 0; i < numEntries; i++) {
-		l2 += (sobelImg.data[i] - sobelTarget.data[i])*(sobelImg.data[i] - sobelTarget.data[i]);
-	}
-
-	l2 = Math.sqrt(l2);
-
-	//Convert distance to similarity
-	sim = 1.0/(1.0+l2);
-	return sim; 
-}
-
-// Sobel similarity, normalized against the baseline
-function normalizedSobelSimilarity(img, target) {
-	var sim = sobelSimilarity(img, target.image);
-	return (sim - target.sobelBaseline) / (1 - target.sobelBaseline);
-}
-
-// Linear combination of Sobel and binary similarity, normalized against the baseline
-function combinedSimilarity(img, target, weight) {
-	if (weight == 0) {
-		return normalizedSobelSimilarity(img, target);
-	}
-	else if (weight == 1) {
-		return normalizedSimilarity(img, target);		
-	}
-	else {
-		var sobelSim = normalizedSobelSimilarity(img, target);
-		var binarySim = normalizedSimilarity(img, target);
-		return weight*binarySim + (1 - weight)*sobelSim; 	
-	}
 }
 
 
@@ -341,9 +331,6 @@ function TargetImageDatabase(directory) {
 				filename: fullname,
 				image: undefined,
 				baseline: undefined,
-				sobelBaseline: undefined,
-				gradientWeightedBaseline: undefined,
-				canvas: undefined,
 				tensor: undefined,
 				startPos: startPos
 			};
@@ -357,8 +344,6 @@ function ensureTargetLoaded(target) {
 	if (target.image === undefined) {
 		target.image = new ImageData2D().loadFromFile(target.filename);
 		target.baseline = baselineSimilarity(target.image);
-		target.sobelBaseline = baselineSobelSimilarity(target.image);
-		target.gradientWeightedBaseline = baselineGradientWeightedSimilarity(target.image);
 		target.tensor = target.image.toTensor();
 	}
 }
@@ -372,7 +357,6 @@ TargetImageDatabase.prototype = {
 		};
 	},
 	getTargetByIndex: function(i) {
-		console.log(i);
 		assert(i >= 0 && i < this.targetsByIndex.length);
 		var target = this.targetsByIndex[i];
 		ensureTargetLoaded(target);
@@ -485,9 +469,6 @@ module.exports = {
 	ImageData2D: ImageData2D,
 	TargetImageDatabase: TargetImageDatabase,
 	normalizedSimilarity: normalizedSimilarity,
-	normalizedSobelSimilarity: normalizedSobelSimilarity,
-	normalizedGradientWeightedSimilarity:normalizedGradientWeightedSimilarity,
-	combinedSimilarity: combinedSimilarity,
 	rendering: rendering,
 	bboxes: bboxes,
 	deleteStoredImages: deleteStoredImages
