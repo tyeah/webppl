@@ -524,9 +524,26 @@ function geo2objdata(geo) {
 
 	var billboards = [];
 
+	// Preliminary sweep to compute range of depths
+	var nbranches = 0;
+	for (var g = geo; g; g = g.next) {
+		if (g.type === 'branch') {
+			g.depthLayer = nbranches;
+			nbranches++;
+		}
+	}
+	// Padded
+	minDepth = -2;
+	maxDepth = nbranches+ 2;
+
+	// Map depth values to -1 (far), 1 (near)
+	function mapdepth(d) {
+		var t = (d - minDepth) / (maxDepth - minDepth);
+		// t += 1e-5*Math.random();
+		return 2*t - 1;
+	}
+
 	// Sweep through geo once to create tree nodes, leaves, etc.
-	var depth = -1;
-	var depthEps = 1e-6;
 	for (var g = geo; g; g = g.next) {
 		if (g.type === 'branch') {
 			// Store the tree root specially (since it doesn't map to anything
@@ -535,16 +552,16 @@ function geo2objdata(geo) {
 				branchTreeNodes.root = {
 					// Needed b/c JSON loses prototype information
 					point: new THREE.Vector2().copy(g.branch.start),
-					depth: undefined,
 					width: g.branch.width,
-					children: []
+					children: [],
+					depth: undefined
 				};
 			}
 			branchTreeNodes.push({
 				point: new THREE.Vector2().copy(g.branch.end),
-				depth: depth,
 				width: g.branch.width,
-				children: []
+				children: [],
+				depth: mapdepth(g.depthLayer)
 			});
 			branchListNodes.push(g);
 		} else if (g.type === 'leaf') {
@@ -553,7 +570,7 @@ function geo2objdata(geo) {
 				center: g.leaf.center,
 				scale: g.leaf.length,
 				angle: g.leaf.angle,
-				depth: depth - (1.5)*depthEps
+				depth: mapdepth(g.parent.depthLayer - 1.5)
 			});
 		} else if (g.type === 'flower') {
 			billboards.push({
@@ -561,12 +578,11 @@ function geo2objdata(geo) {
 				center: g.flower.center,
 				scale: g.flower.radius*2,
 				angle: g.flower.angle,
-				depth: depth + (2)*depthEps
+				depth: mapdepth(g.parent.depthLayer + 2)
 			});
 		} else {
 			throw 'Unrecognized geo type ' + g.type;
 		}
-		depth += depthEps
 	}
 
 	// Sweep through tree nodes a second time to create child pointers
