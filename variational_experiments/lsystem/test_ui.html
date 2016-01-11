@@ -48,7 +48,7 @@
 				ctx.putImageData(imgData, 0, 0);
 			}
 
-			function renderParticleGLDetailed(canvas, particle, callback) {
+			function renderParticleGLDetailed(canvas, particle) {
 				var glCanvas = $('#canvas-gl');
 				glCanvas.prop({width: canvas.width, height: canvas.height});
 				// Render
@@ -58,24 +58,21 @@
 			    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 			    gl.enable (gl.BLEND);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-				render.renderGLDetailed(gl, viewport, particle.geo, function() {
-					// Read back pixels
-					var pixelData = new Uint8Array(canvas.width*canvas.height*4);
-					gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
-					// Draw image to canvas
-					compositeGLPixelsToCanvas(canvas, pixelData);
-					callback();
-				});
+				render.renderGLDetailed(gl, viewport, particle.geo);
+				// Read back pixels
+				var pixelData = new Uint8Array(canvas.width*canvas.height*4);
+				gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+				// Draw image to canvas
+				compositeGLPixelsToCanvas(canvas, pixelData);
 			}
 
 			// ----------------------------------------------------------------
 
-			function renderParticleCanvasProxy(canvas, particle, callback) {
+			function renderParticleCanvasProxy(canvas, particle) {
 				render.renderCanvasProxy(canvas, viewport, particle.geo, false, false);
-				callback();
 			}
 
-			function renderParticle(canvas, particle, tgtimage, renderFn, callback) {
+			function renderParticle(canvas, particle, tgtimage, renderFn) {
 				var ctx = canvas.getContext('2d');
 				if (tgtimage) {
 					// Draw gray-ed out target as background
@@ -92,7 +89,7 @@
 					ctx.fill();
 				}
 				// Draw geometry
-				renderFn(canvas, particle, callback);
+				renderFn(canvas, particle);
 			}
 
 			function showCurrentParticle() {
@@ -108,13 +105,10 @@
 					ctx.putImageData(particle.imageData, 0, 0);
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
-					// renderParticle(canvas, particle, targetImg, renderParticleCanvasProxy, function() {
-					renderParticle(canvas, particle, targetImg, renderParticleGLDetailed, function() {
-						particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-						renderParticle(canvas_small, particle, undefined, renderParticleCanvasProxy, function() {
-							particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
-						});
-					});
+					renderParticle(canvas, particle, targetImg, renderParticleGLDetailed);
+					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+					renderParticle(canvas_small, particle, undefined, renderParticleCanvasProxy);
+					particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);
 				}
 
 				// Update UI
@@ -205,7 +199,7 @@
 			}
 
 			// basename may be undefined, in which case there is no target image
-			function loadTargetImage(basename, callback) {
+			function loadTargetImageAndAssets(basename, callback) {
 
 				function createCanvases() {
 					// Large canvas
@@ -221,19 +215,20 @@
 					glCanvas.prop(fullTargetSize);
 					glCanvas.css('display', 'none');
 					gl = glCanvas[0].getContext('webgl');
+
+					// Load GL rendering assets
+					render.loadAssets(gl, true, callback);
 				}
 
 				if (!basename) {
 					fullTargetSize = {width: 600, height: 600};
 					createCanvases();
-					callback();
 				} else {
 					var targetImgFile = '../targets/source/' + basename + '.png';
 					targetImg = new Image();
 					targetImg.addEventListener('load', function() {
 						fullTargetSize = {width: targetImg.width, height: targetImg.height};
 						createCanvases();
-						callback();
 					}, false);
 					targetImg.src = targetImgFile;
 				}
@@ -263,7 +258,7 @@
 					numParticles = particleHistory[0].length;
 					viewport = data.viewport;
 					smallTargetSize = data.targetSize;
-					loadTargetImage(data.targetName, function() {
+					loadTargetImageAndAssets(data.targetName, function() {
 						// GUI init
 						if (!gui) {
 							gui = new dat.GUI();

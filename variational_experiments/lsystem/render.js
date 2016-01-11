@@ -110,9 +110,15 @@ function loadTexture(gl, filename, async, callback) {
 	});
 }
 
-// TODO: Will need a bit more sophistication if an asset can be present in multiple asset lists (so as not
-//    to double-load)
-function ensureAssetsLoaded(gl, assets, async, callback) {
+var ASSETS = {};
+
+function registerAssets(obj) {
+	for (var prop in obj) {
+		ASSETS[prop] = obj[prop];
+	}
+}
+
+render.loadAssets = function(gl, async, callback) {
 
 	function FULLPATH(path) {
 		return ROOT + '/assets/' + path;
@@ -144,16 +150,9 @@ function ensureAssetsLoaded(gl, assets, async, callback) {
 		}
 	}
 
-	if (assets.__loaded) {
-		callback();
-	} else {
-		var asslist = [];
-		for (var prop in assets) asslist.push(assets[prop]);
-		loadAssets(asslist, function() {
-			assets.__loaded = true;
-			callback();
-		});
-	}
+	var asslist = [];
+	for (var prop in ASSETS) asslist.push(ASSETS[prop]);
+	loadAssets(asslist, callback);
 }
 
 
@@ -526,7 +525,7 @@ function geo2objdata(geo) {
 	var billboards = [];
 
 	// Sweep through geo once to create tree nodes, leaves, etc.
-	var depth = 1;
+	var depth = -1;
 	var depthEps = 1e-6;
 	for (var g = geo; g; g = g.next) {
 		if (g.type === 'branch') {
@@ -554,7 +553,7 @@ function geo2objdata(geo) {
 				center: g.leaf.center,
 				scale: g.leaf.length,
 				angle: g.leaf.angle,
-				depth: depth - (1.5 + 0.1*Math.random())*depthEps
+				depth: depth - (1.5)*depthEps
 			});
 		} else if (g.type === 'flower') {
 			billboards.push({
@@ -562,12 +561,12 @@ function geo2objdata(geo) {
 				center: g.flower.center,
 				scale: g.flower.radius*2,
 				angle: g.flower.angle,
-				depth: depth
+				depth: depth + (2)*depthEps
 			});
 		} else {
 			throw 'Unrecognized geo type ' + g.type;
 		}
-		depth -= depthEps
+		depth += depthEps
 	}
 
 	// Sweep through tree nodes a second time to create child pointers
@@ -602,8 +601,8 @@ function vineTreeMesh(tree) {
 				// next = tree.children[0].point.clone().add(
 				// 	tree.children[1].point
 				// ).multiplyScalar(0.5);
-				next = tree.children[0].point;
-				// next = tree.children[1].point;
+				// next = tree.children[0].point;
+				next = tree.children[1].point;
 			}
 			var cps = controlPoints(p0, p1, prev, next);
 			var w0 = prevs[prevs.length - 1].width;
@@ -655,68 +654,63 @@ var vineAssets = {
 		tex: undefined
 	}
 };
+registerAssets(vineAssets);
 var bboard = billboard();
-render.renderGLDetailed = function(gl, viewport, geo, asyncCallback) {
-	ensureAssetsLoaded(gl, vineAssets, asyncCallback !== undefined, function() {
+render.renderGLDetailed = function(gl, viewport, geo) {
 
-		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-		var viewport3d = {
-			xmin: viewport.xmin,
-			xmax: viewport.xmax,
-			ymin: viewport.ymin,
-			ymax: viewport.ymax,
-			zmin: -1,
-			zmax: 1
+	var viewport3d = {
+		xmin: viewport.xmin,
+		xmax: viewport.xmax,
+		ymin: viewport.ymin,
+		ymax: viewport.ymax,
+		zmin: -1,
+		zmax: 1
+	}
+	var viewportMat = viewportMatrix(viewport3d);
+
+	var objdata = geo2objdata(geo);
+
+	var vmesh = vineTreeMesh(objdata.vineTree);
+	var vineProg = vineAssets.vineProgram.prog;
+	gl.useProgram(vineProg);
+	gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat.elements);
+	vmesh.draw(gl, vineProg);
+	vmesh.destroyBuffers(gl);
+
+	if (objdata.billboards) {
+		// Sort all billboard objects (leaves and flowers) by depth,
+		//    storing which texture to use for each
+		objdata.billboards.sort(function(a, b) {
+			if (a.depth > b.depth) return 1;
+			if (a.depth < b.depth) return -1;
+			return 0;
+		});
+		// Then render them back-to-front
+		var bbProg = vineAssets.billboardProgram.prog;
+		gl.useProgram(bbProg);
+		var matLoc = gl.getUniformLocation(bbProg, 'viewMat');
+		gl.activeTexture(gl.TEXTURE0);
+		gl.uniform1i(gl.getUniformLocation(bbProg, "tex"), 0);
+		var scalemat = new THREE.Matrix4();
+		var rotmat = new THREE.Matrix4();
+		var transmat = new THREE.Matrix4();
+		var fullmat = new THREE.Matrix4();
+		for (var i = 0; i < objdata.billboards.length; i++) {
+			var obj = objdata.billboards[i];
+			gl.bindTexture(gl.TEXTURE_2D, vineAssets[obj.type].tex);
+			scalemat.makeScale(obj.scale, obj.scale, 1);
+			rotmat.makeRotationZ(obj.angle);
+			var c = obj.center;
+			transmat.makeTranslation(c.x, c.y, obj.depth);
+			fullmat.copy(viewportMat).multiply(transmat).multiply(rotmat).multiply(scalemat);
+			gl.uniformMatrix4fv(matLoc, false, fullmat.elements);
+			bboard.draw(gl, bbProg);
 		}
-		var viewportMat = viewportMatrix(viewport3d);
+	}
 
-		var objdata = geo2objdata(geo);
-
-		//
-		var vmesh = vineTreeMesh(objdata.vineTree);
-		var vineProg = vineAssets.vineProgram.prog;
-		gl.useProgram(vineProg);
-		gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat.elements);
-		vmesh.draw(gl, vineProg);
-		vmesh.destroyBuffers(gl);
-		//
-		if (objdata.billboards) {
-			// Sort all billboard objects (leaves and flowers) by depth,
-			//    storing which texture to use for each
-			objdata.billboards.sort(function(a, b) {
-				if (a.depth > b.depth) return 1;
-				if (a.depth < b.depth) return -1;
-				return 0;
-			});
-			// Then render them back-to-front
-			var bbProg = vineAssets.billboardProgram.prog;
-			gl.useProgram(bbProg);
-			var matLoc = gl.getUniformLocation(bbProg, 'viewMat');
-			gl.activeTexture(gl.TEXTURE0);
-			gl.uniform1i(gl.getUniformLocation(bbProg, "tex"), 0);
-			var scalemat = new THREE.Matrix4();
-			var rotmat = new THREE.Matrix4();
-			var transmat = new THREE.Matrix4();
-			var fullmat = new THREE.Matrix4();
-			for (var i = 0; i < objdata.billboards.length; i++) {
-				var obj = objdata.billboards[i];
-				gl.bindTexture(gl.TEXTURE_2D, vineAssets[obj.type].tex);
-				scalemat.makeScale(obj.scale, obj.scale, 1);
-				rotmat.makeRotationZ(obj.angle);
-				var c = obj.center;
-				transmat.makeTranslation(c.x, c.y, obj.depth);
-				fullmat.copy(viewportMat).multiply(transmat).multiply(rotmat).multiply(scalemat);
-				gl.uniformMatrix4fv(matLoc, false, fullmat.elements);
-				bboard.draw(gl, bbProg);
-			}
-		}
-		//
-
-		gl.flush();
-
-		if (asyncCallback) asyncCallback();
-	});
+	gl.flush();
 }
 
 
@@ -731,69 +725,66 @@ var drawPixelsAssets = {
 		prog: undefined
 	}
 };
+registerAssets(drawPixelsAssets);
 var vertBufferCache = {};
 var colorBufferCache = {};
 // Pixels come in as bytes
-render.drawPixels = function(gl, pixelData, asyncCallback) {
-	ensureAssetsLoaded(gl, drawPixelsAssets, asyncCallback !== undefined, function() {
-		var drawPixelsProg = drawPixelsAssets.shaderProgram.prog;
-		gl.useProgram(drawPixelsProg);
+render.drawPixels = function(gl, pixelData) {
+	var drawPixelsProg = drawPixelsAssets.shaderProgram.prog;
+	gl.useProgram(drawPixelsProg);
 
-		var h = gl.drawingBufferHeight;
-		var w = gl.drawingBufferWidth;
-		var size = w + 'x' + h;
-		gl.viewport(0, 0, w, h);
+	var h = gl.drawingBufferHeight;
+	var w = gl.drawingBufferWidth;
+	var size = w + 'x' + h;
+	gl.viewport(0, 0, w, h);
 
-		// Build vertex buffer
-		var vertBuf = vertBufferCache[size];
-		if (vertBuf === undefined) {
-			vertBuf = gl.createBuffer();
-			vertBufferCache[size] = vertBuf;
+	// Build vertex buffer
+	var vertBuf = vertBufferCache[size];
+	if (vertBuf === undefined) {
+		vertBuf = gl.createBuffer();
+		vertBufferCache[size] = vertBuf;
 
-			var verts = [];
-			for (var y = 0; y < h; y++) {
-				var ty = (y + 0.5) / h;
-				var ny = (1-ty)*-1 + ty*1;
-				for (var x = 0; x < w; x++) {
-					var tx = (x + 0.5) / w;
-					var nx = (1-tx)*-1 + tx*1;
-					verts.push(nx); verts.push(ny);
-				}
+		var verts = [];
+		for (var y = 0; y < h; y++) {
+			var ty = (y + 0.5) / h;
+			var ny = (1-ty)*-1 + ty*1;
+			for (var x = 0; x < w; x++) {
+				var tx = (x + 0.5) / w;
+				var nx = (1-tx)*-1 + tx*1;
+				verts.push(nx); verts.push(ny);
 			}
-			verts = new Float32Array(verts);
-
-			gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
-			gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
 		}
+		verts = new Float32Array(verts);
 
-		// Build color buffer
-		pixelData = new Float32Array(pixelData);	// Shader will do 1/255 division
-		var colorBuf = colorBufferCache[size];
-		if (colorBuf === undefined) {
-			colorBuf = gl.createBuffer();
-			colorBufferCache[size] = colorBuf;
-		}
-		gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-		gl.bufferData(gl.ARRAY_BUFFER, pixelData, gl.STATIC_DRAW);
-
-		// Bind
-		var vertLoc = gl.getAttribLocation(drawPixelsProg, "inPos");
-		gl.enableVertexAttribArray(vertLoc);
 		gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
-		gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
-		var colorLoc = gl.getAttribLocation(drawPixelsProg, "inColor");
-		gl.enableVertexAttribArray(colorLoc);
-		gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-		gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, 0, 0);
+		gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+	}
 
-		// Render
-		gl.drawArrays(gl.POINTS, 0, pixelData.length/4);
-		gl.flush();
-		gl.disableVertexAttribArray(vertLoc);
-		gl.disableVertexAttribArray(colorLoc);
+	// Build color buffer
+	pixelData = new Float32Array(pixelData);	// Shader will do 1/255 division
+	var colorBuf = colorBufferCache[size];
+	if (colorBuf === undefined) {
+		colorBuf = gl.createBuffer();
+		colorBufferCache[size] = colorBuf;
+	}
+	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+	gl.bufferData(gl.ARRAY_BUFFER, pixelData, gl.STATIC_DRAW);
 
-		if (asyncCallback) asyncCallback();
-	});
+	// Bind
+	var vertLoc = gl.getAttribLocation(drawPixelsProg, "inPos");
+	gl.enableVertexAttribArray(vertLoc);
+	gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+	gl.vertexAttribPointer(vertLoc, 2, gl.FLOAT, false, 0, 0);
+	var colorLoc = gl.getAttribLocation(drawPixelsProg, "inColor");
+	gl.enableVertexAttribArray(colorLoc);
+	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+	gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, 0, 0);
+
+	// Render
+	gl.drawArrays(gl.POINTS, 0, pixelData.length/4);
+	gl.flush();
+	gl.disableVertexAttribArray(vertLoc);
+	gl.disableVertexAttribArray(colorLoc);
 }
 
 

@@ -234,22 +234,38 @@ var makeProgram = function(neurallyGuided) {
 
 		// Generate leaf?
 		// TODO: Make these ERPs neurally-guided(?)
-		var leafOpt = leafOpts[discrete(leafProbs)];
-		if (leafOpt !== 'none') {
-			var lwidth = newbranch.width * leafWidthMul;
-			var llength = lwidth * leafAspect;
-			var angmean = (leafOpt === 'left') ? Math.PI/4 : -Math.PI/4;
-			var langle = newbranch.angle + gaussian(angmean, Math.PI/12);
-			var lstart = newbranch.start.clone().lerp(newbranch.end, 0.5);
-			var lend = polar2rect(llength, langle).add(lstart);
-			var lcenter = lstart.clone().add(lend).multiplyScalar(0.5);
-			addLeaf({
-				length: llength,
-				width: lwidth,
-				angle: langle,
-				center: lcenter
-			});
-		}
+		future(function() {
+			var leafOpt = leafOpts[discrete(leafProbs)];
+			if (leafOpt !== 'none') {
+				// var lwidth = newbranch.width * leafWidthMul;
+				var lwidth = leafWidthMul * initialWidth;
+				var llength = lwidth * leafAspect;
+				var angmean = (leafOpt === 'left') ? Math.PI/4 : -Math.PI/4;
+				var langle = newbranch.angle + gaussian(angmean, Math.PI/12);
+				var lstart = newbranch.start.clone().lerp(newbranch.end, 0.5);
+				var lend = polar2rect(llength, langle).add(lstart);
+				var lcenter = lstart.clone().add(lend).multiplyScalar(0.5);
+				addLeaf({
+					length: llength,
+					width: lwidth,
+					angle: langle,
+					center: lcenter
+				});
+			}
+		});
+
+		// Generate flower?
+		// TODO: Make this choice neurally-guided
+		future(function() {
+			if (flip(0.5)) {
+				addFlower({
+					center: newbranch.end,
+					// radius: flowerRadMul * newbranch.width,
+					radius: flowerRadMul * initialWidth,
+					angle: newbranch.angle
+				});
+			}
+		});
 
 		if (neurallyGuided) {
 			globalStore.nnGuide.step(globalStore, newState);
@@ -260,8 +276,7 @@ var makeProgram = function(neurallyGuided) {
 			var terminateProb = 0.5;
 			if (_flip(terminateProb, newState, 'terminate')) {
 				globalStore.terminated = true;
-			}
-			// } else {
+			} else {
 				// Generate no further branches w/ prob 1/3
 				// Generate one further branch w/ prob 1/3
 				// Generate two further branches w/ prob 1/3
@@ -274,21 +289,10 @@ var makeProgram = function(neurallyGuided) {
 							}
 							// else factor(0);
 						});
-					} else {
-						// We decided not to generate any further branches.
-						// Should we generate a flower at the end of this branch?
-						// TODO: Make this choice neurally-guided
-						if (flip(0.5)) {
-							addFlower({
-								center: newbranch.end,
-								radius: flowerRadMul * newbranch.width,
-								angle: newbranch.angle
-							});
-						}
 					}
 					// else factor(0);
 				});
-			// }
+			}
 		});
 	};
 
