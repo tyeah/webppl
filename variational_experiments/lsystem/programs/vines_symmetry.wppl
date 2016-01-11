@@ -12,11 +12,11 @@ var ad = require.call(null, 'adnn/ad');
 var renderSize = {width: 50, height: 50}
 lsysUtils.rendering.init(__ROOT, renderSize.width, renderSize.height);
 
-// var futurePolicy = 'immediate';
+var futurePolicy = 'immediate';
 // var futurePolicy = 'lifo';
 // var futurePolicy = 'fifo';
 // var futurePolicy = 'uniformFromAll';
-var futurePolicy = 'uniformFromDeepest';
+// var futurePolicy = 'uniformFromDeepest';
 // var futurePolicy = 'depthWeighted';
 setFuturePolicy(futurePolicy);
 

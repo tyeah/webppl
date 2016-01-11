@@ -13,11 +13,11 @@ var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datas
 var targetSize = targetDB.targetSize();
 lsysUtils.rendering.init(__ROOT, targetSize.width, targetSize.height);
 
-// var futurePolicy = 'immediate';
+var futurePolicy = 'immediate';
 // var futurePolicy = 'lifo';
 // var futurePolicy = 'fifo';
 // var futurePolicy = 'uniformFromAll';
-var futurePolicy = 'uniformFromDeepest';
+// var futurePolicy = 'uniformFromDeepest';
 // var futurePolicy = 'depthWeighted';
 setFuturePolicy(futurePolicy);
 
@@ -141,13 +141,13 @@ var makeProgram = function(neurallyGuided) {
 	var _flip = makeSampler('bernoulli', [ad.scalar.sigmoid]);
 
 
-	var addBranch = function(newbranch, prevBranch) {
+	var addBranch = function(newbranch, currState) {
 		// Update model state
 		globalStore.geo = {
 			type: 'branch',
 			branch: newbranch,
 			next: globalStore.geo,
-			parent: prevBranch,
+			parent: currState.prevBranch,
 			n: globalStore.geo ? globalStore.geo.n + 1 : 1
 		};
 		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.branch(newbranch));
@@ -156,12 +156,13 @@ var makeProgram = function(neurallyGuided) {
 		targetFactor();
 	};
 
-	var addLeaf = function(newleaf) {
+	var addLeaf = function(newleaf, currState) {
 		// Update model state
 		globalStore.geo = {
 			type: 'leaf',
 			leaf: newleaf,
 			next: globalStore.geo,
+			parent: currState.prevBranch,
 			n: globalStore.geo ? globalStore.geo.n + 1 : 1
 		};
 		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.leaf(newleaf));
@@ -170,12 +171,13 @@ var makeProgram = function(neurallyGuided) {
 		targetFactor();
 	};
 
-	var addFlower = function(newflower) {
+	var addFlower = function(newflower, currState) {
 		// Update model state
 		globalStore.geo = {
 			type: 'flower',
 			flower: newflower,
 			next: globalStore.geo,
+			parent: currState.prevBranch,
 			n: globalStore.geo ? globalStore.geo.n + 1 : 1
 		};
 		globalStore.bbox = globalStore.bbox.clone().union(lsysUtils.bboxes.flower(newflower));
@@ -222,7 +224,7 @@ var makeProgram = function(neurallyGuided) {
 			width: width,
 			end: polar2rect(length, newang).add(currState.pos)
 		};
-		addBranch(newbranch, currState.prevBranch);
+		addBranch(newbranch, currState);
 
 		var newState = state({
 			depth: currState.depth + 1,
@@ -237,7 +239,6 @@ var makeProgram = function(neurallyGuided) {
 		future(function() {
 			var leafOpt = leafOpts[discrete(leafProbs)];
 			if (leafOpt !== 'none') {
-				// var lwidth = newbranch.width * leafWidthMul;
 				var lwidth = leafWidthMul * initialWidth;
 				var llength = lwidth * leafAspect;
 				var angmean = (leafOpt === 'left') ? Math.PI/4 : -Math.PI/4;
@@ -250,20 +251,19 @@ var makeProgram = function(neurallyGuided) {
 					width: lwidth,
 					angle: langle,
 					center: lcenter
-				});
+				}, newState);
 			}
 		});
 
 		// Generate flower?
-		// TODO: Make this choice neurally-guided
+		// TODO: Make these ERPs neurally-guided(?)
 		future(function() {
 			if (flip(0.5)) {
 				addFlower({
 					center: newbranch.end,
-					// radius: flowerRadMul * newbranch.width,
 					radius: flowerRadMul * initialWidth,
 					angle: newbranch.angle
-				});
+				}, newState);
 			}
 		});
 
