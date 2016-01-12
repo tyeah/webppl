@@ -21,7 +21,7 @@
 			var propDisplays;
 
 			var targetImg;
-			var fullTargetSize;
+			var fullTargetSize = {width: 600, height: 600};
 			var smallTargetSize;
 
 			var gl;
@@ -76,7 +76,7 @@
 				var ctx = canvas.getContext('2d');
 				if (tgtimage) {
 					// Draw gray-ed out target as background
-					ctx.drawImage(tgtimage, 0, 0);
+					ctx.drawImage(tgtimage, 0, 0, fullTargetSize.width, fullTargetSize.height);
 					ctx.globalCompositeOperation = 'lighten';
 					ctx.rect(0, 0, canvas.width, canvas.height);
 					ctx.fillStyle = 'rgb(128, 128, 128)';
@@ -221,13 +221,11 @@
 				}
 
 				if (!basename) {
-					fullTargetSize = {width: 600, height: 600};
 					createCanvases();
 				} else {
 					var targetImgFile = '../targets/source/' + basename + '.png';
 					targetImg = new Image();
 					targetImg.addEventListener('load', function() {
-						fullTargetSize = {width: targetImg.width, height: targetImg.height};
 						createCanvases();
 					}, false);
 					targetImg.src = targetImgFile;
