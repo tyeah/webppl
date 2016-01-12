@@ -146,7 +146,7 @@ var makeProgram = function(neurallyGuided) {
 
 	var initialWidth = 0.75;
 	var widthDecay = 0.975;
-	var minWidthPercent = 0.2;
+	var minWidthPercent = 0.15;
 	var minWidth = minWidthPercent*initialWidth;
 
 	var state = function(obj) {
