@@ -139,6 +139,7 @@ var makeProgram = function(neurallyGuided) {
 	// var _gaussian = makeSampler('gaussian', [undefined, ad.scalar.exp]);
 	var _gaussian = makeMixtureSampler('gaussian', 4, [undefined, ad.scalar.exp]);
 	var _flip = makeSampler('bernoulli', [ad.scalar.sigmoid]);
+	var _discrete3 = makeSampler('discrete', [ad.scalar.sigmoid, ad.scalar.sigmoid, ad.scalar.sigmoid]);
 
 
 	var addBranch = function(newbranch, currState) {
@@ -210,8 +211,8 @@ var makeProgram = function(neurallyGuided) {
 		return utils.new(THREE.Vector2, r*Math.cos(theta), r*Math.sin(theta));
 	};
 
-	var leafOpts = ['none', 'left', 'right'];
-	var leafProbs = [1, 1, 1];
+	var lOpts = ['none', 'left', 'right'];
+	var lProbs = [1, 1, 1];
 	var branch = function(currState) {
 
 		// Generate new branch
@@ -235,14 +236,13 @@ var makeProgram = function(neurallyGuided) {
 		});
 
 		// Generate leaf?
-		// TODO: Make these ERPs neurally-guided(?)
 		future(function() {
-			var leafOpt = leafOpts[discrete(leafProbs)];
+			var leafOpt = lOpts[_discrete3(lProbs[0], lProbs[1], lProbs[2], newState, 'leaf')];
 			if (leafOpt !== 'none') {
 				var lwidth = leafWidthMul * initialWidth;
 				var llength = lwidth * leafAspect;
 				var angmean = (leafOpt === 'left') ? Math.PI/4 : -Math.PI/4;
-				var langle = newbranch.angle + gaussian(angmean, Math.PI/12);
+				var langle = newbranch.angle + _gaussian(angmean, Math.PI/12, newState, 'leafAngle');
 				var lstart = newbranch.start.clone().lerp(newbranch.end, 0.5);
 				var lend = polar2rect(llength, langle).add(lstart);
 				var lcenter = lstart.clone().add(lend).multiplyScalar(0.5);
@@ -256,9 +256,8 @@ var makeProgram = function(neurallyGuided) {
 		});
 
 		// Generate flower?
-		// TODO: Make these ERPs neurally-guided(?)
 		future(function() {
-			if (flip(0.5)) {
+			if (_flip(0.5, newState, 'flower')) {
 				addFlower({
 					center: newbranch.end,
 					radius: flowerRadMul * initialWidth,
