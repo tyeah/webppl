@@ -3,11 +3,15 @@ import matplotlib.pyplot as plt
 import os
 import sys 
 import argparse 
+import math
 
 """
-Displays each image in targets/source, records coordinates of mouseclick, 
-saves normalized coordinates for each image file to targets/source/file.txt.
+Displays each image in targets/source, records coordinates of two consecutive mouseclicks, 
+saves normalized coordinates and unit direction for each image file to targets/source/file.txt.
 Close window to advance to the next image. 
+
+"Restart" annotation by selecting two new points.
+Total number of clicks must be even - the final pair will be written to file.
 
 Usage: annotateStarting.py --file [file] --startX [startX] --startY [startY]. If file is given then 
 only file will be annotated, otherwise will loop through all images in targets/source. 
@@ -16,16 +20,8 @@ If startX and startY are given then text files for all images (or, if --file is 
 will be generated with the same starting point, without manual annotation. 
 
 """
-source_dir = '../targets/source/'
+source_dir = '../targets/glyphs/'
 ext = '.png'
-
-def onclick(event):
-	if event.xdata != None and event.ydata != None:
-		print event.xdata, event.ydata 
-		normalized_x = event.xdata/width 
-		normalized_y = event.ydata/height 
-		coord_file = open(source_dir + file[:-4] + '.txt', 'w')
-		coord_file.write(str(normalized_x) + " " + str(normalized_y))
 
 filelist = []
 
@@ -58,7 +54,51 @@ for file in filelist:
 			ax = plt.gca()
 			fig = plt.gcf()
 			implot = ax.imshow(im)
+			pt1 = [0,0]
+			pt2 = [0,0]
+			dir = [0,0]
+			annotated = False
+
+			def onclick(event):
+				global annotated
+				if event.xdata != None and event.ydata != None:
+					print "Absolute coords : ", event.xdata, event.ydata 
+					#starting point
+					if not annotated:
+						pt1[0] = event.xdata/width 
+						pt1[1] = event.ydata/height 
+						annotated = True
+						print "Starting point ", pt1
+					#starting direction
+					else:
+						pt2[0] = event.xdata/width 
+						pt2[1] = event.ydata/height 
+						dir[0] = pt2[0] - pt1[0]
+						dir[1] = pt2[1] - pt1[1]
+
+						#Normalize to unit vector
+						norm = math.sqrt(dir[0]*dir[0] + dir[1]*dir[1])
+						dir[0] = dir[0]/norm 
+						dir[1] = dir[1]/norm 
+						print "Dir ", dir 
+						annotated = False
+
 
 			cid = fig.canvas.mpl_connect('button_press_event', onclick)
 
 			plt.show()
+
+			if annotated:
+				print "Did not specify direction. Not writing to file."
+
+			else:
+				coord_file = open(source_dir + file[:-4] + '.txt', 'w')
+				coord_str = str(pt1[0]) + " " + str(pt1[1]) + "\n" + str(dir[0]) + " " + str(dir[1])
+				print coord_str, source_dir + file[:-4] + '.txt'
+				coord_file.write(coord_str)
+
+				coord_file.close()
+
+				print "Starting point and direction written to file: "
+				print "Starting point: ", pt1
+				print "Direction: ", dir
