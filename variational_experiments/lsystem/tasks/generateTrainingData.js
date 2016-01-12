@@ -16,7 +16,7 @@ var utils = require('../../utils.js');
 // Parse options
 var opts = require('minimist')(process.argv.slice(2), {
 	default: {
-		numParticles: 300,
+		numParticles: 600,
 		sampler: 'smc'
 	}
 });
