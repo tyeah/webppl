@@ -99,8 +99,10 @@ ImageData2D.prototype = {
 		var n = this.data.length | 0;
 		var sumWeights = 0;
 		for (var i = 0; i < n; i += 4) {  // stride of 4 for RGBA pixels
-			var eq = (this.data[i] === 255) === (other.data[i] === 255);
-			var w = flatWeight + (1-flatWeight)*sobelImg.data[i/4];
+			var thisEmpty = this.data[i] === 255;
+			var otherEmpty = other.data[i] === 255;
+			var eq = thisEmpty === otherEmpty;
+			var w = otherEmpty ? 1 : flatWeight + (1-flatWeight)*sobelImg.data[i/4];
 			sim += w*eq;
 			sumWeights += w;
 		}
@@ -320,7 +322,7 @@ function makeCombinedSimilarity(weight, sim1, sim2) {
 ///////////////////////////
 // Which similarity measure should we use?
 // var similarity = binarySimilarity;
-var similarity = makeGradientWeightedSimilarity(2);
+var similarity = makeGradientWeightedSimilarity(1.5);
 // var similarity = sobelSimilarity;
 // var similarity = binarizedSobelSimilarity;
 // var similarity = makeCombinedSimilarity(0.5, binarySimilarity, sobelSimilarity);
