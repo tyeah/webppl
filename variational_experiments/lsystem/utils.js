@@ -5,6 +5,14 @@ var Tensor = require('adnn/tensor');
 var THREE = require('three');
 var Sobel = require('image_processing/sobel.js');
 
+function getSobel(img) {
+	var sobelImg = img.__sobel;
+	if (img.__sobel === undefined) {
+		img.__sobel = Sobel.sobel(img.toTensor(0, 1));
+		sobelImg = img.__sobel;
+	}
+	return sobelImg;
+}
 
 // ----------------------------------------------------------------------------
 // 2D image class
@@ -160,6 +168,37 @@ ImageData2D.prototype = {
 		}
 		return 1 - dist/n;
 	},
+	weightedBinaryFilledBilateralSymmetryScore: function(edgeMul) {
+		var flatWeight = 1 / edgeMul;
+		var sobelImg = getSobel(this);
+		var dist = 0;
+		var n = 0;
+		var w = this.width;
+		var h = this.height;
+		var whalf = Math.floor(w / 2);
+		var sumWeights = 0;
+		for (var y = 0; y < h; y++) {
+			for (var x = 0; x < whalf; x++) {
+				var xmirr = w - 1 - x;
+				var i = y*w + x;
+				var imirr = y*w + xmirr;
+				// Stride of 4 for RGBA
+				var v = this.data[4*i];
+				var vmirr = this.data[4*imirr];
+				if (v !== 255) {
+					var W = flatWeight + (1-flatWeight)*sobelImg.data[i];
+					sumWeights += W;
+					dist += W * (vmirr === 255);
+				}
+				if (vmirr !== 255) {
+					var W = flatWeight + (1-flatWeight)*sobelImg.data[imirr];
+					sumWeights += W;
+					dist += W * (v === 255);
+				}
+			}
+		}
+		return 1 - dist/sumWeights;
+	},
 	toBinaryByteArray: function() {
 		var numPixels = this.width*this.height;
 		var numBytes = Math.ceil(numPixels/8);
@@ -235,15 +274,6 @@ ImageData2D.prototype = {
 // Similarity function between target image and another image
 function binarySimilarity(img, targetImg) {
 	return img.percentSameBinary(targetImg);
-}
-
-function getSobel(targetImg) {
-	var sobelTarget = targetImg.__sobel;
-	if (targetImg.__sobel === undefined) {
-		targetImg.__sobel = Sobel.sobel(targetImg.toTensor(0, 1));
-		sobelTarget = targetImg.__sobel;
-	}
-	return sobelTarget;
 }
 
 // Gradient (of target) weighted binary similarity
