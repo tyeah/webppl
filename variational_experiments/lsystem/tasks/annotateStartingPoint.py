@@ -58,11 +58,14 @@ for file in filelist:
 			pt2 = [0,0]
 			dir = [0,0]
 			annotated = False
+			numclicks = 0
 
 			def onclick(event):
 				global annotated
+				global numclicks
 				if event.xdata != None and event.ydata != None:
 					print "Absolute coords : ", event.xdata, event.ydata 
+					numclicks += 1
 					#starting point
 					if not annotated:
 						pt1[0] = event.xdata/width 
@@ -88,7 +91,7 @@ for file in filelist:
 
 			plt.show()
 
-			if annotated:
+			if numclicks == 0 or numclicks % 2 != 0:
 				print "Did not specify direction. Not writing to file."
 
 			else:
