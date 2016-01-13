@@ -68,25 +68,32 @@ while (true) {
 		}
 	}
 	var MAPtrace;
+	var MAPn;	// Number of geometries
 	if (opts.sampler === 'smc') {
 		utils.runwebppl(ParticleFilter, [generate, opts.numParticles, true, false, true], globalStore, '', function(s, ret) {
 			MAPtrace = ret.MAPparticle.trace;
+			MAPn = ret.MAPparticle.value.n;
 		});
 	} else if (opts.sampler === 'mh') {
 		var mhOpts = { justSample: true, onlyMAP: true };
 		utils.runwebppl(HashMH, [generate, opts.numParticles, mhOpts], globalStore, '', function(s, ret) {
 			MAPtrace = ret.MAP.trace;
+			MAPn = ret.MAP.value.n;
 		});
 	} else {
 		throw 'Unrecognized sampler ' + opts.sampler;
 	}
-	var outTrace = MAPtrace;
-	if (targetDB) {
-		outTrace = [globalStore.target.index].concat(outTrace);
+	// Filter out results that are too small (these are likely 'bad'/outlier results and we don't
+	//    want to train on them)
+	if (MAPn >= 10) {
+		var outTrace = MAPtrace;
+		if (targetDB) {
+			outTrace = [globalStore.target.index].concat(outTrace);
+		}
+		fs.appendFileSync(filename, JSON.stringify(outTrace) + '\n');
+		var t = present();
+		var rate = counter / ((t - t0)/60000);
+		console.log('Generated trace ' + counter + ' (avg rate: ' + rate + ' per min)');
+		counter++;
 	}
-	fs.appendFileSync(filename, JSON.stringify(outTrace) + '\n');
-	var t = present();
-	var rate = counter / ((t - t0)/60000);
-	console.log('Generated trace ' + counter + ' (avg rate: ' + rate + ' per min)');
-	counter++;
 }
