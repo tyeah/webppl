@@ -44,7 +44,7 @@ var filename = gen_traces + '/' + trainingTraces + '.txt';
 var trainingOpts = {
 	numParticles: 1,				// mini batch size
 	// numParticles: 100,				// mini batch size
-	maxNumFlights: 10000,			// max number of mini-batches
+	maxNumFlights: 20000,			// max number of mini-batches
 	convergeEps: 0.001,
 	gradientEstimator: 'EUBO',
 	exampleTraces: utils.loadTraces(filename),
