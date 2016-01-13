@@ -45,18 +45,23 @@ function saveDownsampledAndFlipped(imageName, sourceLoc, outputLoc, outputLocFli
 		outputLoc, outputLocFlipped));
 	
 	var coordfile = fs.readFileSync(sourceDir + imageName.slice(0, -4) + '.txt', 'utf8');
-	var coords = coordfile.split(' ');
+	var coordlines = coordfile.split('\n');
+	var coords = coordlines[0].split(' ');
+	var direc = coordlines[1].split(' ')
 
 	var flippedCoords = [0, 0];
+	var flippedDir = [0, 0];
 	flippedCoords[1] = coords[1];
 	flippedCoords[0] = String(1 - parseFloat(coords[0]));
+	flippedDir[1] = direc[1];
+	flippedDir[0] = String(-parseFloat(direc[0]));
 	
 	//Save normalized starting coordinate files to image.txt
-	var coordStr = coords[0] + ' ' + coords[1];
-	var flippedCoordStr = flippedCoords[0] + ' ' + flippedCoords[1];
+	var coordStr = coords[0] + ' ' + coords[1] + '\n' + direc[0] + ' ' + direc[1];
 	fs.writeFileSync(listDirPrefix + dir + '/' + imageName.slice(0, -4) + '.txt', coordStr);
 
 	//Save normalized starting coordinate files to image_flipped.txt
+	var flippedCoordStr = flippedCoords[0] + ' ' + flippedCoords[1] + '\n' + flippedDir[0] + ' ' + flippedDir[1];
 	fs.writeFileSync(listDirPrefix + dir + '/' + imageName.slice(0, -4) + '_flipped.txt', flippedCoordStr);
 
 }

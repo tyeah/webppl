@@ -321,13 +321,14 @@ var makeProgram = function(neurallyGuided) {
 
 		// Determine starting state by inverting viewport transform
 		var starting_world_pos = norm2world(globalStore.target.startPos);
+		var starting_dir = globalStore.target.startDir;
+		var starting_ang = Math.atan2(starting_dir.y, starting_dir.x);
 
 		// These are separated like this so that we can have an initial local
 		//    state to feed to the _gaussian for the initial angle.
 		var initState = state({
 			depth: 0,
 			pos: starting_world_pos,
-			// pos: utils.new(THREE.Vector2, 0, 0),
 			angle: 0,
 			width: initialWidth,
 			prevBranch: undefined
@@ -335,8 +336,7 @@ var makeProgram = function(neurallyGuided) {
 		var startState = state({
 			depth: initState.depth,
 			pos: initState.pos,
-			angle: _gaussian(-Math.PI/2, Math.PI/6, initState, 'startAngle'),
-			// angle: _gaussian(Math.PI/2, Math.PI/10, initState, 'startAngle'),
+			angle: _gaussian(starting_ang, Math.PI/6, initState, 'startAngle'),
 			width: initState.width,
 			prevBranch: initState.prevBranch
 		});

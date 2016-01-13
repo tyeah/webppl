@@ -363,9 +363,12 @@ function TargetImageDatabase(directory) {
 
 			//Read .txt file with coordinates
 			var coordfile = fs.readFileSync(directory + '/' + shortname + '.txt', 'utf8');
-			var coords = coordfile.split(' ');
+			var coordlines = coordfile.split('\n');
+			var coords = coordlines[0].split(' ');
+			var dir = coordlines[1].split(' ')
 
 			var startPos = new THREE.Vector2(parseFloat(coords[0]), parseFloat(coords[1]));
+			var startDir = new THREE.Vector2(parseFloat(dir[0]), parseFloat(dir[1]));
 
 			var target = {
 				index: this.targetsByIndex.length,				
@@ -374,7 +377,8 @@ function TargetImageDatabase(directory) {
 				image: undefined,
 				baseline: undefined,
 				tensor: undefined,
-				startPos: startPos
+				startPos: startPos,
+				startDir: startDir
 			};
 			this.targetsByIndex.push(target);
 			this.targetsByName[shortname] = target;

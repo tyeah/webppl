@@ -13,7 +13,8 @@ Close window to advance to the next image.
 "Restart" annotation by selecting two new points.
 Total number of clicks must be even - the final pair will be written to file.
 
-Usage: annotateStarting.py --file [file] --startX [startX] --startY [startY]. If file is given then 
+Usage: annotateStarting.py --file [file] --startX [startX] --startY [startY]. --dirX [dirX] --dirY [dirY]
+If file is given then 
 only file will be annotated, otherwise will loop through all images in targets/source. 
 
 If startX and startY are given then text files for all images (or, if --file is specified, only one image)
@@ -29,6 +30,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--file')
 parser.add_argument('--startX')
 parser.add_argument('--startY')
+parser.add_argument('--dirX')
+parser.add_argument('--dirY')
 args = parser.parse_args()
 
 if args.file:
@@ -42,9 +45,9 @@ print filelist
 #Iterate through images in directory 
 for file in filelist:
 	if file.endswith(ext): 
-		if args.startX and args.startY:
+		if args.startX and args.startY and args.dirX and args.dirY:
 			coord_file = open(source_dir + file[:-4] + '.txt', 'w')
-			coord_file.write(str(args.startX) + " " + str(args.startY))
+			coord_file.write(str(args.startX) + " " + str(args.startY) + "\n" + str(args.dirX) + " " + str(args.dirY))
 	
 		else:
 			print file 
