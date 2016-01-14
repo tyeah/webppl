@@ -5,6 +5,8 @@
 // * --arch=name: Name of neural guide architecture, looks in nnarch/architectures
 // * --outputName=name: Writes output neural nets to saved_params/name.txt
 //   [Optional] If omitted, will use value of --arch
+// * --numTraces=num: Trains on a random subset of num traces
+//   [Optional] If omitted, will use all training traces
 
 
 var _ = require('underscore');
@@ -39,7 +41,14 @@ var globalStore = rets.globalStore;
 var generateGuided = rets.generateGuided;
 
 
+// Load traces
 var filename = gen_traces + '/' + trainingTraces + '.txt';
+var traces = utils.loadTraces(filename);
+if (opts.numTraces) {
+	assert(opts.numTraces <= traces.length,
+		'--numTraces is bigger than the size of the trace file!');
+	traces = _.shuffle(traces).slice(0, opts.numTraces);
+}
 
 var trainingOpts = {
 	numParticles: 1,				// mini batch size
@@ -47,7 +56,7 @@ var trainingOpts = {
 	maxNumFlights: 20000,			// max number of mini-batches
 	convergeEps: 0.001,
 	gradientEstimator: 'EUBO',
-	exampleTraces: utils.loadTraces(filename),
+	exampleTraces: traces,
 	// gradientEstimator: 'ELBO',
 	// optimizer: {
 	// 	name: 'adagrad',
