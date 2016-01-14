@@ -170,37 +170,6 @@ ImageData2D.prototype = {
 		}
 		return 1 - dist/n;
 	},
-	weightedBinaryFilledBilateralSymmetryScore: function(edgeMul) {
-		var flatWeight = 1 / edgeMul;
-		var sobelImg = getSobel(this);
-		var dist = 0;
-		var n = 0;
-		var w = this.width;
-		var h = this.height;
-		var whalf = Math.floor(w / 2);
-		var sumWeights = 0;
-		for (var y = 0; y < h; y++) {
-			for (var x = 0; x < whalf; x++) {
-				var xmirr = w - 1 - x;
-				var i = y*w + x;
-				var imirr = y*w + xmirr;
-				// Stride of 4 for RGBA
-				var v = this.data[4*i];
-				var vmirr = this.data[4*imirr];
-				if (v !== 255) {
-					var W = flatWeight + (1-flatWeight)*sobelImg.data[i];
-					sumWeights += W;
-					dist += W * (vmirr === 255);
-				}
-				if (vmirr !== 255) {
-					var W = flatWeight + (1-flatWeight)*sobelImg.data[imirr];
-					sumWeights += W;
-					dist += W * (v === 255);
-				}
-			}
-		}
-		return 1 - dist/sumWeights;
-	},
 	toBinaryByteArray: function() {
 		var numPixels = this.width*this.height;
 		var numBytes = Math.ceil(numPixels/8);
@@ -265,6 +234,16 @@ ImageData2D.prototype = {
 			this.data[4*i+3] = 255;	// full alpha
 		}
 		return this;
+	},
+	//// TEST /////
+	gradNorm: function() {
+		var gradImg = Sobel.sobel(this.toTensor(0, 1));
+		var s = 0;
+		var n = this.width*this.height;
+		for (var i = 0; i < n; i++) {
+			s += gradImg.data[i];
+		}
+		return s / n;
 	}
 };
 
