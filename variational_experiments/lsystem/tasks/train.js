@@ -47,8 +47,9 @@ var traces = utils.loadTraces(filename);
 if (opts.numTraces) {
 	assert(opts.numTraces <= traces.length,
 		'--numTraces is bigger than the size of the trace file!');
-	traces = _.shuffle(traces).slice(0, opts.numTraces);
+	traces = traces.slice(0, opts.numTraces);
 }
+console.log(traces.length);
 
 var trainingOpts = {
 	numParticles: 1,				// mini batch size
