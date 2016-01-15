@@ -39,10 +39,12 @@ if (images[images.length-1] === '') images.pop();
 
 function saveDownsampledAndFlipped(imageName, sourceLoc, outputLoc, outputLocFlipped) {
 	// Save resized + flipped images
-	syscall(util.format('convert %s -resize %dx%d\! %s',
-		sourceLoc, newWidth, newHeight, outputLoc));
-	syscall(util.format('convert %s -flop %s',
-		outputLoc, outputLocFlipped));
+	var resizeCall = util.format('convert %s -resize %dx%d\! %s', sourceLoc, newWidth, newHeight, outputLoc);
+	// console.log('*** ' + resizeCall);
+	syscall(resizeCall);
+	var flopCall = util.format('convert %s -flop %s', outputLoc, outputLocFlipped);
+	// console.log('*** ' + flopCall);
+	syscall(flopCall);
 	
 	var coordfile = fs.readFileSync(sourceDir + imageName.slice(0, -4) + '.txt', 'utf8');
 	var coordlines = coordfile.split('\n');
@@ -71,6 +73,6 @@ for (var i = 0; i < images.length; i++) {
 	var outputLoc = listDirPrefix + dir + '/' +images[i];
 	var outputLocFlipped = listDirPrefix + dir + '/' + images[i].slice(0, -4) + '_flipped.png';
 	var sourceLoc = sourceDir + images[i];	
-	saveDownsampledAndFlipped(images[i], sourceLoc, outputLoc, outputLocFlipped);
 	console.log(images[i]);
+	saveDownsampledAndFlipped(images[i], sourceLoc, outputLoc, outputLocFlipped);
 }
