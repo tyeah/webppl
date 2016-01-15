@@ -46,21 +46,21 @@ if (opts.trainedModel) {
 }
 console.log(opts);
 
-function generateResult() {
-	// Initialize
-	console.log('   Compiling code...');
-	var file = __dirname + '/../programs/' + program + '.wppl';
-	var rootdir = __dirname + '/..';
-	var rets = utils.execWebpplFileWithRoot(file, rootdir);
-	var globalStore = rets.globalStore;
-	var generate = opts.trainedModel ? rets.generateGuided : rets.generate;
-	var targetDB = rets.targetDB;
-	var renderSize = rets.renderSize || targetDB.targetSize();
-	var viewport = rets.viewport;
-	if (opts.trainedModel) {
-		globalStore.nnGuide = nnGuide;
-	}
+// Compile ahead-of-time
+console.log('   Compiling code...');
+var file = __dirname + '/../programs/' + program + '.wppl';
+var rootdir = __dirname + '/..';
+var rets = utils.execWebpplFileWithRoot(file, rootdir);
+var globalStore = rets.globalStore;
+var generate = opts.trainedModel ? rets.generateGuided : rets.generate;
+var targetDB = rets.targetDB;
+var renderSize = rets.renderSize || targetDB.targetSize();
+var viewport = rets.viewport;
+if (opts.trainedModel) {
+	globalStore.nnGuide = nnGuide;
+}
 
+function generateResult() {
 	// Run
 	console.log('   Running program...');
 	var saveHistory = lsysUtils.deleteStoredImages;
