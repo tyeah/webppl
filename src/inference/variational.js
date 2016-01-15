@@ -204,7 +204,12 @@ module.exports = function(env) {
     for (var i = 0; i < this.numParticles; i++) {
       var trace = undefined;
       if (this.gradientEstimator === 'EUBO') {
-        var ti = Math.floor(Math.random() * this.exampleTraces.length); 
+        /////////
+        var ti = Math.floor(Math.random() * this.exampleTraces.length);
+        // if (this.traceIndex === undefined) this.traceIndex = 0;
+        // var ti = this.traceIndex;
+        // this.traceIndex = (this.traceIndex + 1) % this.exampleTraces.length;
+        /////////
         trace = new Trace(this.exampleTraces[ti]);
       }
       this.particles.push(newParticle(this.oldStore, exitK, trace));

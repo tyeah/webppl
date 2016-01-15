@@ -10,6 +10,9 @@ var ad = require.call(null, 'adnn/ad');
 // Globals / constants
 
 var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/orig');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_train');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_test');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/siggraph_letters');
 var targetSize = targetDB.targetSize();
 lsysUtils.rendering.init(__ROOT, targetSize.width, targetSize.height);
 
@@ -137,6 +140,9 @@ var makeProgram = function(neurallyGuided) {
 		}
 	};
 	// var _gaussian = makeSampler('gaussian', [undefined, ad.scalar.exp]);
+	// var _gaussian = makeMixtureSampler('gaussian', 1, [undefined, ad.scalar.exp]);
+	// var _gaussian = makeMixtureSampler('gaussian', 2, [undefined, ad.scalar.exp]);
+	// var _gaussian = makeMixtureSampler('gaussian', 3, [undefined, ad.scalar.exp]);
 	var _gaussian = makeMixtureSampler('gaussian', 4, [undefined, ad.scalar.exp]);
 	var _flip = makeSampler('bernoulli', [ad.scalar.sigmoid]);
 	var _discrete3 = makeSampler('discrete', [ad.scalar.sigmoid, ad.scalar.sigmoid, ad.scalar.sigmoid]);

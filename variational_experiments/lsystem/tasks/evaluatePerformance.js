@@ -97,7 +97,7 @@ if (testDB) {
 		numReps = testDB.numTargets();
 		for (var i = 0; i < numReps; i++) {
 			testlist.push(i);
-		}		
+		}
 	}
 
 }
@@ -108,6 +108,7 @@ var outfilename = performance_eval + '/' + outputName + '.csv';
 var outfile = fs.openSync(outfilename, 'w');
 fs.writeSync(outfile, 'numParticles,sim,time,avgTime,length,normTime,avgNormTime\n');
 var warmUp = true;
+// var warmUp = false;
 for (var i = opts.start; i <= opts.end; i += opts.incr) {
 	var np = i;
 	// We run through all test targets once, just to make sure everything is warmed
