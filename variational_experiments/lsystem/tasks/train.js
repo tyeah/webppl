@@ -5,6 +5,8 @@
 // * --arch=name: Name of neural guide architecture, looks in nnarch/architectures
 // * --outputName=name: Writes output neural nets to saved_params/name.txt
 //   [Optional] If omitted, will use value of --arch
+// * --numIters=num: Number of training iterations
+//   [Optional] Defaults to 20000
 // * --numTraces=num: Trains on a random subset of num traces
 //   [Optional] If omitted, will use all training traces
 
@@ -17,7 +19,11 @@ var nnarch = require('../nnarch');
 
 
 // Parse options
-var opts = require('minimist')(process.argv.slice(2));
+var opts = require('minimist')(process.argv.slice(2), {
+	default: {
+		numIters: 20000
+	}
+});
 var program = opts.program;
 assert(program, 'Must define --program option');
 var trainingTraces = opts.trainingTraces;
@@ -49,12 +55,10 @@ if (opts.numTraces) {
 		'--numTraces is bigger than the size of the trace file!');
 	traces = traces.slice(0, opts.numTraces);
 }
-console.log(traces.length);
 
 var trainingOpts = {
 	numParticles: 1,				// mini batch size
-	// numParticles: 100,				// mini batch size
-	maxNumFlights: 20000,			// max number of mini-batches
+	maxNumFlights: opts.numIters,	// max number of mini-batches
 	convergeEps: 0.001,
 	gradientEstimator: 'EUBO',
 	exampleTraces: traces,
