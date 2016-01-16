@@ -14,6 +14,40 @@ function getSobel(img) {
 	return sobelImg;
 }
 
+
+function getClosestForegroundColor(targetImg, currentImgPos) {
+	var radius = 1;
+	var closestColor = [0, 0, 0];	
+
+	for (var x = -radius; x <= radius; x+=radius) {
+		for (var y = -radius; y <= radius; y+=radius) {
+			
+			imgPos = {
+				x: currentImgPos.x + x,
+				y: currentImgPos.y + y,
+			};
+
+			//check valid position
+			if (imgPos.x >= 0 && imgPos.x < targetImg.width && imgPos.y >= 0 && imgPos.y < targetImg.height) {
+				var index = targetImg.width*imgPos.y + imgPos.x;
+
+				var color = [targetImg.data[4*index], 
+				targetImg.data[4*index + 1],
+				targetImg.data[4*index + 2]];				
+				if (color[0] != 255 || color[1] != 255 || color[2] != 255) {
+					closestColor = color;	
+					break;			
+				}
+				else {
+					radius += 1;				
+				}		
+			}
+		}
+	}
+	return closestColor;
+
+}
+
 // ----------------------------------------------------------------------------
 // 2D image class
 
@@ -490,14 +524,17 @@ function deleteStoredImages(particle) {
 // ----------------------------------------------------------------------------
 
 
+
 module.exports = {
 	ImageData2D: ImageData2D,
 	TargetImageDatabase: TargetImageDatabase,
 	normalizedSimilarity: normalizedSimilarity,
 	rendering: rendering,
 	bboxes: bboxes,
-	deleteStoredImages: deleteStoredImages
+	deleteStoredImages: deleteStoredImages,
+	getClosestForegroundColor: getClosestForegroundColor
 };
+
 
 
 

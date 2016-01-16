@@ -185,7 +185,6 @@ var makeProgram = function(neurallyGuided) {
 		};
 
 		//Get color of closest non background ([255, 255, 255]) target pixel at currState.pos 
-
 		var targetColor = lsysUtils.getClosestForegroundColor(globalStore.target.image, imgPos);
 
 		var newbranch = {
