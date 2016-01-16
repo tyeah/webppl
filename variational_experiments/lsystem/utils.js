@@ -144,6 +144,35 @@ ImageData2D.prototype = {
 		sim = sim/sumWeights;
 		return sim;
 	},
+	//flatWeight: floor for zero gradient pixels
+	weightedColorSimilarity: function (other, sobelImg, flatWeight) {
+		assert(this.width === other.width && this.height === other.height
+			&& this.width === sobelImg.dims[1] && this.height === sobelImg.dims[2],
+			'weightedColorSimilarity: image dimensions do not match!');
+		
+		//Compute gradient weighted color distance
+		var n = this.data.length | 0;
+		var sumWeights = 0;	
+		var sim = 0;
+		for (var i = 0; i < n; i+=4) {
+			var thisEmpty = (this.data[i] === 255 && this.data[i+1] === 255 && this.data[i+2] === 255);
+			var otherEmpty = (other.data[i] === 255 && other.data[i+1] === 255 && other.data[i+2] === 255);				
+			var w = otherEmpty ? 1 : flatWeight + (1-flatWeight)*sobelImg.data[Math.floor(i/4)];
+			
+			//RGB
+			for (var j = 0; j < 3; j++) {
+				sim += w/(1 + Math.abs(this.data[i+j]/255.0 - other.data[i+j]/255.0));					
+			}
+
+			sumWeights += w;
+		}	
+
+		sim = sim/sumWeights;
+
+		//console.log(sim);
+
+		return sim;
+	},
 	percentSameBinary: function(other) {
 		var sim = this.numSameBinary(other);
 		return sim / (this.height*this.width);
@@ -289,6 +318,15 @@ ImageData2D.prototype = {
 // Similarity function between target image and another image
 function binarySimilarity(img, targetImg) {
 	return img.percentSameBinary(targetImg);
+}
+
+function makeGradientWeightedColorSimilarity(edgeMul) {
+	var flatWeight = 1 / edgeMul;
+	return function(img, targetImg) {
+		var sobelTarget = getSobel(targetImg);
+		var val = img.weightedColorSimilarity(targetImg, sobelTarget, flatWeight);
+		return val;
+	};	
 }
 
 // Gradient (of target) weighted binary similarity
