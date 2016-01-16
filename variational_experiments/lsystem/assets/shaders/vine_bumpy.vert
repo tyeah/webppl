@@ -71,7 +71,9 @@ uniform mat4 viewMat;
 attribute vec3 inPos;
 attribute vec2 inUV;
 attribute vec3 inNorm;
+attribute vec3 color;
 varying vec2 outUV;
+varying vec3 outColor;
 
 float freq = 2.;
 float amp = 0.01;
@@ -79,6 +81,7 @@ float amp = 0.01;
 
 void main(void) {
 	outUV = inUV;
+    outColor = color;
 	vec4 ndcpos = viewMat * vec4(inPos, 1.);
 	gl_Position = vec4(ndcpos.xy + amp*snoise(freq*inUV)*inNorm.xy, ndcpos.z, 1.);
 }

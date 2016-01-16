@@ -41,6 +41,7 @@ function compileProgram(gl, vertSrc, fragSrc) {
 	gl.attachShader(prog, vertShader);
 	gl.attachShader(prog, fragShader);
 	gl.linkProgram(prog);
+
 	return prog;
 }
 
@@ -165,6 +166,7 @@ function Mesh() {
 	this.uvs = [];
 	this.normals = [];
 	this.indices = [];
+	this.colors = [];
 
 	this.buffers = undefined;
 };
@@ -181,6 +183,7 @@ Mesh.prototype.copy = (function() {
 		copyvecs(this.vertices, other.vertices);
 		copyvecs(this.uvs, other.uvs);
 		copyvecs(this.normals, other.normals);
+		copyvecs(this.colors, other.colors);
 		return this;
 	};
 })();
@@ -208,6 +211,7 @@ Mesh.prototype.append = function(other) {
 	this.vertices = this.vertices.concat(other.vertices);
 	this.uvs = this.uvs.concat(other.uvs);
 	this.normals = this.normals.concat(other.normals);
+	this.colors = this.colors.concat(other.colors);
 	var m = other.indices.length;
 	for (var i = 0; i < m; i++) {
 		this.indices.push(other.indices[i] + n);
@@ -263,6 +267,20 @@ Mesh.prototype.recomputeBuffers = function(gl) {
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.indices);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 	this.buffers.numIndices = indices.length;
+
+	var colors = new Float32Array(n*3);
+	for (var i = 0; i < n; i++) {
+		var c = this.colors[i];
+		//console.log(c);
+		colors[3*i] = c.x;
+		colors[3*i+1] = c.y;
+		colors[3*i+2] = c.z;
+	}
+	this.buffers.colors = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.colors);
+	gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+
+
 };
 
 Mesh.prototype.destroyBuffers = function(gl) {
@@ -272,6 +290,8 @@ Mesh.prototype.destroyBuffers = function(gl) {
 			gl.deleteBuffer(this.buffers.uvs);
 		if (this.buffers.normals)
 			gl.deleteBuffer(this.buffers.normals);
+		if (this.buffers.colors)
+			gl.deleteBuffer(this.buffers.colors);
 		gl.deleteBuffer(this.buffers.indices);
 		this.buffers = undefined;
 	}
@@ -285,10 +305,18 @@ Mesh.prototype.draw = function(gl, prog) {
 	var vertLoc = gl.getAttribLocation(prog, "inPos");
 	var uvLoc = gl.getAttribLocation(prog, "inUV");
 	var normLoc = gl.getAttribLocation(prog, "inNorm");
+	
+	
+	var colorLoc = gl.getAttribLocation(prog, "color");
+	gl.enableVertexAttribArray(colorLoc);
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.colors);
+	gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
 
 	gl.enableVertexAttribArray(vertLoc);
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.vertices);
 	gl.vertexAttribPointer(vertLoc, 3, gl.FLOAT, false, 0, 0);
+
+
 
 	if (uvLoc !== -1) {
 		gl.enableVertexAttribArray(uvLoc);
@@ -312,6 +340,7 @@ Mesh.prototype.draw = function(gl, prog) {
 	if (normLoc !== -1) {
 		gl.disableVertexAttribArray(normLoc);
 	}
+
 };
 
 
@@ -323,6 +352,11 @@ function renderBranch(context, branch) {
 	context.beginPath();
 	context.lineWidth = branch.width;
 	context.moveTo(branch.start.x, branch.start.y);
+	//Convert branch.color to hex color code
+	if (branch.color) {
+		var hexcode = '#' + branch.color[0].toString(16) + branch.color[1].toString(16) + branch.color[2].toString(16);
+		context.strokeStyle = hexcode;	
+	}
 	context.lineTo(branch.end.x, branch.end.y);
 	context.stroke();
 }
@@ -447,8 +481,8 @@ function controlPoints(p0, p1, prev, next) {
 	return [p0, p01, p11, p1];
 }
 
-function vine(cps, curveFn, width0, width1, v0, v1, depth) {
-
+//incorporate color
+function vine(cps, curveFn, width0, width1, v0, v1, depth, color) {
 	var mesh = new Mesh();
 
 	var points = curveFn(cps);
@@ -485,6 +519,9 @@ function vine(cps, curveFn, width0, width1, v0, v1, depth) {
 		var p1 = center.clone().add(normal);
 		mesh.vertices.push(new THREE.Vector3(p0.x, p0.y, depth));
 		mesh.vertices.push(new THREE.Vector3(p1.x, p1.y, depth));
+		var c1 = new THREE.Vector3(color[0]/255.0, color[1]/255.0, color[2]/255.0);
+		mesh.colors.push(c1);
+		mesh.colors.push(c1);
 		mesh.normals.push(new THREE.Vector3(-normal.x, -normal.y, 0));
 		mesh.normals.push(new THREE.Vector3(normal.x, normal.y, 0));
 	}
@@ -506,6 +543,11 @@ function billboard() {
 	mesh.vertices.push(new THREE.Vector3(.5, -.5, 0));
 	mesh.vertices.push(new THREE.Vector3(.5, .5, 0));
 	mesh.vertices.push(new THREE.Vector3(-.5, .5, 0));
+	var c1 = new THREE.Vector3(Math.random(), Math.random(), Math.random());
+	mesh.colors.push(c1);
+	mesh.colors.push(c1);
+	mesh.colors.push(c1);
+	mesh.colors.push(c1);
 	mesh.uvs.push(new THREE.Vector2(0, 0));
 	mesh.uvs.push(new THREE.Vector2(1, 0));
 	mesh.uvs.push(new THREE.Vector2(1, 1));
@@ -553,6 +595,7 @@ function geo2objdata(geo) {
 					// Needed b/c JSON loses prototype information
 					point: new THREE.Vector2().copy(g.branch.start),
 					width: g.branch.width,
+					color: g.branch.color,
 					children: [],
 					depth: undefined
 				};
@@ -560,6 +603,7 @@ function geo2objdata(geo) {
 			branchTreeNodes.push({
 				point: new THREE.Vector2().copy(g.branch.end),
 				width: g.branch.width,
+				color: g.branch.color,
 				children: [],
 				depth: mapdepth(g.depthLayer)
 			});
@@ -623,7 +667,11 @@ function vineTreeMesh(tree) {
 			var cps = controlPoints(p0, p1, prev, next);
 			var w0 = prevs[prevs.length - 1].width;
 			var w1 = tree.width;
-			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1, tree.depth);
+			var color = tree.color;
+			if (!color) { //default to green
+				color = [70, 140, 8];
+			}
+			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1, tree.depth, color);
 			mesh.append(vineMesh);
 		}
 
@@ -692,6 +740,7 @@ render.renderGLDetailed = function(gl, viewport, geo) {
 	var vineProg = vineAssets.vineProgram.prog;
 	gl.useProgram(vineProg);
 	gl.uniformMatrix4fv(gl.getUniformLocation(vineProg, 'viewMat'), false, viewportMat.elements);
+	
 	vmesh.draw(gl, vineProg);
 	vmesh.destroyBuffers(gl);
 
