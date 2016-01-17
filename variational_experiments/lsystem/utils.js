@@ -8,7 +8,7 @@ var Sobel = require('image_processing/sobel.js');
 function getSobel(img) {
 	var sobelImg = img.__sobel;
 	if (img.__sobel === undefined) {
-		img.__sobel = Sobel.sobel(img.toTensor(0, 1));
+		img.__sobel = Sobel.sobel(img.toTensorAveraged(0, 1));
 		sobelImg = img.__sobel;
 	}
 	return sobelImg;
@@ -296,6 +296,19 @@ ImageData2D.prototype = {
 			x.data[i] = (1-t)*lo + t*hi;
 		}
 		return x;
+	},
+	toTensorAveraged: function(lo, hi) {
+		if (lo === undefined) lo = -1;
+		if (hi === undefined) hi = 1;
+		var x = new Tensor([1, this.height, this.width]);
+		var numPixels = this.width*this.height;
+		for (var i = 0; i < numPixels; i++) {
+			var avg = (this.data[4*i] + this.data[4*i + 1] + this.data[4*i + 2])/3;
+			//console.log(avg);
+			var t = avg / 255;
+			x.data[i] = (1-t)*lo + t*hi;
+		}
+	return x;
 	},
 	// Converts [lo, hi] to [0, 255]
 	fromTensor: function(x, lo, hi) {
@@ -604,7 +617,6 @@ module.exports = {
 	deleteStoredImages: deleteStoredImages,
 	getClosestForegroundColor: getClosestForegroundColor
 };
-
 
 
 
