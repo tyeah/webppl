@@ -170,24 +170,22 @@ ImageData2D.prototype = {
 		
 		//Compute gradient weighted color distance
 		var n = this.data.length | 0;
-		var sumWeights = 0;	
-		var sim = 0;
+		var dist = 0;
+		var nEntries = 0;
 		for (var i = 0; i < n; i+=4) {
 			var thisEmpty = (this.data[i] === 255 && this.data[i+1] === 255 && this.data[i+2] === 255);
 			var otherEmpty = (other.data[i] === 255 && other.data[i+1] === 255 && other.data[i+2] === 255);				
 			var w = otherEmpty ? 1 : flatWeight + (1-flatWeight)*sobelImg.data[Math.floor(i/4)];
 			
 			for (var j = 0; j < 3; j++) {
-				if (thisEmpty === otherEmpty) { 
-					sim += w/(1 + Math.abs((this.data[i+j]/255.0) - (other.data[i+j]/255.0)));					
-					sumWeights += w;
-				}
+				dist += Math.abs((this.data[i+j]/255.0) - (other.data[i+j]/255.0));
+				nEntries += 1;
 			}
 		}	
 
-		sim = sim/sumWeights;
+		dist = dist/nEntries;
 
-		//console.log(sim);
+		var sim = 1 - dist;
 
 		return sim;
 	},
@@ -356,10 +354,7 @@ function makeGradientWeightedColorSimilarity(edgeMul) {
 	return function(img, targetImg) {
 		var sobelTarget = getSobel(targetImg);
 		
-		//image to tensor
 		//var sobelImg = new ImageData2D().fromTensor(sobelTarget);
-
-		//Save
 		//sobelImg.saveToFile('sobel/sobelImg_' + (Math.round(Math.random()*100)).toString() + '.png');
 
 		var val = img.weightedColorSimilarity(targetImg, sobelTarget, flatWeight);
@@ -374,8 +369,6 @@ function makeGradientWeightedSimilarity(edgeMul) {
 		var sobelTarget = getSobel(targetImg);
 
 		//var sobelImg = new ImageData2D().fromTensor(sobelTarget);
-
-		//Save
 		//sobelImg.saveToFile('sobel/sobelImg_' + (Math.round(Math.random()*100)).toString() + '.png');
 
 		return img.weightedPercentSameBinary(targetImg, sobelTarget, flatWeight);
@@ -417,8 +410,8 @@ function makeCombinedSimilarity(weight, sim1, sim2) {
 ///////////////////////////
 // Which similarity measure should we use?
 // var similarity = binarySimilarity;
-var similarity = makeGradientWeightedSimilarity(1.5);
-//var similarity = makeGradientWeightedColorSimilarity(1.5);
+//var similarity = makeGradientWeightedSimilarity(1.5);
+var similarity = makeGradientWeightedColorSimilarity(1.5); //1.5
 // var similarity = sobelSimilarity;
 // var similarity = binarizedSobelSimilarity;
 // var similarity = makeCombinedSimilarity(0.5, binarySimilarity, sobelSimilarity);
