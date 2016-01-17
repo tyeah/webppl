@@ -148,7 +148,7 @@ var makeProgram = function(neurallyGuided) {
 	var _gaussian = makeMixtureSampler('gaussian', 4, [undefined, ad.scalar.exp]);
 	var _flip = makeSampler('bernoulli', [ad.scalar.sigmoid]);
 
-	var initialWidth = 0.75;
+	var initialWidth = 0.75; //0.75;
 	var widthDecay = 0.975;
 	var minWidthPercent = 0.15;
 	var minWidth = minWidthPercent*initialWidth;
@@ -226,6 +226,11 @@ var makeProgram = function(neurallyGuided) {
 			var terminateProb = 0.5;
 			if (_flip(terminateProb, newState, 'terminate')) {
 				globalStore.terminated = true;
+
+				//save output image
+				//globalStore.genImg.saveToFile(__ROOT + '/output/img_' + (globalStore.geo.n).toString() + '.png');
+
+
 			} else {
 				// Generate no further branches w/ prob 1/3
 				// Generate one further branch w/ prob 1/3

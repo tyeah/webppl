@@ -14,36 +14,54 @@ function getSobel(img) {
 	return sobelImg;
 }
 
+function checkValidColor(targetImg, imgPos) {
+	if (imgPos.x >= 0 && imgPos.x < targetImg.width && 
+		imgPos.y >= 0 && imgPos.y < targetImg.height) {
+			var currentIndex = targetImg.width*imgPos.y + imgPos.x;
+			var currentColor = [targetImg.data[4*currentIndex], 
+								targetImg.data[4*currentIndex + 1],
+								targetImg.data[4*currentIndex + 2]];	
+
+			if (currentColor[0] != 255 || currentColor[1] != 255 || currentColor[2] != 255) {
+				return [true, currentColor];
+		}	
+	}
+
+	return [false];
+}
 
 function getClosestForegroundColor(targetImg, currentImgPos) {
-	var radius = 1;
-	var closestColor = [0, 0, 0];	
+	var radius = 0;
+	var closestColor = [255, 0, 0];	
+	var foundClosest = false;
+	var checkColor = checkValidColor(targetImg, currentImgPos);
 
-	for (var x = -radius; x <= radius; x+=radius) {
-		for (var y = -radius; y <= radius; y+=radius) {
-			
-			imgPos = {
-				x: currentImgPos.x + x,
-				y: currentImgPos.y + y,
-			};
-
-			//check valid position
-			if (imgPos.x >= 0 && imgPos.x < targetImg.width && imgPos.y >= 0 && imgPos.y < targetImg.height) {
-				var index = targetImg.width*imgPos.y + imgPos.x;
-
-				var color = [targetImg.data[4*index], 
-				targetImg.data[4*index + 1],
-				targetImg.data[4*index + 2]];				
-				if (color[0] != 255 || color[1] != 255 || color[2] != 255) {
-					closestColor = color;	
-					break;			
-				}
-				else {
-					radius += 1;				
-				}		
-			}
-		}
+	if (checkColor[0] == true) {
+		closestColor = checkColor[1];
 	}
+
+	while (!foundClosest) {
+		radius += 1;
+		for (var x_offset = -radius; x_offset <= radius; x_offset+=radius) {
+			for (var y_offset = -radius; y_offset <= radius; y_offset+=radius) {
+				if (x_offset !== 0 || y_offset !== 0) {
+					imgPos = {
+						x: currentImgPos.x + x_offset,
+						y: currentImgPos.y + y_offset,
+					};
+					
+					var checkColor = checkValidColor(targetImg, imgPos);
+
+					if (checkColor[0] == true) {
+						closestColor = checkColor[1];
+						foundClosest = true;
+						break;
+					}
+				}
+			}
+		}	
+	}
+
 	return closestColor;
 
 }
@@ -324,6 +342,13 @@ function makeGradientWeightedColorSimilarity(edgeMul) {
 	var flatWeight = 1 / edgeMul;
 	return function(img, targetImg) {
 		var sobelTarget = getSobel(targetImg);
+		
+		//image to tensor
+		//var sobelImg = new ImageData2D().fromTensor(sobelTarget);
+
+		//Save
+		//sobelImg.saveToFile('sobel/sobelImg_' + (Math.round(Math.random()*100)).toString() + '.png');
+
 		var val = img.weightedColorSimilarity(targetImg, sobelTarget, flatWeight);
 		return val;
 	};	
@@ -334,6 +359,12 @@ function makeGradientWeightedSimilarity(edgeMul) {
 	var flatWeight = 1 / edgeMul;
 	return function(img, targetImg) {
 		var sobelTarget = getSobel(targetImg);
+
+		//var sobelImg = new ImageData2D().fromTensor(sobelTarget);
+
+		//Save
+		//sobelImg.saveToFile('sobel/sobelImg_' + (Math.round(Math.random()*100)).toString() + '.png');
+
 		return img.weightedPercentSameBinary(targetImg, sobelTarget, flatWeight);
 	};
 }
@@ -373,8 +404,8 @@ function makeCombinedSimilarity(weight, sim1, sim2) {
 ///////////////////////////
 // Which similarity measure should we use?
 // var similarity = binarySimilarity;
-//var similarity = makeGradientWeightedSimilarity(1.5);
-var similarity = makeGradientWeightedColorSimilarity(1.5);
+var similarity = makeGradientWeightedSimilarity(1.5);
+//var similarity = makeGradientWeightedColorSimilarity(1.5);
 // var similarity = sobelSimilarity;
 // var similarity = binarizedSobelSimilarity;
 // var similarity = makeCombinedSimilarity(0.5, binarySimilarity, sobelSimilarity);

@@ -357,6 +357,9 @@ function renderBranch(context, branch) {
 		var hexcode = '#' + branch.color[0].toString(16) + branch.color[1].toString(16) + branch.color[2].toString(16);
 		context.strokeStyle = hexcode;	
 	}
+	else {
+		console.log("no color");
+	}
 	context.lineTo(branch.end.x, branch.end.y);
 	context.stroke();
 }
