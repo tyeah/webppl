@@ -9,7 +9,8 @@ var ad = require.call(null, 'adnn/ad');
 // ----------------------------------------------------------------------------
 // Globals / constants
 
-var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/orig');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/orig');
+var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/electric_letters');
 var targetSize = targetDB.targetSize();
 lsysUtils.rendering.init(__ROOT, targetSize.width, targetSize.height);
 

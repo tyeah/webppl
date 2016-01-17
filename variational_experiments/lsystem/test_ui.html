@@ -21,10 +21,14 @@
 			var propDisplays;
 
 			var targetImg;
-			var fullTargetSize = {width: 600, height: 600};
+			// var fullTargetSize = {width: 600, height: 600};
+			var fullTargetSize = {width: 800, height: 800};
 			var smallTargetSize;
 
 			var gl;
+
+			// var glRenderStyle = 'vines';
+			var glRenderStyle = 'lightning';
 
 			// ----------------------------------------------------------------
 
@@ -58,7 +62,11 @@
 			    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 			    gl.enable (gl.BLEND);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-				render.renderGLDetailed(gl, viewport, particle.geo);
+				if (glRenderStyle === 'lightning') {
+					render.renderGLLightning(gl, viewport, particle.geo);
+				} else {
+					render.renderGLDetailed(gl, viewport, particle.geo);
+				}
 				// Read back pixels
 				var pixelData = new Uint8Array(canvas.width*canvas.height*4);
 				gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
@@ -85,7 +93,11 @@
 				} else {
 					// Fill with white
 					ctx.rect(0, 0, canvas.width, canvas.height);
-					ctx.fillStyle = 'white';
+					if (renderFn == renderParticleGLDetailed && glRenderStyle === 'lightning') {
+						ctx.fillStyle = 'black';
+					} else {
+						ctx.fillStyle = 'white';
+					}
 					ctx.fill();
 				}
 				// Draw geometry
@@ -105,7 +117,8 @@
 					ctx.putImageData(particle.imageData, 0, 0);
 					ctx_small.putImageData(particle.imageDataSmall, 0, 0);
 				} else {
-					renderParticle(canvas, particle, targetImg, renderParticleGLDetailed);
+					// renderParticle(canvas, particle, targetImg, renderParticleGLDetailed);
+					renderParticle(canvas, particle, undefined, renderParticleGLDetailed);
 					particle.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 					renderParticle(canvas_small, particle, undefined, renderParticleCanvasProxy);
 					particle.imageDataSmall = ctx_small.getImageData(0, 0, canvas_small.width, canvas_small.height);

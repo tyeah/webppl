@@ -13,6 +13,7 @@ var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datas
 // var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_train');
 // var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_test');
 // var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/siggraph_letters');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/phylopic');
 var targetSize = targetDB.targetSize();
 lsysUtils.rendering.init(__ROOT, targetSize.width, targetSize.height);
 

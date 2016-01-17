@@ -421,11 +421,10 @@ function makeBezierUniform(n) {
 	}
 }
 
-// Return bezier control points for a given set of interpolation
+// Return smooth control points for a given set of interpolation
 //    points. 
 // Assumes that points are all equally spaced 1 unit apart in knot space
-function controlPoints(p0, p1, prev, next) {
-	// Compute tangents
+function controlPoints(p0, p1, prev, next, tangentScale) {
 	var m0, m1;
 	if (prev === undefined) {
 		m0 = p1.clone().sub(p0);
@@ -440,6 +439,11 @@ function controlPoints(p0, p1, prev, next) {
 		m1 = p1.clone().sub(p0).divideScalar(2).add(
 			next.clone().sub(p1).divideScalar(2)
 		);
+	}
+	// Scale tangents(?)
+	if (tangentScale !== undefined) {
+		m0.multiplyScalar(tangentScale);
+		m1.multiplyScalar(tangentScale);
 	}
 	// Turn tangents into middle two bezier control points
 	var p01 = p0.clone().add(m0.divideScalar(3));
@@ -603,8 +607,8 @@ function geo2objdata(geo) {
 
 // Given a point tree, build a vine mesh for that tree
 var bezFn = makeBezierUniform(20);
-function vineTreeMesh(tree) {
-	function buildVineTreeMesh(mesh, tree, v, prevs) {
+function vineTreeMesh(tree, tangentScale) {
+	function buildVineTreeMesh(meshes, tree, v, prevs) {
 		// Handle this point
 		if (prevs.length > 0) {
 			var p0 = prevs[prevs.length - 1].point;
@@ -620,11 +624,11 @@ function vineTreeMesh(tree) {
 				// next = tree.children[0].point;
 				next = tree.children[1].point;
 			}
-			var cps = controlPoints(p0, p1, prev, next);
+			var cps = controlPoints(p0, p1, prev, next, tangentScale);
 			var w0 = prevs[prevs.length - 1].width;
 			var w1 = tree.width;
 			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1, tree.depth);
-			mesh.append(vineMesh);
+			meshes.push({mesh: vineMesh, depth: tree.depth});
 		}
 
 		// Recurse
@@ -633,12 +637,26 @@ function vineTreeMesh(tree) {
 			prevs.shift();
 		}
 		for (var i = 0; i < tree.children.length; i++) {
-			buildVineTreeMesh(mesh, tree.children[i], v + 1, prevs.slice());
+			buildVineTreeMesh(meshes, tree.children[i], v + 1, prevs.slice());
 		}
 	}
 
+	var meshes = [];
+	buildVineTreeMesh(meshes, tree, 0, []);
+	// Sort by depth, then append into one mesh.
+	// This way, the mesh will render in back-to-front order
+	meshes.sort(function(a, b) {
+		if (a.depth < b.depth)
+			return -1;
+		else if (a.depth > b.depth)
+			return 1;
+		else
+			return 0;
+	});
 	var mesh = new Mesh();
-	buildVineTreeMesh(mesh, tree, 0, []);
+	for (var i = 0; i < meshes.length; i++) {
+		mesh.append(meshes[i].mesh);
+	}
 	return mesh;
 }
 
@@ -725,6 +743,52 @@ render.renderGLDetailed = function(gl, viewport, geo) {
 			bboard.draw(gl, bbProg);
 		}
 	}
+
+	gl.flush();
+}
+
+
+
+var lightningAssets = {
+	lightningProgram: {
+		type: 'shaderProgram',
+		vertShader: 'shaders/lightning.vert',
+		fragShader: 'shaders/lightning.frag',
+		prog: undefined
+	},
+	lightning: {
+		type: 'texture',
+		image: 'textures/lightning.png',
+		tex: undefined
+	}
+};
+registerAssets(lightningAssets);
+render.renderGLLightning = function(gl, viewport, geo) {
+
+	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+	var viewport3d = {
+		xmin: viewport.xmin,
+		xmax: viewport.xmax,
+		ymin: viewport.ymin,
+		ymax: viewport.ymax,
+		zmin: -1,
+		zmax: 1
+	}
+	var viewportMat = viewportMatrix(viewport3d);
+
+	var objdata = geo2objdata(geo);
+	var vmesh = vineTreeMesh(objdata.vineTree, 0.1);
+
+	var lProg = lightningAssets.lightningProgram.prog;
+	gl.useProgram(lProg);
+	gl.uniformMatrix4fv(gl.getUniformLocation(lProg, 'viewMat'), false, viewportMat.elements);
+	gl.activeTexture(gl.TEXTURE0);
+	gl.uniform1i(gl.getUniformLocation(lProg, "tex"), 0);
+	gl.bindTexture(gl.TEXTURE_2D, lightningAssets.lightning.tex);
+
+	vmesh.draw(gl, lProg);
+	vmesh.destroyBuffers(gl);
 
 	gl.flush();
 }
