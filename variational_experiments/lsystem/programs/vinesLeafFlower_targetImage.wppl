@@ -9,8 +9,8 @@ var ad = require.call(null, 'adnn/ad');
 // ----------------------------------------------------------------------------
 // Globals / constants
 
-var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/orig');
-// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_train');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/orig');
+var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_train');
 // var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_test');
 // var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/siggraph_letters');
 // var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/phylopic');

@@ -21,14 +21,14 @@
 			var propDisplays;
 
 			var targetImg;
-			// var fullTargetSize = {width: 600, height: 600};
-			var fullTargetSize = {width: 800, height: 800};
+			var fullTargetSize = {width: 600, height: 600};
+			// var fullTargetSize = {width: 800, height: 800};
 			var smallTargetSize;
 
 			var gl;
 
-			// var glRenderStyle = 'vines';
-			var glRenderStyle = 'lightning';
+			var glRenderStyle = 'vines';
+			// var glRenderStyle = 'lightning';
 
 			// ----------------------------------------------------------------
 
@@ -259,6 +259,50 @@
 				return {min: minval, max: maxval};
 			}
 
+			function zeropad(num, totalDigits) {
+				var numstr = '' + num;
+				var n = totalDigits - numstr.length;
+				for (var i = 0; i < n; i++) {
+					numstr = '0' + numstr;
+				}
+				return numstr;
+			}
+
+			function makeVideo() {
+				var canvas = $('#canvas')[0];
+
+				console.log('Saving video images...');
+				// Have 'dummy' particle so we get a totally-blank image at time = 0;
+				var bestParticles = [{
+					geo: null,
+					time: 0
+				}];
+				// We look at odd-index generations, plus the last one, since the other
+				//    even-index generations correspond to pre-resample particles
+				for (var i = 1; i < particleHistory.length; i += 2) {
+					var j = findBestInGen('log_post', i);
+					bestParticles.push(particleHistory[i][j]);
+				}
+				// Only include the last generation if the particle has a different time
+				//    than the last post-resample particle (to avoid duplicates)
+				var j = findBestInGen('log_post', particleHistory.length - 1);
+				var particle = particleHistory[particleHistory.length - 1][j];
+				if (particle.time !== bestParticles[bestParticles.length - 1].time) {
+					bestParticles.push(particleHistory[particleHistory.length - 1][j]);
+				}
+				// Now save images
+				for (var i = 0; i < bestParticles.length; i++) {
+					var particle = bestParticles[i];
+					renderParticle(canvas, particle, undefined, renderParticleGLDetailed);
+					console.log('Sending image data!')
+					$.post('saveImage', {
+						imgFilename: 'videoImages/' + zeropad(i, 4) + '_' + particle.time + '.png',
+						imgData: canvas.toDataURL()
+					});
+				}
+				console.log('DONE');
+			}
+
 			function generate() {
 				console.log('------------------------------');
 				console.log('Generating...');
@@ -286,6 +330,7 @@
 							LLshowBestInGen: makeShowBestInGen('log_like'),
 							LLshowBestOverall: makeShowBestOverall('log_like'),
 							LLshowBestOverallFinished: makeShowBestOverallFinished('log_like'),
+							makeVideo: makeVideo
 						}
 
 						// Sliders for controlling which generation/particle we're looking at.
@@ -342,6 +387,9 @@
 						var LLbestInGenButton = gui.add(guistate, 'LLshowBestInGen').name('LL Best in gen');
 						guicomponents = guicomponents.concat([LPbestOverallButton, LPbestOverallFinishedButton, LPbestInGenButton,
 															  LLbestOverallButton, LLbestOverallFinishedButton, LLbestInGenButton]);
+
+						var makeVideoButton = gui.add(guistate, 'makeVideo').name('Make Video');
+						guicomponents = guicomponents.concat([makeVideoButton]);
 
 						// Finish up
 						console.log('   DONE.');

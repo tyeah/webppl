@@ -24,7 +24,7 @@ var webppl = require('../../../src/main.js');
 var lsysUtils = require('../utils.js');
 var particleHistoryUtils = require('../particleHistoryUtils.js');
 var nnarch = require('../nnarch');
-
+var qs = require('querystring');
 
 // Parse options
 var opts = require('minimist')(process.argv.slice(2), {
@@ -107,19 +107,39 @@ function fetchAsset(path) {
 	}
 }
 
+function saveImage(filename, data) {
+	var base64Data = data.replace(/^data:image\/png;base64,/, '');
+	fs.writeFile(filename, base64Data, 'base64');
+}
+
 function handleRequest(request, response) {
 	console.log('Request received: ' + request.url);
-	var respContents;
-	if (request.url === '/generate') {
-		console.log('   [Generating result]');
-		respContents = generateResult();
+	if (request.method === 'POST') {
+		var body = '';
+        request.on('data', function(data) {
+            body += data;
+        });
+        request.on('end',function() {
+        	var respContents;
+            var POST = qs.parse(body);
+            if (request.url === '/saveImage') {
+            	console.log('   [Saving image ' + POST.imgFilename + ']');
+            	saveImage(POST.imgFilename, POST.imgData);
+            }
+            response.end(respContents);
+        });
 	} else {
-		console.log('   [Fetching static asset]');
-		var path = request.url === '/' ? '/test_ui.html' : request.url;
-		respContents = fetchAsset(path);
+		var respContents;
+		if (request.url === '/generate') {
+			console.log('   [Generating result]');
+			respContents = generateResult();
+		} else {
+			console.log('   [Fetching static asset]');
+			var path = request.url === '/' ? '/test_ui.html' : request.url;
+			respContents = fetchAsset(path);
+		}
+		response.end(respContents);
 	}
-	console.log('   Done.');
-	response.end(respContents);
 }
 
 

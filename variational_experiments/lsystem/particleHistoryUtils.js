@@ -54,7 +54,8 @@ particleHistoryUtils.compress = function(history) {
 			active: p.active,
 			similarity: p.store.sim,
 			num_geo: p.store.geo.n,
-			geo: geoIdToIndex[p.store.geo.__id]
+			geo: geoIdToIndex[p.store.geo.__id],
+			time: p.time
 		}
 	});
 	// Finally, return deduplicated history object.

@@ -14,6 +14,11 @@ function isActive(particle) {
   return particle.active;
 }
 
+function hrtimeToSeconds(t) {
+  // Seconds + nanoseconds
+  return t[0] + t[1]/1e9;
+}
+
 module.exports = function(env) {
 
   function withImportanceDist(s, k, a, erp, importanceERP) {
@@ -87,6 +92,9 @@ module.exports = function(env) {
     env.coroutine = this;
 
     this.oldStore = _.clone(s); // will be reinstated at the end
+
+    // Start timer
+    this.startTime = process.hrtime();
   }
 
   ParticleFilter.prototype.run = function() {
@@ -177,6 +185,8 @@ module.exports = function(env) {
         throw 'Error! All particles -Infinity';
       }
     } else {
+      var time = hrtimeToSeconds(process.hrtime(this.startTime));
+
       // Compute list of retained particles
       var retainedParticles = [];
       var newExpWeights = [];
@@ -203,6 +213,7 @@ module.exports = function(env) {
         var proc = this.processHistoryParticle;
         this.particleHistory.push(this.particles.map(function(p) {
           var cp = copyParticle(p);  // To properly preserve this state
+          cp.time = time;
           proc(cp);
           return cp;
         }));
@@ -214,6 +225,7 @@ module.exports = function(env) {
         var proc = this.processHistoryParticle;
         this.particleHistory.push(this.particles.map(function(p) {
           var cp = copyParticle(p);  // To properly preserve this state
+          cp.time = time;
           proc(cp);
           return cp;
         }));
@@ -286,8 +298,13 @@ module.exports = function(env) {
     dist.MAPparticle = this.particles[besti];
     // Save the particle history
     if (this.particleHistory) {
+      var time = hrtimeToSeconds(process.hrtime(this.startTime));
       dist.particleHistory = this.particleHistory;
-      dist.particleHistory.push(this.particles);
+      dist.particleHistory.push(this.particles.map(function(p) {
+        var cp = copyParticle(p);
+        cp.time = time;
+        return cp;
+      }));
     } else {
       dist.particleHistory = [this.particles];
     }

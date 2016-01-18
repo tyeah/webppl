@@ -51,17 +51,20 @@ ImageData2D.prototype = {
 		var render = require('./render.js');
 		render.drawPixels(gl, this.data);
 	},
-	loadFromFile: function(filename) {
-		// Sort of a hack: load it to an Image, then draw to a Canvas, then do
-		//    loadFromCanvas.
-		var filedata = fs.readFileSync(filename);
-		var img = new Canvas.Image;
-		img.src = filedata;
+	loadFromImage: function(img) {
+		// Sort of a hack: draw to canvas, then do loadFromCanvas
 		var canvas = new Canvas(img.width, img.height);
 		var ctx = canvas.getContext('2d');
 		ctx.drawImage(img, 0, 0, img.width, img.height);
 		this.loadFromCanvas(canvas);
 		return this;
+	},
+	loadFromFile: function(filename) {
+		// Again, hack: load it to an Image, then do loadFromImage
+		var filedata = fs.readFileSync(filename);
+		var img = new Canvas.Image;
+		img.src = filedata;
+		return this.loadFromImage(img);
 	},
 	saveToFile: function(filename) {
 		// Again, hack: copy to canvas, then save that to a file.

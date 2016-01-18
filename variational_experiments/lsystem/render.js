@@ -29,8 +29,10 @@ function compileShader ( gl, type, src ){
    else return null;
    gl.shaderSource(shader, src);
    gl.compileShader(shader);
-   if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) == 0)
+   if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) == 0) {
       console.log(type + "\n" + gl.getShaderInfoLog(shader));
+      throw 'shader compile error';
+  }
    return shader;
 }
 
@@ -97,8 +99,26 @@ function loadImage_browser(filename, async, callback) {
 
 var loadImage = (client === 'node') ? loadImage_node : loadImage_browser;
 
+function imageToPixelData(img) {
+	var utils = require('./utils.js')
+	var imgData = new utils.ImageData2D().loadFromImage(img);
+	var n = imgData.width * imgData.height * 4;
+	var data = new Uint8Array(n);
+	for (var i = 0; i < n; i++) {
+		data[i] = imgData.data[i];
+	}
+	return {
+		width: imgData.width,
+		height: imgData.height,
+		data: data
+	};
+}
+
 function loadTexture(gl, filename, async, callback) {
 	loadImage(filename, async, function(img) {
+		if (client === 'node') {
+			img = imageToPixelData(img);
+		}
 		var texture = gl.createTexture();
 		gl.bindTexture(gl.TEXTURE_2D, texture);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
@@ -692,6 +712,8 @@ registerAssets(vineAssets);
 var bboard = billboard();
 render.renderGLDetailed = function(gl, viewport, geo) {
 
+	if (!geo) return;
+
 	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
 	var viewport3d = {
@@ -764,6 +786,8 @@ var lightningAssets = {
 };
 registerAssets(lightningAssets);
 render.renderGLLightning = function(gl, viewport, geo) {
+
+	if (!geo) return;
 
 	gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
