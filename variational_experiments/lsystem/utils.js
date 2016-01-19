@@ -36,9 +36,20 @@ function getClosestForegroundColor(targetImg, currentImgPos) {
 	var foundClosest = false;
 	var checkColor = checkValidColor(targetImg, currentImgPos);
 
+	//console.log(targetImg.height, targetImg.width);
+
 	if (checkColor[0] == true) {
 		closestColor = checkColor[1];
 	}
+	
+	/*
+	else {
+		if (currentImgPos.y > 10) {
+			console.log(targetImg.width, targetImg.height, currentImgPos);			
+		}
+		return [255, 0, 0];
+	}
+	*/
 
 	while (!foundClosest) {
 		radius += 1;
@@ -410,8 +421,8 @@ function makeCombinedSimilarity(weight, sim1, sim2) {
 ///////////////////////////
 // Which similarity measure should we use?
 // var similarity = binarySimilarity;
-//var similarity = makeGradientWeightedSimilarity(1.5);
-var similarity = makeGradientWeightedColorSimilarity(1.5); //1.5
+var similarity = makeGradientWeightedSimilarity(1.5);
+//var similarity = makeGradientWeightedColorSimilarity(5.0); //1.5
 // var similarity = sobelSimilarity;
 // var similarity = binarizedSobelSimilarity;
 // var similarity = makeCombinedSimilarity(0.5, binarySimilarity, sobelSimilarity);
