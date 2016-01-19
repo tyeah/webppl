@@ -349,14 +349,18 @@ Mesh.prototype.draw = function(gl, prog) {
 
 
 function renderBranch(context, branch) {
+
 	context.beginPath();
 	context.lineWidth = branch.width;
 	context.moveTo(branch.start.x, branch.start.y);
 	//Convert branch.color to hex color code
-	if (branch.color) {
-		var hexcode = '#' + branch.color[0].toString(16) + branch.color[1].toString(16) + branch.color[2].toString(16);
+	//Interpolation
+
+	if (branch.startColor) {
+		var hexcode = '#' + branch.startColor[0].toString(16) + branch.startColor[1].toString(16) + branch.startColor[2].toString(16);
 		context.strokeStyle = hexcode;	
 	}
+	
 	context.lineTo(branch.end.x, branch.end.y);
 	context.stroke();
 }
@@ -482,11 +486,25 @@ function controlPoints(p0, p1, prev, next) {
 }
 
 //incorporate color
-function vine(cps, curveFn, width0, width1, v0, v1, depth, color) {
+function vine(cps, curveFn, width0, width1, v0, v1, depth, startColor, endColor) {
 	var mesh = new Mesh();
 
 	var points = curveFn(cps);
 	var n = points.length;
+
+	//var c1 = new THREE.Vector3(Math.random() , Math.random(), Math.random());
+
+	//console.log(startColor, endColor);
+
+	var rStep = (endColor[0] - startColor[0])/(n);
+	var gStep = (endColor[1] - startColor[1])/(n);
+	var bStep = (endColor[2] - startColor[2])/(n);
+
+	//console.log(startColor, endColor, "steps ", rStep, gStep, bStep);
+	
+	//if (endColor[2] > endColor[0] && endColor[2] > endColor[0]) {
+	//	console.log(endColor[0], " ", endColor[1], " ", endColor[2]);
+	//}
 
 	var accumlengths = [0];
 	for (var i = 1; i < n; i++) {
@@ -519,9 +537,15 @@ function vine(cps, curveFn, width0, width1, v0, v1, depth, color) {
 		var p1 = center.clone().add(normal);
 		mesh.vertices.push(new THREE.Vector3(p0.x, p0.y, depth));
 		mesh.vertices.push(new THREE.Vector3(p1.x, p1.y, depth));
-		var c1 = new THREE.Vector3(color[0]/255.0, color[1]/255.0, color[2]/255.0);
+		
+		var c1 = new THREE.Vector3((startColor[0]+ rStep*i)/255.0 , (startColor[1]+ gStep*i)/255.0 , (startColor[2]+ bStep*i)/255.0);
+		//var c1 = new THREE.Vector3(endColor[0]/255.0, endColor[1]/255.0, endColor[2]/255.0);
+
+		//console.log(c1);
+
 		mesh.colors.push(c1);
 		mesh.colors.push(c1);
+
 		mesh.normals.push(new THREE.Vector3(-normal.x, -normal.y, 0));
 		mesh.normals.push(new THREE.Vector3(normal.x, normal.y, 0));
 	}
@@ -532,6 +556,8 @@ function vine(cps, curveFn, width0, width1, v0, v1, depth, color) {
 		mesh.indices.push(idx+1); mesh.indices.push(idx+3); mesh.indices.push(idx+2);
 		idx += 2;
 	}
+
+	//console.log(mesh.colors.length, mesh.indices.length, mesh.vertices.length);
 
 	return mesh;
 }
@@ -595,7 +621,8 @@ function geo2objdata(geo) {
 					// Needed b/c JSON loses prototype information
 					point: new THREE.Vector2().copy(g.branch.start),
 					width: g.branch.width,
-					color: g.branch.color,
+					startColor: g.branch.startColor,
+					endColor: g.branch.endColor,
 					children: [],
 					depth: undefined
 				};
@@ -603,7 +630,8 @@ function geo2objdata(geo) {
 			branchTreeNodes.push({
 				point: new THREE.Vector2().copy(g.branch.end),
 				width: g.branch.width,
-				color: g.branch.color,
+				startColor: g.branch.startColor,
+				endColor: g.branch.endColor,
 				children: [],
 				depth: mapdepth(g.depthLayer)
 			});
@@ -667,11 +695,16 @@ function vineTreeMesh(tree) {
 			var cps = controlPoints(p0, p1, prev, next);
 			var w0 = prevs[prevs.length - 1].width;
 			var w1 = tree.width;
-			var color = tree.color;
-			if (!color) { //default to green
-				color = [70, 140, 8];
+			var startColor = tree.startColor;
+			var endColor = tree.endColor;
+
+			if (!startColor) { //default to green
+				startColor = [70, 140, 8];
 			}
-			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1, tree.depth, color);
+			if (!endColor) { //default to green
+				endColor = [70, 140, 8];
+			}
+			var vineMesh = vine(cps, bezFn, w0, w1, v, v+1, tree.depth, startColor, endColor);
 			mesh.append(vineMesh);
 		}
 

@@ -9,7 +9,7 @@ var ad = require.call(null, 'adnn/ad');
 // ----------------------------------------------------------------------------
 // Globals / constants
 
-var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/color_train');
+var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/color_all');
 var targetSize = targetDB.targetSize();
 lsysUtils.rendering.init(__ROOT, targetSize.width, targetSize.height);
 
@@ -33,7 +33,7 @@ var norm2world = function(p) {
 var world2norm = function(p) {
 	return utils.new(THREE.Vector2, 
 		(p.x - viewport.xmin)/(viewport.xmax - viewport.xmin),
-		(p.y - viewport.xmin)/(viewport.ymax - viewport.ymin)
+		(p.y - viewport.ymin)/(viewport.ymax - viewport.ymin)
 	);	
 }
 
@@ -148,8 +148,8 @@ var makeProgram = function(neurallyGuided) {
 	var _gaussian = makeMixtureSampler('gaussian', 4, [undefined, ad.scalar.exp]);
 	var _flip = makeSampler('bernoulli', [ad.scalar.sigmoid]);
 
-	var initialWidth = 0.75; //0.75;
-	var widthDecay = 0.975;
+	var initialWidth = 0.25; //0.75;
+	var widthDecay = 1.0; //0.975;
 	var minWidthPercent = 0.15;
 	var minWidth = minWidthPercent*initialWidth;
 
@@ -158,7 +158,8 @@ var makeProgram = function(neurallyGuided) {
 			depth: obj.depth,
 			pos: obj.pos,
 			angle: obj.angle,
-			color: obj.color,
+			startColor: obj.startColor,
+			endColor: obj.endColor,
 			width: obj.width,
 			prevBranch: obj.prevBranch,
 			features: neurallyGuided ? globalStore.nnGuide.localFeatures(obj) : undefined
@@ -179,20 +180,34 @@ var makeProgram = function(neurallyGuided) {
 
 		//convert currState.pos back to normalized image space
 		var normPos = world2norm(currState.pos);
+
 		var imgPos = {
-			x: Math.round(max(normPos.x*globalStore.target.image.width, 0)),
-			y: Math.round(max(normPos.y*globalStore.target.image.height, 0))
+			x: Math.round(normPos.x*globalStore.target.image.width),
+			y: Math.round(normPos.y*globalStore.target.image.height)
 		};
 
+
 		//Get color of closest non background ([255, 255, 255]) target pixel at currState.pos 
-		var targetColor = lsysUtils.getClosestForegroundColor(globalStore.target.image, imgPos);
+		var targetStartColor = lsysUtils.getClosestForegroundColor(globalStore.target.image, imgPos);
+
+		var endPos = polar2rect(length, newang).add(currState.pos);
+
+		//convert endPos back to normalized image space
+		var normEndPos = world2norm(endPos);
+		var endImgPos = {
+			x: Math.round(normEndPos.x*globalStore.target.image.width),
+			y: Math.round(normEndPos.y*globalStore.target.image.height)
+		};
+
+		var targetEndColor = lsysUtils.getClosestForegroundColor(globalStore.target.image, endImgPos);
 
 		var newbranch = {
 			start: currState.pos,
 			angle: newang,
 			width: width,
-			color: targetColor,
-			end: polar2rect(length, newang).add(currState.pos)
+			startColor: targetStartColor,
+			endColor: targetEndColor,
+			end: endPos //polar2rect(length, newang).add(currState.pos)
 		};
 
 		// Update model state
@@ -212,7 +227,8 @@ var makeProgram = function(neurallyGuided) {
 			depth: currState.depth + 1,
 			pos: newbranch.end,
 			angle: newbranch.angle,
-			color: newbranch.color,
+			startColor: newbranch.startColor,
+			endColor: newbranch.endColor,
 			width: newbranch.width,
 			prevBranch: globalStore.geo
 		});
@@ -286,9 +302,11 @@ var makeProgram = function(neurallyGuided) {
 		};
 
 		var index = globalStore.target.image.width*imgPos.y + imgPos.x;
-		var targetColor = [globalStore.target.image.data[4*index], 
+		var targetStartColor = [globalStore.target.image.data[4*index], 
 		globalStore.target.image.data[4*index + 1],
 		globalStore.target.image.data[4*index + 2]];
+
+		var targetEndColor = targetStartColor;
 
 		// These are separated like this so that we can have an initial local
 		//    state to feed to the _gaussian for the initial angle.
@@ -296,7 +314,8 @@ var makeProgram = function(neurallyGuided) {
 			depth: 0,
 			pos: starting_world_pos,
 			angle: 0,
-			color: targetColor,
+			startColor: targetStartColor,
+			endColor: targetEndColor,
 			width: initialWidth,
 			prevBranch: undefined
 		});
@@ -304,7 +323,8 @@ var makeProgram = function(neurallyGuided) {
 			depth: initState.depth,
 			pos: initState.pos,
 			angle: _gaussian(starting_ang, Math.PI/6, initState, 'startAngle'),
-			color: initState.color,
+			startColor: initState.startColor,
+			endColor: initState.endColor,
 			width: initState.width,
 			prevBranch: initState.prevBranch
 		});
