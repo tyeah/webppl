@@ -354,13 +354,19 @@ function renderBranch(context, branch) {
 	context.lineWidth = branch.width;
 	context.moveTo(branch.start.x, branch.start.y);
 	//Convert branch.color to hex color code
-	//Interpolation
 
 	if (branch.startColor) {
-		var hexcode = '#' + branch.startColor[0].toString(16) + branch.startColor[1].toString(16) + branch.startColor[2].toString(16);
+		var hexcode = '#';
+		for (var i = 0; i < 3; i++) {
+			var this_hex = branch.startColor[i].toString(16);
+			if (this_hex.length == 1) {
+				this_hex = '0' + this_hex;
+			}
+			hexcode = hexcode + this_hex;
+		}
 		context.strokeStyle = hexcode;	
 	}
-	
+
 	context.lineTo(branch.end.x, branch.end.y);
 	context.stroke();
 }
