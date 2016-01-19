@@ -36,20 +36,9 @@ function getClosestForegroundColor(targetImg, currentImgPos) {
 	var foundClosest = false;
 	var checkColor = checkValidColor(targetImg, currentImgPos);
 
-	//console.log(targetImg.height, targetImg.width);
-
 	if (checkColor[0] == true) {
 		closestColor = checkColor[1];
 	}
-	
-	/*
-	else {
-		if (currentImgPos.y > 10) {
-			console.log(targetImg.width, targetImg.height, currentImgPos);			
-		}
-		return [255, 0, 0];
-	}
-	*/
 
 	while (!foundClosest) {
 		radius += 1;
