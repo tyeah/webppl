@@ -127,7 +127,7 @@ NNArch.nnFunction = function(fn) {
 		if (net === undefined) {
 			net = fn.apply(this, arguments);
 			this.nnCache[name] = net;
-			Variational.registerParams(name, net.parameters);
+			Variational.registerParams(name, net.getParameters());
 			net.setTraining(this.training);
 		}
 		return net;
