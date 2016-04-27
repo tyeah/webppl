@@ -1,0 +1,46 @@
+var sigma0 = [[0.1, 0], [0, 0.1]];
+var sigma1 = [[0.01, 0], [0, 0.01]];
+var sigma2 = [[0.01, 0], [0, 0.01]];
+var termProb = 0.5;
+
+var makeProgram = function(sigma0, sigma1, sigma2) {
+  var run = function() {
+    var startX = [0, 0];
+    globalStore.X = [];
+    globalStore.Y = [];
+    globalStore.Z = [];
+    future( function() { step(startX) });
+    finishAllFutures();
+    return [globalStore.Y, globalStore.Z];
+  }
+
+  var step = function(curX) {
+    var X = sample(multivariateGaussianERP, [curX, sigma0]);
+    var Y = sample(multivariateGaussianERP, [X, sigma1]);
+    var Z = sample(multivariateGaussianERP, [X, sigma2]);
+    globalStore.X = globalStore.Y.concat([X]);
+    globalStore.Y = globalStore.Y.concat([Y]);
+    globalStore.Z = globalStore.Z.concat([Z]);
+    if (!flip(termProb)) {
+      future( function() { step(X); } );
+    }
+  }
+
+  return run;
+}
+
+var runProgram = makeProgram(sigma0, sigma1, sigma2);
+
+
+var rets = {
+  globalStore: globalStore,
+  generate: runProgram
+}
+
+rets;
+
+/*
+ParticleFilter(runProgram, 10);
+*/
+
+

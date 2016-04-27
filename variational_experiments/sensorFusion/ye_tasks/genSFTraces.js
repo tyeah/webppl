@@ -149,8 +149,9 @@ console.log("MAP in MAP flight " + MAPInMAPIdx);
 console.log("MAP in MAP logpost: " + MAPInMAPlogpost);
 console.log("average MAP logpost: " + avgMAPlogpost);
 if (traceFile) {
-  console.log('save to ' + traceFile);
+  console.log('save traces to ' + traceFile);
 }
 if (savePost) {
   fs.appendFileSync(savePost, numParticles + ',' + avgMAPlogpost + ',' + timeUsed + '\n');
+  console.log('save statistics to ' + traceFile);
 }
