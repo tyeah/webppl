@@ -1,0 +1,85 @@
+// Run using: webppl gammaGaussian.wppl
+
+var ad = require.call(null, 'adnn/ad');
+
+// Example from https://en.wikipedia.org/wiki/Variational_Bayesian_methods
+
+var a0 = 0.5;
+var mu0 = 1;
+var lambda0 = 1;
+var mu1 = 0;
+var lambda1 = 1;
+
+// Needs to be outside of 'program,' so that it persists across runs
+var params = ad.params([5]);
+
+var program = function() {
+	Variational.registerParams('myParams', [params]);
+	var p = ad.tensorToScalars(params);
+
+	// The 'exp' transform guarantees the param will be nonnegative
+  var vBernoulliERP = withImportanceDist(bernoulliERP, Variational.bernoulliERP);
+  // in this withImportanceDist, first erp should not be Variational erp, 
+  // which has no property "setParams",
+  // but second must be Variational erp,
+  // which does have property "setParams".
+	vBernoulliERP.importanceERP.setParams([ad.scalar.exp(p[0])]);
+	var mod0 = sample(vBernoulliERP, [a0]); // see variational.js:843:60
+  /*
+  if (!mod0) {
+    console.log(mod0);
+  }
+  */
+
+  var vGaussianERP = withImportanceDist(gaussianERP, Variational.gaussianERP);
+  if (mod0) {
+    vGaussianERP.importanceERP.setParams([ad.scalar.exp(p[1]), ad.scalar.exp(p[2])]);
+  } else {
+    vGaussianERP.importanceERP.setParams([ad.scalar.exp(p[3]), ad.scalar.exp(p[4])]);
+  }
+
+  var mu = mod0 ? sample(vGaussianERP, [mu0, 1 / Math.sqrt(lambda0)]) :
+           sample(vGaussianERP, [mu1, 1 / Math.sqrt(lambda1)]);
+  var lambda = mod0? lambda0 : lambda1;
+  /*
+  if (mod0) {
+    vGaussianERP.importanceERP.setParams([ad.scalar.exp(p[1]), ad.scalar.exp(p[2])]);
+    var mu = sample(vGaussianERP, [mu0, 1 / Math.sqrt(lambda0)]);
+    var lambda = lambda0;
+  } else {
+    vGaussianERP.importanceERP.setParams([ad.scalar.exp(p[3]), ad.scalar.exp(p[4])]);
+    var mu = sample(vGaussianERP, [mu1, 1 / Math.sqrt(lambda1)]);
+    var lambda = lambda1;
+  }
+  */
+
+  /* webppl has block scope, while js has function scope
+  if (true) {
+    var muuu = 0;
+  }
+  console.log(muuu);
+  */
+
+  //console.log(10000);
+  //console.log(gaussianERP.score([mu, 1 / Math.sqrt(lambda0)], 1));
+  // here 1 and 2 are training data
+	factor(gaussianERP.score([mu, 1 / Math.sqrt(lambda)], 0));
+	factor(gaussianERP.score([mu, 1 / Math.sqrt(lambda)], 0.1));
+	factor(gaussianERP.score([mu, 1 / Math.sqrt(lambda)], 1));
+	factor(gaussianERP.score([mu, 1 / Math.sqrt(lambda)], 0.9));
+
+	return mu;
+};
+
+var rets = {
+  program: program,
+  globalStore: globalStore
+}
+
+rets;
+
+
+/*
+Task:
+make clear how variational works with importanceERP
+*/

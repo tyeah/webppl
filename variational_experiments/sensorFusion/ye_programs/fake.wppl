@@ -1,0 +1,38 @@
+var makeProgram = function(h) {
+  var ret = function() {
+    console.log("globalStore.hidden = " + globalStore.hidden);
+    console.log(globalStore);
+    return flip(globalStore.hidden);
+  }
+  //console.log('!?');
+  return ret;
+}
+
+//globalStore.hidden = 0.3;
+/*
+var rets = {
+  globalStore: globalStore,
+  generate: makeProgram
+}
+*/
+//rets.generate(0.3)(); //this is wrong
+
+/* this is right
+var g = makeProgram(0.3);
+g();
+*/
+
+/* this is also wrong
+var g = rets.generate(0.3);
+g();
+*/
+
+var rets = {
+  globalStore: globalStore,
+  generate: makeProgram(globalStore.hidden)
+  //generate: makeProgram(0.3)
+}
+//console.log('!!!');
+//var g = rets.generate;
+//g();
+rets;

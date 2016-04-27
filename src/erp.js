@@ -213,7 +213,8 @@ function multivariateGaussianScore(params, x) {
 
 var multivariateGaussianERP = new ERP({
   sample: multivariateGaussianSample,
-  score: multivariateGaussianScore
+  score: multivariateGaussianScore,
+  adscore: adscorers.multivariateGaussian
 });
 
 var discreteERP = new ERP({

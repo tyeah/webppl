@@ -1,0 +1,87 @@
+var utils = require.call(null, __ROOT + '/../utils.js');
+var lsysUtils = require.call(null, __ROOT + '/utils.js');
+var nnarch = require.call(null, __ROOT + '/nnarch');
+var _ = require.call(null, 'underscore');
+var ad = require.call(null, 'adnn/ad');
+
+var makeProgram = function(neurallyGuided) {
+
+	var makeSampler = function(erpName, verpName) {
+		var erp = global[erpName + 'ERP'];
+		var verp = withImportanceDist(erp, Variational[erpName + 'ERP']);
+		return !neurallyGuided ? 
+		function() {
+			var params = arguments;
+			return sample(erp, params);
+		}
+		:
+		function() {
+			var params = arguments;
+      //console.log(globalStore.vparams[verpName]);
+      //console.log(ad.tensorToScalars(globalStore.vparams[verpName]));
+			var vparams = ad.tensorToScalars(globalStore.vparams[verpName]);
+			verp.importanceERP.setParams(vparams);
+			return sample(verp, params);
+		};
+	};
+
+	var makeMixtureSampler = function(erpName, nComps) {
+		var erp = global[erpName + 'ERP'];
+		var verp = withImportanceDist(erp, Variational[erpName + 'MixtureERP']);
+		return !neurallyGuided ?
+		function() {
+			var params = arguments;
+			return sample(erp, params);
+		}
+		:
+		function() {
+			var params = Array.prototype.slice.call(arguments, 0, n);
+			//var vparams = globalStore.vparams[verpName];
+			//var vparams = ad.tensorToScalars(globalStore.vparams[verpName]).map(ad.value);
+			var vparams = ad.value(globalStore.vparams[verpName]);
+			verp.importanceERP.setParams(vparams);
+			return sample(verp, params);
+		}
+	};
+
+	var _gaussian = makeSampler('gaussian', 'gaussian0');
+	//var _flip = makeSampler('bernoulli', 'bernoulli0');
+
+  var generate = function() {
+    //console.log(globalStore.vparams['gaussian0']);
+    Variational.registerParams('vparams', [globalStore.vparams['gaussian0']]);
+    /*
+     * be careful: here the second parameter must be an array
+     */
+		// Constants needed by the guide architecture
+    /*
+		if (neurallyGuided) {
+			globalStore.nnGuide.constant('viewport', viewport);
+			globalStore.nnGuide.constant('initialWidth', initialWidth);
+			globalStore.nnGuide.constant('minWidth', minWidth);
+		}
+
+		if (neurallyGuided) {
+			globalStore.nnGuide.init(globalStore);
+		}
+    */
+		
+    var mu = _gaussian(0, Math.PI/8);
+
+    return mu;
+  }
+  return generate;
+}
+
+var rets = {
+	generate: makeProgram(false),
+	generateGuided: makeProgram(true),
+	//renderSize: renderSize,
+	//viewport: viewport,
+	globalStore: globalStore,
+	environment: env
+};
+rets;
+
+
+

@@ -1,0 +1,161 @@
+var utils = require.call(null, __ROOT + '/../utils.js');
+var lsysUtils = require.call(null, __ROOT + '/ye_utils.js');
+var nnarch = require.call(null, __ROOT + '/nnarch');
+var _ = require.call(null, 'underscore');
+var THREE = require.call(null, 'three');
+var ad = require.call(null, 'adnn/ad');
+
+
+// ----------------------------------------------------------------------------
+// Globals / constants
+
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/orig');
+var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/ye_data/train');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_test');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/siggraph_letters');
+var targetSize = targetDB.targetSize();
+lsysUtils.rendering.init(__ROOT, targetSize.width, targetSize.height);
+
+var futurePolicy = 'immediate';
+// var futurePolicy = 'lifo';
+// var futurePolicy = 'fifo';
+// var futurePolicy = 'uniformFromAll';
+// var futurePolicy = 'uniformFromDeepest';
+// var futurePolicy = 'depthWeighted';
+setFuturePolicy(futurePolicy);
+
+
+var targetFactor = function(y, yhat) {
+  factor(y == yhat ? 10 : 0);
+};
+
+
+// ----------------------------------------------------------------------------
+// The program itself
+
+
+var makeProgram = function(neurallyGuided) {
+
+	// Set up ERPs (either normal or neurally-guided)
+	var makeSampler = function(erpName) {
+		var erp = global[erpName + 'ERP'];
+		var verp = withImportanceDist(erp, Variational[erpName + 'ERP']);
+		//var n = bounds.length;
+		return !neurallyGuided ? 
+		function() {
+			//var params = Array.prototype.slice.call(arguments, 0, n);
+      var params = arguments[0];
+			return sample(erp, params);
+		}
+		:
+		function() {
+      var params = arguments[0];
+      /*
+			var params = Array.prototype.slice.call(arguments, 0, n);
+			var localState = arguments[n];
+      */
+			var name = arguments[1];	// TODO: replace with callsite id?
+			var vparams = globalStore.nnGuide.predict(globalStore, name);
+      //var vparams = params;
+			verp.importanceERP.setParams(vparams);
+			return sample(verp, params);
+		};
+	};
+	var makeMixtureSampler = function(erpName, nComps, bounds) {
+		var erp = global[erpName + 'ERP'];
+		var verp = withImportanceDist(erp, Variational[erpName + 'MixtureERP']);
+		var n = bounds.length;
+		// Keep weights between [0,1] (only need to keep them nonnegative, but I think
+		//    this will help keep things regularized...)
+		var weightBounds = repeat(nComps, function() { return ad.scalar.sigmoid; });
+		var paramBounds = repeat(nComps, function() { return bounds; });
+		var allBounds = weightBounds.concat(flatten(paramBounds));
+		return !neurallyGuided ?
+		function() {
+			var params = Array.prototype.slice.call(arguments, 0, n);
+			return sample(erp, params);
+		}
+		:
+		function() {
+			var params = Array.prototype.slice.call(arguments, 0, n);
+			var localState = arguments[n];
+			var name = arguments[n+1];	// TODO: replace with callsite id?
+			//var vparams = globalStore.nnGuide.predict(globalStore, localState, name, allBounds);
+      var vparams = params
+			var ws = vparams.slice(0, nComps);
+			var ps = group(vparams.slice(nComps), n);
+			verp.importanceERP.setParams([ws, ps]);
+			return sample(verp, params);
+		}
+	};
+	// var _gaussian = makeSampler('gaussian', [undefined, ad.scalar.exp]);
+	// var _gaussian = makeMixtureSampler('gaussian', 1, [undefined, ad.scalar.exp]);
+	var _discrete10 = makeSampler('discrete');
+	var _dirichlet = makeSampler('dirichlet');
+  //var discrete_params = _.times(10, function() { return 0.1; });
+  //var discrete_params = _.times(10, 0.1);
+  var discrete_params = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1];
+  //console.log(discrete_params);
+
+	var generate = function() {
+		// Constants needed by the guide architecture
+    /*
+    console.log('nnCache');
+    console.log(globalStore.nnGuide.nnCache);
+    */
+    console.log('nnCache');
+		if (neurallyGuided) {
+			globalStore.nnGuide.constant('targetDB', targetDB);
+      /*
+			globalStore.nnGuide.constant('viewport', viewport);
+			globalStore.nnGuide.constant('initialWidth', initialWidth);
+			globalStore.nnGuide.constant('minWidth', minWidth);
+      */
+		}
+
+		if (globalStore.target === undefined) {
+			var ti = randomInteger(targetDB.numTargets());
+      //console.log('trace ti: ' + ti);
+			globalStore.target = targetDB.getTargetByIndex(ti);
+		}
+		//var w = globalStore.target.image.width;
+		//var h = globalStore.target.image.height;
+
+    /*
+		if (neurallyGuided) {
+			globalStore.nnGuide.init(globalStore);
+		}
+    */
+
+    var yhat = _discrete10(discrete_params, 'cnn');
+    //console.log('trace yhat: ' + yhat);
+    var y = randomInteger(10);
+    //console.log('trace y: ' + y);
+    targetFactor(y, yhat);
+    
+    yhat;
+	};
+
+	return generate;
+}
+
+//console.log(Object.keys(env.coroutine));
+//console.log(env.coroutine instanceof Variational)
+
+// ----------------------------------------------------------------------------
+// Return stuff that external tasks will need
+
+
+var rets = {
+	generate: makeProgram(false),
+	generateGuided: makeProgram(true),
+	targetDB: targetDB,
+	globalStore: globalStore,
+	environment: env
+};
+rets;
+
+
+
+
+

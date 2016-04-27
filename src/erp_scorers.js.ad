@@ -1,0 +1,262 @@
+var ad = require('adnn/ad');
+var Tensor = require('adnn/tensor');
+function uniformScore(params, val) {
+    if (ad.scalar.lt(val, params[0]) || ad.scalar.gt(val, params[1])) {
+        return ad.scalar.sub(0, Infinity);
+    }
+    return ad.scalar.sub(0, ad.scalar.log(ad.scalar.sub(params[1], params[0])));
+}
+function flipScore(params, val) {
+    if (ad.scalar.neq(val, true) && ad.scalar.neq(val, false)) {
+        return ad.scalar.sub(0, Infinity);
+    }
+    var weight = params[0];
+    return val ? ad.scalar.log(weight) : ad.scalar.log(ad.scalar.sub(1, weight));
+}
+function randomIntegerScore(params, val) {
+    var stop = params[0];
+    var inSupport = ad.scalar.eq(val, ad.scalar.floor(val)) && ad.scalar.leq(0, val) && ad.scalar.lt(val, stop);
+    return inSupport ? ad.scalar.sub(0, ad.scalar.log(stop)) : ad.scalar.sub(0, Infinity);
+}
+var LOG_2PI = 1.8378770664093453;
+function gaussianScore(params, x) {
+    var mu = params[0];
+    var sigma = params[1];
+    return ad.scalar.mul(ad.scalar.sub(0, 0.5), ad.scalar.add(ad.scalar.add(LOG_2PI, ad.scalar.mul(2, ad.scalar.log(sigma))), ad.scalar.div(ad.scalar.mul(ad.scalar.sub(x, mu), ad.scalar.sub(x, mu)), ad.scalar.mul(sigma, sigma))));
+}
+function multivariateGaussianScore(params, x) { 
+  var mu = params[0];
+  var cov = params[1];
+  var n = mu.length;
+  if (cov instanceof Array) {
+    cov = new Tensor([cov.length, cov.length]).fromArray(cov);
+  }
+  var coeffs = n * LOG_2PI + Math.log(cov.determinant()); //number
+  x = new Tensor([x.length]).fromArray(x);
+  mu = ad.scalarsToTensor(mu);
+  var xSubMu = ad.tensor.sub(x, mu);
+  xSubMu = ad.tensor.reshape(xSubMu, [xSubMu.x.length, 1]);
+  var dotMuInvConv = ad.tensor.dot(ad.tensor.transpose(xSubMu), cov.inverse());
+  xSubMuTrans = ad.tensor.transpose(xSubMu);
+  var exponents = ad.tensor.dot(dotMuInvConv, xSubMu);
+  var score = ad.scalar.mul(-0.5, ad.scalar.add(coeffs, ad.tensorToScalars(exponents)[0]));
+  score.backprop()
+  return score;
+}
+function sum(xs) {
+    if (ad.scalar.peq(xs.length, 0)) {
+        return 0;
+    } else {
+        var total = 0;
+        var n = xs.length;
+        for (var i = 0; ad.scalar.lt(i, n); i = ad.scalar.add(i, 1))
+            total = ad.scalar.add(total, xs[i]);
+        return total;
+    }
+}
+function normalizeArray(xs) {
+    var Z = sum(xs);
+    return xs.map(function (x) {
+        return ad.scalar.div(x, Z);
+    });
+}
+function discreteScore(params, val) {
+    var probs = normalizeArray(params);
+    var stop = probs.length;
+    var inSupport = ad.scalar.eq(val, ad.scalar.floor(val)) && ad.scalar.leq(0, val) && ad.scalar.lt(val, stop);
+    return inSupport ? ad.scalar.log(probs[val]) : ad.scalar.sub(0, Infinity);
+}
+var gammaCof = [
+    76.18009172947146,
+    ad.scalar.sub(0, 86.50532032941678),
+    24.01409824083091,
+    ad.scalar.sub(0, 1.231739572450155),
+    0.001208650973866179,
+    ad.scalar.sub(0, 0.000005395239384953)
+];
+function logGamma(xx) {
+    var x = ad.scalar.sub(xx, 1);
+    var tmp = ad.scalar.add(x, 5.5);
+    tmp = ad.scalar.sub(tmp, ad.scalar.mul(ad.scalar.add(x, 0.5), ad.scalar.log(tmp)));
+    var ser = 1.000000000190015;
+    for (var j = 0; ad.scalar.leq(j, 5); j = ad.scalar.add(j, 1)) {
+        x = ad.scalar.add(x, 1);
+        ser = ad.scalar.add(ser, ad.scalar.div(gammaCof[j], x));
+    }
+    return ad.scalar.add(ad.scalar.sub(0, tmp), ad.scalar.log(ad.scalar.mul(2.5066282746310007, ser)));
+}
+function gammaScore(params, val) {
+    var a = params[0];
+    var b = params[1];
+    var x = val;
+    return ad.scalar.sub(ad.scalar.sub(ad.scalar.sub(ad.scalar.mul(ad.scalar.sub(a, 1), ad.scalar.log(x)), ad.scalar.div(x, b)), logGamma(a)), ad.scalar.mul(a, ad.scalar.log(b)));
+}
+function exponentialScore(params, val) {
+    var a = params[0];
+    return ad.scalar.sub(ad.scalar.log(a), ad.scalar.mul(a, val));
+}
+function logBeta(a, b) {
+    return ad.scalar.sub(ad.scalar.add(logGamma(a), logGamma(b)), logGamma(ad.scalar.add(a, b)));
+}
+function betaScore(params, val) {
+    var a = params[0];
+    var b = params[1];
+    var x = val;
+    return ad.scalar.gt(x, 0) && ad.scalar.lt(x, 1) ? ad.scalar.sub(ad.scalar.add(ad.scalar.mul(ad.scalar.sub(a, 1), ad.scalar.log(x)), ad.scalar.mul(ad.scalar.sub(b, 1), ad.scalar.log(ad.scalar.sub(1, x)))), logBeta(a, b)) : ad.scalar.sub(0, Infinity);
+}
+var digammaCof = [
+    ad.scalar.div(ad.scalar.sub(0, 1), 12),
+    ad.scalar.div(1, 120),
+    ad.scalar.div(ad.scalar.sub(0, 1), 252),
+    ad.scalar.div(1, 240),
+    ad.scalar.div(ad.scalar.sub(0, 5), 660),
+    ad.scalar.div(691, 32760),
+    ad.scalar.div(ad.scalar.sub(0, 1), 12)
+];
+function digamma(x) {
+    if (ad.scalar.lt(x, 0)) {
+        return ad.scalar.sub(digamma(ad.scalar.sub(1, x)), ad.scalar.div(ad.scalar.PI, ad.scalar.tan(ad.scalar.mul(ad.scalar.PI, x))));
+    } else if (ad.scalar.lt(x, 6)) {
+        var n = ad.scalar.ceil(ad.scalar.sub(6, x));
+        var psi = digamma(ad.scalar.add(x, n));
+        for (var i = 0; ad.scalar.lt(i, n); i = ad.scalar.add(i, 1)) {
+            psi = ad.scalar.sub(psi, ad.scalar.div(1, ad.scalar.add(x, i)));
+        }
+        return psi;
+    } else {
+        var psi = ad.scalar.sub(ad.scalar.log(x), ad.scalar.div(1, ad.scalar.mul(2, x)));
+        var invsq = ad.scalar.div(1, ad.scalar.mul(x, x));
+        var z = 1;
+        for (var i = 0; ad.scalar.lt(i, digammaCof.length); i = ad.scalar.add(i, 1)) {
+            z = ad.scalar.mul(z, invsq);
+            psi = ad.scalar.add(psi, ad.scalar.mul(digammaCof[i], z));
+        }
+        return psi;
+    }
+}
+function fact(x) {
+    var t = 1;
+    while (ad.scalar.gt(x, 1)) {
+        t = ad.scalar.mul(t, x);
+        x = ad.scalar.sub(x, 1);
+    }
+    return t;
+}
+function lnfact(x) {
+    if (ad.scalar.lt(x, 1)) {
+        x = 1;
+    }
+    if (ad.scalar.lt(x, 12)) {
+        return ad.scalar.log(fact(ad.scalar.round(x)));
+    }
+    var invx = ad.scalar.div(1, x);
+    var invx2 = ad.scalar.mul(invx, invx);
+    var invx3 = ad.scalar.mul(invx2, invx);
+    var invx5 = ad.scalar.mul(invx3, invx2);
+    var invx7 = ad.scalar.mul(invx5, invx2);
+    var sum$2 = ad.scalar.sub(ad.scalar.mul(ad.scalar.add(x, 0.5), ad.scalar.log(x)), x);
+    sum$2 = ad.scalar.add(sum$2, ad.scalar.div(ad.scalar.log(ad.scalar.mul(2, ad.scalar.PI)), 2));
+    sum$2 = ad.scalar.add(sum$2, ad.scalar.sub(ad.scalar.div(invx, 12), ad.scalar.div(invx3, 360)));
+    sum$2 = ad.scalar.add(sum$2, ad.scalar.sub(ad.scalar.div(invx5, 1260), ad.scalar.div(invx7, 1680)));
+    return sum$2;
+}
+function binomialG(x) {
+    if (ad.scalar.peq(x, 0)) {
+        return 1;
+    }
+    if (ad.scalar.peq(x, 1)) {
+        return 0;
+    }
+    var d = ad.scalar.sub(1, x);
+    return ad.scalar.div(ad.scalar.add(ad.scalar.sub(1, ad.scalar.mul(x, x)), ad.scalar.mul(ad.scalar.mul(2, x), ad.scalar.log(x))), ad.scalar.mul(d, d));
+}
+function binomialScore(params, val) {
+    var p = params[0];
+    var n = params[1];
+    if (ad.scalar.gt(n, 20) && ad.scalar.gt(ad.scalar.mul(n, p), 5) && ad.scalar.gt(ad.scalar.mul(n, ad.scalar.sub(1, p)), 5)) {
+        // large n, reasonable p approximation
+        var s = val;
+        var inv2 = ad.scalar.div(1, 2);
+        var inv3 = ad.scalar.div(1, 3);
+        var inv6 = ad.scalar.div(1, 6);
+        if (ad.scalar.geq(s, n)) {
+            return ad.scalar.sub(0, Infinity);
+        }
+        var q = ad.scalar.sub(1, p);
+        var S = ad.scalar.add(s, inv2);
+        var T = ad.scalar.sub(ad.scalar.sub(n, s), inv2);
+        var d1 = ad.scalar.sub(ad.scalar.add(s, inv6), ad.scalar.mul(ad.scalar.add(n, inv3), p));
+        var d2 = ad.scalar.add(ad.scalar.sub(ad.scalar.div(q, ad.scalar.add(s, inv2)), ad.scalar.div(p, ad.scalar.add(T, inv2))), ad.scalar.div(ad.scalar.sub(q, inv2), ad.scalar.add(n, 1)));
+        d2 = ad.scalar.add(d1, ad.scalar.mul(0.02, d2));
+        var num = ad.scalar.add(ad.scalar.add(1, ad.scalar.mul(q, binomialG(ad.scalar.div(S, ad.scalar.mul(n, p))))), ad.scalar.mul(p, binomialG(ad.scalar.div(T, ad.scalar.mul(n, q)))));
+        var den = ad.scalar.mul(ad.scalar.mul(ad.scalar.add(n, inv6), p), q);
+        var z = ad.scalar.div(num, den);
+        var invsd = ad.scalar.sqrt(z);
+        z = ad.scalar.mul(d2, invsd);
+        return ad.scalar.add(gaussianScore([
+            0,
+            1
+        ], z), ad.scalar.log(invsd));
+    } else {
+        return ad.scalar.add(ad.scalar.add(ad.scalar.sub(ad.scalar.sub    // exact formula
+(// exact formula
+        lnfact(n), lnfact(ad.scalar.sub(n, val))), lnfact(val)), ad.scalar.mul(val, ad.scalar.log(p))), ad.scalar.mul(ad.scalar.sub(n, val), ad.scalar.log(ad.scalar.sub(1, p))));
+    }
+}
+function poissonScore(params, val) {
+    var mu = params[0];
+    var k = val;
+    return ad.scalar.sub(ad.scalar.sub(ad.scalar.mul(k, ad.scalar.log(mu)), mu), lnfact(k));
+}
+function dirichletScore(params, val) {
+    var alpha = params;
+    var theta = val;
+    var asum = 0;
+    for (var i = 0; ad.scalar.lt(i, alpha.length); i = ad.scalar.add(i, 1)) {
+        asum = ad.scalar.add(asum, alpha[i]);
+    }
+    var logp = logGamma(asum);
+    for (var j = 0; ad.scalar.lt(j, alpha.length); j = ad.scalar.add(j, 1)) {
+        logp = ad.scalar.add(logp, ad.scalar.mul(ad.scalar.sub(alpha[j], 1), ad.scalar.log(theta[j])));
+        logp = ad.scalar.sub(logp, logGamma(alpha[j]));
+    }
+    return logp;
+}
+function logsumexp(a) {
+    var m = ad.scalar.sub(0, Infinity);
+    for (var i = 0; ad.scalar.lt(i, a.length); i = ad.scalar.add(i, 1)) {
+        m = ad.scalar.max(m, a[i]);
+    }
+    var sum$2 = 0;
+    for (var i = 0; ad.scalar.lt(i, a.length); i = ad.scalar.add(i, 1)) {
+        sum$2 = ad.scalar.add(sum$2, ad.scalar.peq(a[i], ad.scalar.sub(0, Infinity)) ? 0 : ad.scalar.exp(ad.scalar.sub(a[i], m)));
+    }
+    return ad.scalar.add(m, ad.scalar.log(sum$2));
+}
+function mixtureScore(scorer, params, weights, val) {
+    var wsum = 0;
+    for (var i = 0; ad.scalar.lt(i, weights.length); i = ad.scalar.add(i, 1)) {
+        wsum = ad.scalar.add(wsum, weights[i]);
+    }
+    var weightedScores = [];
+    for (var i = 0; ad.scalar.lt(i, weights.length); i = ad.scalar.add(i, 1)) {
+        var ls = ad.scalar.add(ad.scalar.log(ad.scalar.div(weights[i], wsum)), scorer(params[i], val));
+        weightedScores.push(ls);
+    }
+    return logsumexp(weightedScores);
+}
+module.exports = {
+    uniform: uniformScore,
+    flip: flipScore,
+    randomInteger: randomIntegerScore,
+    gaussian: gaussianScore,
+    discrete: discreteScore,
+    gamma: gammaScore,
+    exponential: exponentialScore,
+    beta: betaScore,
+    binomial: binomialScore,
+    poisson: poissonScore,
+    dirichlet: dirichletScore,
+    mixture: mixtureScore,
+    multivariateGaussian: multivariateGaussianScore
+};

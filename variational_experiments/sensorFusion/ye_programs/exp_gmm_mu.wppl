@@ -1,0 +1,48 @@
+var utils = require.call(null, __ROOT + '/../utils.js');
+var lsysUtils = require.call(null, __ROOT + '/utils.js');
+var nnarch = require.call(null, __ROOT + '/nnarch');
+var _ = require.call(null, 'underscore');
+var ad = require.call(null, 'adnn/ad');
+
+var makeProgram = function(neurallyGuided) {
+
+	var makeGaussianSampler = function(verpName) {
+		var erp = global['gaussianERP'];
+		var verp = withImportanceDist(erp, Variational['gaussianERP']);
+		return !neurallyGuided ? 
+		function() {
+			var params = arguments;
+			return sample(erp, params);
+		}
+		:
+		function() {
+			var params = arguments;
+			var vparams = ad.tensorToScalars(globalStore.vparams[verpName]);
+			verp.importanceERP.setParams(vparams.concat(0.3)); //vparams is only mu
+			return sample(verp, params);
+		};
+	};
+
+	var _gaussian = makeGaussianSampler('gaussian0');
+
+  var generate = function() {
+    //console.log(globalStore.vparams['gaussian0']);
+    Variational.registerParams('vparams', [globalStore.vparams['gaussian0']]);
+		
+    var mu = _gaussian(0, Math.PI/8);
+
+    return mu;
+  }
+  return generate;
+}
+
+var rets = {
+	generate: makeProgram(false),
+	generateGuided: makeProgram(true),
+	globalStore: globalStore,
+	environment: env
+};
+rets;
+
+
+

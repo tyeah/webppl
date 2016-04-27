@@ -1,0 +1,141 @@
+var utils = require.call(null, __ROOT + '/../utils.js');
+var lsysUtils = require.call(null, __ROOT + '/ye_utils.js');
+var nnarch = require.call(null, __ROOT + '/ye_nnarch');
+var _ = require.call(null, 'underscore');
+var THREE = require.call(null, 'three');
+var ad = require.call(null, 'adnn/ad');
+
+
+// ----------------------------------------------------------------------------
+// Globals / constants
+var sigma0 = [[0.1, 0], [0, 0.1]];
+var sigma1 = [[0.01, 0], [0, 0.01]];
+var sigma2 = [[0.01, 0], [0, 0.01]];
+
+var futurePolicy = 'immediate';
+// var futurePolicy = 'lifo';
+// var futurePolicy = 'fifo';
+// var futurePolicy = 'uniformFromAll';
+// var futurePolicy = 'uniformFromDeepest';
+// var futurePolicy = 'depthWeighted';
+setFuturePolicy(futurePolicy);
+
+// ----------------------------------------------------------------------------
+// Factor to consider measurement of X, which are, Y and Z
+var measureFactor = function(X, Y, Z) {
+  //console.log('-------------------------0');
+  factor(multivariateGaussianERP.score([X, sigma1], Y));
+  factor(multivariateGaussianERP.score([X, sigma2], Z));
+  //console.log('-------------------------1');
+}
+
+// ----------------------------------------------------------------------------
+// The program itself
+
+
+var makeProgram = function(neurallyGuided) {
+
+  //------------------------------------------------------------------------/
+	// Set up ERPs (either normal or neurally-guided)
+	var makeSampler = function(erpName, otherParams) {
+		var erp = global[erpName + 'ERP'];
+		var verp = withImportanceDist(erp, Variational[erpName + 'ERP']);
+    //console.log(Object.keys(erp));
+    //console.log('verp');
+    //console.log(verp);
+		//var n = bounds.length;
+		return !neurallyGuided ? 
+		function() {
+			//var params = Array.prototype.slice.call(arguments, 0, n);
+      var params = arguments[0];
+			return sample(erp, params);
+		}
+		:
+		function() {
+      var params = arguments[0];
+			var name = arguments[1];	// TODO: replace with callsite id?
+			var vparams = [globalStore.nnGuide.predict(globalStore, name), sigma0];
+			verp.importanceERP.setParams(vparams);
+			return sample(verp, params);
+		};
+	};
+
+
+	var _mGaussian = makeSampler('multivariateGaussian');
+  //var _mGaussianParams = [[0, 0], sigma0];
+  //----------------------------------------------------------------------/
+
+  var step = function(prevX) {
+    var Y = globalStore.measure[0][globalStore.stepIndex];
+    var Z = globalStore.measure[1][globalStore.stepIndex];
+    globalStore.curY = Y;
+    globalStore.curZ = Z;
+    //var X = sample(multivariateGaussianERP, [curX, sigma0]);
+    var X = _mGaussian([prevX, sigma0], 'XTrace');
+    globalStore.prevX = X
+    globalStore.stepIndex += 1;
+    
+    measureFactor(X, Y, Z);
+
+    if (globalStore.stepIndex < globalStore.measure[0].length) {
+      future( function() { step(X); } );
+    }
+  }
+
+	var generate = function() {
+		// Constants needed by the guide architecture
+    /*
+		if (neurallyGuided) {
+			globalStore.nnGuide.constant('targetDB', targetDB);
+		}
+    */
+
+		if (globalStore.measure === undefined) {
+      // training mode. it will find the corresponding measure since the 
+      // first item of a training trace is the correspongding measure index
+			var ti = randomInteger(globalStore.measures.length);
+      //console.log('measure ti: ' + ti);
+			globalStore.measure = globalStore.measures[ti];
+		}
+
+    globalStore.stepIndex = 0
+
+    /*
+		if (neurallyGuided) {
+			globalStore.nnGuide.init(globalStore);
+		}
+    */
+
+    var startX = [0, 0];
+    globalStore.curY = undefined;
+    globalStore.curZ = undefined;
+    globalStore.Y = [];
+    globalStore.Z = [];
+    globalStore.prevX = startX;
+    future( function() { step(startX) });
+    finishAllFutures();
+    return [globalStore.Y, globalStore.Z];
+	};
+
+	return generate;
+}
+
+//console.log(Object.keys(env.coroutine));
+//console.log(env.coroutine instanceof Variational)
+
+// ----------------------------------------------------------------------------
+// Return stuff that external tasks will need
+
+
+var rets = {
+	generate: makeProgram(false),
+	generateGuided: makeProgram(true),
+	globalStore: globalStore,
+	environment: env
+};
+rets;
+
+
+
+
+

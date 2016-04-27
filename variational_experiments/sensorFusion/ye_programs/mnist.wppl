@@ -1,0 +1,217 @@
+var utils = require.call(null, __ROOT + '/../utils.js');
+var lsysUtils = require.call(null, __ROOT + '/ye_utils.js');
+var nnarch = require.call(null, __ROOT + '/nnarch');
+var _ = require.call(null, 'underscore');
+var THREE = require.call(null, 'three');
+var ad = require.call(null, 'adnn/ad');
+
+
+// ----------------------------------------------------------------------------
+// Globals / constants
+
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/orig');
+var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/ye_data/train');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/script_test');
+// var targetDB = utils.new(lsysUtils.TargetImageDatabase, __ROOT + '/targets/datasets/siggraph_letters');
+var targetSize = targetDB.targetSize();
+lsysUtils.rendering.init(__ROOT, targetSize.width, targetSize.height);
+
+var futurePolicy = 'immediate';
+// var futurePolicy = 'lifo';
+// var futurePolicy = 'fifo';
+// var futurePolicy = 'uniformFromAll';
+// var futurePolicy = 'uniformFromDeepest';
+// var futurePolicy = 'depthWeighted';
+setFuturePolicy(futurePolicy);
+
+
+var viewport = {xmin: -12, xmax: 12, ymin: -22, ymax: 2};
+var norm2world = function(p) {
+	return utils.new(THREE.Vector2,
+		viewport.xmin + p.x*(viewport.xmax - viewport.xmin), 
+		viewport.ymin + p.y*(viewport.ymax - viewport.ymin)
+	);	
+}
+
+// ----------------------------------------------------------------------------
+// Factor encouraging similarity to target image
+
+
+// Save rendered image so far to imagesSoFar directory
+var saveImageSoFar = false;
+
+// Render update
+var renderUpdate = function(geo) {
+	lsysUtils.rendering.drawImgToRenderContext(globalStore.genImg);
+	lsysUtils.rendering.renderIncr(geo, viewport);
+	globalStore.genImg = lsysUtils.rendering.copyImgFromRenderContext();
+	// Save?
+	if (saveImageSoFar) {
+		globalStore.genImg.saveToFile(__ROOT + '/imagesSoFar/img_' + (globalStore.geo.n).toString() + '.png');
+	}
+};
+
+// Basically Gaussian log-likelihood, without the constant factor
+var makescore = function(val, target, tightness) {
+	var diff = val - target;
+	return - (diff * diff) / (tightness * tightness);
+}
+
+var simTightness = 0.02;
+var boundsTightness = 0.001;
+// var availableFuturesWeight = 25;
+var targetFactor = function() {
+	renderUpdate(globalStore.geo);
+	// Similarity factor
+	var sim = lsysUtils.normalizedSimilarity(globalStore.genImg, globalStore.target);
+	globalStore.sim = sim;
+	var simf = makescore(sim, 1, simTightness);
+	// Bounds factors
+	var bbox = globalStore.bbox;
+	var extraX = (Math.max(viewport.xmin - bbox.min.x, 0) + Math.max(bbox.max.x - viewport.xmax, 0)) / (viewport.xmax - viewport.xmin);
+	var extraY = (Math.max(viewport.ymin - bbox.min.y, 0) + Math.max(bbox.max.y - viewport.ymax, 0)) / (viewport.ymax - viewport.ymin);
+	var boundsfx = makescore(extraX, 0, boundsTightness);
+	var boundsfy = makescore(extraY, 0, boundsTightness);
+	var f = simf + boundsfx + boundsfy;
+	// ////
+	// // More available futures factor
+	// var fprime = simf + boundsfx + boundsfy;
+	// var f = fprime + availableFuturesWeight*availableFuturesScore();
+	// ////
+	if (globalStore.prevFactor) {
+		factor(f - globalStore.prevFactor);
+	} else {
+		factor(f);
+	}
+	globalStore.prevFactor = f;
+	// console.log('targetFactor');
+	// console.log(f);
+};
+
+
+// ----------------------------------------------------------------------------
+// The program itself
+
+
+var makeProgram = function(neurallyGuided) {
+
+	// Set up ERPs (either normal or neurally-guided)
+	var makeSampler = function(erpName) {
+		var erp = global[erpName + 'ERP'];
+		var verp = withImportanceDist(erp, Variational[erpName + 'ERP']);
+    //console.log(Object.keys(erp));
+		//var n = bounds.length;
+		return !neurallyGuided ? 
+		function() {
+			//var params = Array.prototype.slice.call(arguments, 0, n);
+      var params = arguments[0];
+			return sample(erp, params);
+		}
+		:
+		function() {
+      var params = arguments[0];
+      /*
+			var params = Array.prototype.slice.call(arguments, 0, n);
+			var localState = arguments[n];
+      */
+			var name = arguments[1];	// TODO: replace with callsite id?
+			var vparams = globalStore.nnGuide.predict(globalStore, name);
+      //console.log(vparams);
+			verp.importanceERP.setParams(vparams);
+			return sample(verp, params);
+		};
+	};
+	var makeMixtureSampler = function(erpName, nComps, bounds) {
+		var erp = global[erpName + 'ERP'];
+		var verp = withImportanceDist(erp, Variational[erpName + 'MixtureERP']);
+		var n = bounds.length;
+		// Keep weights between [0,1] (only need to keep them nonnegative, but I think
+		//    this will help keep things regularized...)
+		var weightBounds = repeat(nComps, function() { return ad.scalar.sigmoid; });
+		var paramBounds = repeat(nComps, function() { return bounds; });
+		var allBounds = weightBounds.concat(flatten(paramBounds));
+		return !neurallyGuided ?
+		function() {
+			var params = Array.prototype.slice.call(arguments, 0, n);
+			return sample(erp, params);
+		}
+		:
+		function() {
+			var params = Array.prototype.slice.call(arguments, 0, n);
+			var localState = arguments[n];
+			var name = arguments[n+1];	// TODO: replace with callsite id?
+			//var vparams = globalStore.nnGuide.predict(globalStore, localState, name, allBounds);
+      var vparams = params
+			var ws = vparams.slice(0, nComps);
+			var ps = group(vparams.slice(nComps), n);
+			verp.importanceERP.setParams([ws, ps]);
+			return sample(verp, params);
+		}
+	};
+	// var _gaussian = makeSampler('gaussian', [undefined, ad.scalar.exp]);
+	// var _gaussian = makeMixtureSampler('gaussian', 1, [undefined, ad.scalar.exp]);
+	var _discrete10 = makeSampler('discrete');
+	var _dirichlet = makeSampler('dirichlet');
+  //var discrete_params = _.times(10, function() { return 0.1; });
+  //var discrete_params = _.times(10, 0.1);
+  var discrete_params = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1];
+  //console.log(discrete_params);
+
+	var generate = function() {
+		// Constants needed by the guide architecture
+    /*
+    console.log('nnCache');
+    console.log(globalStore.nnGuide.nnCache);
+    */
+		if (neurallyGuided) {
+			globalStore.nnGuide.constant('targetDB', targetDB);
+      /*
+			globalStore.nnGuide.constant('viewport', viewport);
+			globalStore.nnGuide.constant('initialWidth', initialWidth);
+			globalStore.nnGuide.constant('minWidth', minWidth);
+      */
+		}
+
+		if (globalStore.target === undefined) {
+			var ti = randomInteger(targetDB.numTargets());
+      //console.log('trace ti: ' + ti);
+			globalStore.target = targetDB.getTargetByIndex(ti);
+		}
+		//var w = globalStore.target.image.width;
+		//var h = globalStore.target.image.height;
+
+    /*
+		if (neurallyGuided) {
+			globalStore.nnGuide.init(globalStore);
+		}
+    */
+
+    var yhat = _discrete10(discrete_params, 'cnn');
+    //console.log('trace yhat: ' + yhat);
+    yhat;
+	};
+
+	return generate;
+}
+
+//console.log(Object.keys(env.coroutine));
+//console.log(env.coroutine instanceof Variational)
+
+// ----------------------------------------------------------------------------
+// Return stuff that external tasks will need
+
+
+var rets = {
+	generate: makeProgram(false),
+	generateGuided: makeProgram(true),
+	targetDB: targetDB,
+	viewport: viewport,
+	globalStore: globalStore,
+	environment: env
+};
+rets;
+
+
+
+
+
