@@ -1,0 +1,83 @@
+var utils = require.call(null, __ROOT + '/../utils.js');
+var lsysUtils = require.call(null, __ROOT + '/ye_utils.js');
+var nnarch = require.call(null, __ROOT + '/ye_nnarch');
+var _ = require.call(null, 'underscore');
+var THREE = require.call(null, 'three');
+var ad = require.call(null, 'adnn/ad');
+
+
+// ----------------------------------------------------------------------------
+// Globals / constants
+var sigma0 = [[0.1, 0], [0, 0.1]];
+var sigma1 = [[0.01, 0], [0, 0.01]];
+var sigma2 = [[0.01, 0], [0, 0.01]];
+
+var futurePolicy = 'immediate';
+// var futurePolicy = 'lifo';
+// var futurePolicy = 'fifo';
+// var futurePolicy = 'uniformFromAll';
+// var futurePolicy = 'uniformFromDeepest';
+// var futurePolicy = 'depthWeighted';
+setFuturePolicy(futurePolicy);
+
+// ----------------------------------------------------------------------------
+// Factor to consider measurement of X, which are, Y and Z
+var measureFactor = function(X, Y, Z) {
+  factor(multivariateGaussianERP.score([X, sigma1], Y));
+  factor(multivariateGaussianERP.score([X, sigma2], Z));
+}
+
+// ----------------------------------------------------------------------------
+// The program itself
+
+
+var makeProgram = function(neurallyGuided) {
+
+  //------------------------------------------------------------------------/
+	// Set up ERPs (either normal or neurally-guided)
+	var makeSampler = function(erpName, otherParams) {
+		var erp = global[erpName + 'ERP'];
+		var verp = withImportanceDist(erp, Variational[erpName + 'ERP']);
+		return !neurallyGuided ? 
+		function() {
+      var params = arguments[0];
+			return sample(erp, params);
+		}
+		:
+		function() {
+      var params = arguments[0];
+			var name = arguments[1];	// TODO: replace with callsite id?
+			var vparams = [globalStore.nnGuide.predict(globalStore, name), sigma0];
+			verp.importanceERP.setParams(vparams);
+			return sample(verp, params);
+		};
+	};
+
+	var _mGaussian = makeSampler('multivariateGaussian');
+
+	var generate = function() {
+    var prevX = globalStore.prevX;
+    var Y = globalStore.curY;
+    var Z = globalStore.curZ;
+    var X = _mGaussian([prevX, sigma0], 'XTrace');
+    globalStore.prevX = X
+    
+    measureFactor(X, Y, Z);
+    return X;
+	};
+
+	return generate;
+}
+
+var rets = {
+	generate: makeProgram(false),
+	generateGuided: makeProgram(true),
+	globalStore: globalStore,
+	environment: env
+};
+rets;
+
+
+
+
+

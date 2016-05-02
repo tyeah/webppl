@@ -18,3 +18,7 @@ variational_experiments/lsystem/performance_eval/*
 variational_experiments/lsystem/performance_compare/**/*.csv
 variational_experiments/lsystem/pyramid_viz/*
 
+variational_experiments/sensorFusion/exp
+variational_experiments/sensorFusion/sensorFusionData/post/*csv
+variational_experiments/sensorFusion/sensorFusionData/post/*pdf
+variational_experiments/sensorFusion/sensorFusionData/post/*ipynb
