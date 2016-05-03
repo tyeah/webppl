@@ -1,5 +1,7 @@
 ////////////////////////////////////////////////////////////////////
-// Particle filtering
+// Particle filtering for real time use. An mesage can be passed to
+// factor, which enables computing the current MAPparticle and store
+// the result to s.MAPparticle
 //
 // Sequential importance re-sampling, which treats 'factor' calls as
 // the synchronization / intermediate distribution points.
@@ -9,6 +11,8 @@
 var _ = require('underscore');
 var util = require('../util.js');
 var erp = require('../erp.js');
+
+var fs = require('fs'); 
 
 function isActive(particle) {
   return particle.active;
@@ -38,6 +42,10 @@ module.exports = function(env) {
   }
 
   function ParticleFilter(s, k, a, wpplFn, numParticles, strict, saveHistory, noHistogram) {
+
+    this.streamFd = s.measures ? fs.openSync(s.measures, 'r') : process.stdin.fd;
+    var bufArr = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    this.buf = new Buffer(bufArr);
 
     this.particles = [];
     this.particleIndex = 0;  // marks the active particle
@@ -94,6 +102,7 @@ module.exports = function(env) {
     return this.currentParticle().continuation(this.currentParticle().store);
   };
 
+
   ParticleFilter.prototype.sample = function(s, cc, a, erp, params) {
     var importanceERP = erp.importanceERP || erp;
     var val = importanceERP.sample(params);
@@ -108,7 +117,7 @@ module.exports = function(env) {
     return cc(s, val);
   };
 
-  ParticleFilter.prototype.factor = function(s, cc, a, score) {
+  ParticleFilter.prototype.factor = function(s, cc, a, score, message) {
     // Update particle weight
     var p = this.currentParticle();
     p.weight += score;
@@ -119,7 +128,60 @@ module.exports = function(env) {
 
     if (this.allParticlesAdvanced()) {
       // Resample in proportion to weights
-      this.resampleParticles();
+      if (message) {
+        assert(score == 0, 'when message is specified, score must be 0');
+        if (message.MAP) {
+          //var startTime = Date.now();
+          // compute MAP here!
+          // s.MAPparticle = {trace: p.trace}; 
+          // s.MAPparticle.message = message;
+          // console.log(s.MAPparticle);
+          var bestLP = -Infinity;
+          var besti = -1;
+          for (var i = 0; i < this.particles.length; i++) {
+            var cp = this.particles[i];
+            if (cp.logpost > bestLP) {
+              bestLP = cp.logpost;
+              besti = i;
+            }
+          }
+          //s.MAPparticle = this.particles[besti];
+          message.MAPparticle = this.particles[besti];
+          //console.log(s.MAPparticle);
+          //console.log(Date.now() - startTime);
+        } else if (message.stream) {
+          //var startTime = Date.now();
+          //var streamData = {Y: [0.1, 0.1], Z: [0.2, 0.2]};// input data from stream here
+          var streamData = []
+          var streamFuture = true;
+          var response = undefined;
+          var bufData = undefined
+          for (var i = 0; i < message.numBufs; i++) {
+            var response = fs.readSync(this.streamFd, this.buf, 0, message.bufSize);
+            bufData = this.buf.toString('utf8', 0, response-1);
+            fs.readSync(this.streamFd, this.buf, 0, 1);//eat \n
+            //console.log(bufData);
+            if (bufData == 'term') {
+              streamFuture = false;
+              break;
+            }
+            streamData.push(JSON.parse(bufData));
+          }
+          //console.log(Date.now() - startTime);
+          // if (s.index < 8) { //temporary condition. need to use the end of the strem as indicator
+          //   var streamFuture = true;
+
+          // } else {
+          //   var streamFuture = false;
+          // }
+          for (var p in this.particles) {
+            this.particles[p].store.streamData = streamData;
+            this.particles[p].store.streamFuture = streamFuture;
+          }
+        }
+      } else {
+        this.resampleParticles();
+      }
       // Resampling can kill all continuing particles
       var i = this.firstActiveParticleIndex();
       if (i === -1) {
@@ -131,6 +193,9 @@ module.exports = function(env) {
     } else {
       // Advance to the next particle
       this.particleIndex = this.nextActiveParticleIndex();
+      if (message) {
+        message.MAPparticle = undefined;
+      }
     }
 
     return this.currentParticle().continuation(this.currentParticle().store);
@@ -313,8 +378,8 @@ module.exports = function(env) {
   }
 
   return {
-    ParticleFilter: pf,
-    withImportanceDist: withImportanceDist
+    ParticleFilterRT: pf,
+    //withImportanceDist: withImportanceDist
   };
 
 };

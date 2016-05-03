@@ -22,3 +22,4 @@ variational_experiments/sensorFusion/exp
 variational_experiments/sensorFusion/sensorFusionData/post/*csv
 variational_experiments/sensorFusion/sensorFusionData/post/*pdf
 variational_experiments/sensorFusion/sensorFusionData/post/*ipynb
+variational_experiments/sensorFusion/sensorFusionData/*txt

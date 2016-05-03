@@ -10,6 +10,7 @@ var _ = require('underscore');
 var PriorityQueue = require('priorityqueuejs');
 var erp = require('../erp.js');
 var util = require('../util.js');
+var fs = require('fs');
 
 module.exports = function(env) {
 
@@ -33,6 +34,7 @@ module.exports = function(env) {
     this.coroutine = env.coroutine;
     env.coroutine = this;
   }
+
 
   Enumerate.prototype.run = function() {
     // Run the wppl computation, when the computation returns we want it

@@ -5,6 +5,16 @@ var _ = require.call(null, 'underscore');
 var THREE = require.call(null, 'three');
 var ad = require.call(null, 'adnn/ad');
 
+/*
+var readline = require.call(null, 'readline');
+var rl = readline.createInterface({
+  input: process.stdin,
+  //input: fs.createReadStream('sensorFusionData/testMeasuresRT.txt'),
+  //input: measures,
+  output: process.stdout,
+  terminal: false
+});
+*/
 
 // ----------------------------------------------------------------------------
 // Globals / constants
@@ -32,6 +42,11 @@ var measureFactor = function(X, Y, Z) {
 
 
 var makeProgram = function(neurallyGuided) {
+  var verboseLog = function(verbose, content) {
+    if (verbose) {
+      console.log(content);
+    }
+  }
 
   //------------------------------------------------------------------------/
 	// Set up ERPs (either normal or neurally-guided)
@@ -55,15 +70,40 @@ var makeProgram = function(neurallyGuided) {
 
 	var _mGaussian = makeSampler('multivariateGaussian');
 
+  var step = function(prevX) {
+    var message = {MAP: true};
+    factor(0, message); //aim at get the last item in the trace? or the full trace?
+    if (message.MAPparticle) {
+      verboseLog(globalStore.verbose, message.MAPparticle.trace);
+    }
+    var message1 = {stream: true, bufSize: 8, numBufs: 4}; //get input from some stream
+    factor(0, message1);
+    if (globalStore.streamFuture) {
+      globalStore.curY = globalStore.streamData.slice(0, 2);
+      globalStore.curZ = globalStore.streamData.slice(2, 4);
+
+      var X = _mGaussian([prevX, sigma0], 'XTrace');
+      globalStore.prevX = X
+      
+      measureFactor(X, globalStore.curY, globalStore.curZ);
+      globalStore.index += 1;
+
+      future( function() { step(X); } );
+    }
+    // what about restart?
+  }
+
 	var generate = function() {
-    var prevX = globalStore.prevX;
-    var Y = globalStore.curY;
-    var Z = globalStore.curZ;
-    var X = _mGaussian([prevX, sigma0], 'XTrace');
-    globalStore.prevX = X;
+    globalStore.readingTime = 0;
+    var startX = [0, 0];
+    globalStore.prevX = startX;
+    //globalStore.stream = {data: {}, future: true} // can this be set in inference?
+    globalStore.index = 0; //temporary
+
+    future( function() { step(globalStore.prevX) });
+    finishAllFutures();
+    return [globalStore.Y, globalStore.Z];
     
-    measureFactor(X, Y, Z);
-    return X;
 	};
 
 	return generate;
@@ -76,8 +116,3 @@ var rets = {
 	environment: env
 };
 rets;
-
-
-
-
-

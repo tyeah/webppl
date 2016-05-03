@@ -33,6 +33,7 @@ var smc = require('./inference/smc.js');
 var rejection = require('./inference/rejection.js');
 var incrementalmh = require('./inference/incrementalmh.js');
 var variational = require('./inference/variational.js');
+var particlefilterrt = require('./inference/particlefilterrt.js');
 var headerUtils = require('./headerUtils.js');
 var Query = require('./query.js').Query;
 var futures = require('./futures.js');
@@ -65,9 +66,9 @@ module.exports = function(env) {
     return env.coroutine.sample(s, k, a, dist, params);
   };
 
-  env.factor = function(s, k, a, score) {
+  env.factor = function(s, k, a, score, message) {
     assert.ok(!isNaN(score));
-    return env.coroutine.factor(s, k, a, score);
+    return env.coroutine.factor(s, k, a, score, message);
   };
 
   env.sampleWithFactor = function(s, k, a, dist, params, scoreFn) {
@@ -129,7 +130,7 @@ module.exports = function(env) {
   // Inference functions and header utils
   var headerModules = [
     enumerate, particlefilter, asyncpf, mh, hashmh, incrementalmh, pmcmc,
-    smc, rejection, headerUtils, futures, variational
+    smc, rejection, headerUtils, futures, variational, particlefilterrt
   ];
   headerModules.forEach(function(mod) {
     addExports(mod(env));
